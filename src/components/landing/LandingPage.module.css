@@ -1,0 +1,558 @@
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #faf4ec;
+  color: #2e2115;
+  font-family: 'Inter', 'SF Pro Text', 'Segoe UI', sans-serif;
+}
+
+.dotsZone {
+  background-image: radial-gradient(circle, rgba(164, 130, 90, 0.12) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* ── Section Divider ─────────────────────────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, #dacbb4, transparent);
+  width: 1400px;
+  margin: 0 auto;
+}
+
+/* ── Container ───────────────────────────────────────────────────────────── */
+.container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.containerNarrow {
+  max-width: 1400px;
+}
+
+/* ── Nav ─────────────────────────────────────────────────────────────────── */
+.nav {
+  border-bottom: 1px solid #dacbb4;
+  background: #faf4ec;
+  flex-shrink: 0;
+}
+
+.navInner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wordmark {
+  font-size: 14px;
+  font-weight: 520;
+  letter-spacing: 0.01em;
+  color: #a4532b;
+  text-decoration: none;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.navLogin {
+  font-size: 14px;
+  font-weight: 440;
+  color: #7c6854;
+  text-decoration: none;
+  transition: color 120ms;
+}
+
+.navLogin:hover { color: #2e2115; }
+
+.navCta {
+  font-size: 13px;
+  font-weight: 480;
+  color: #fff8f2;
+  background: #a4532b;
+  border-radius: 8px;
+  padding: 7px 14px;
+  text-decoration: none;
+  transition: background 120ms;
+}
+
+.navCta:hover { background: #853f1d; }
+
+
+/* ── Shared: eyebrow ─────────────────────────────────────────────────────── */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 480;
+  color: #a4532b;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 16px;
+}
+
+/* ── Shared: CTA button ──────────────────────────────────────────────────── */
+.ctaButton {
+  display: inline-block;
+  background: #a4532b;
+  color: #fff8f2;
+  font-size: 14px;
+  font-weight: 480;
+  padding: 12px 28px;
+  border-radius: 10px;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: background 120ms;
+}
+
+.ctaButton:hover { background: #853f1d; }
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+.hero {
+  padding: 96px 0 72px;
+  text-align: center;
+}
+
+.heroHeadline {
+  font-size: clamp(26px, 3.5vw, 42px);
+  font-weight: 480;
+  color: #2e2115;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
+}
+
+.heroSub {
+  font-size: clamp(15px, 1.8vw, 18px);
+  font-weight: 400;
+  color: #7c6854;
+  line-height: 1.6;
+  max-width: 520px;
+  margin: 0 auto 36px;
+}
+
+.ctaNote {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: #7c6854;
+  margin-top: 14px;
+}
+
+/* ── HeroTabs ────────────────────────────────────────────────────────────── */
+.heroTabs {
+  margin-top: 52px;
+}
+
+.tabStrip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  font-size: 13px;
+  font-weight: 440;
+  color: #7c6854;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: background 120ms, color 120ms, border-color 120ms;
+  font-family: inherit;
+}
+
+.tab:hover { color: #2e2115; background: #f5e2d0; }
+
+.tabActive {
+  background: #f5e2d0;
+  color: #2e2115;
+  border-color: #dacbb4;
+}
+
+.mockupCard {
+  background: #fffdf8;
+  border: 1px solid #dacbb4;
+  border-radius: 12px;
+  padding: 22px 24px;
+  max-width: 520px;
+  margin: 0 auto;
+  text-align: left;
+  min-height: 210px;
+}
+
+.mockupCardTitle {
+  font-size: 13px;
+  font-weight: 510;
+  color: #2e2115;
+  margin: 0 0 2px;
+}
+
+.mockupCardSub {
+  font-size: 12px;
+  font-weight: 400;
+  color: #7c6854;
+  margin: 0 0 12px;
+}
+
+.mockupDivider {
+  height: 1px;
+  background: #e8d9c4;
+  margin: 12px 0;
+}
+
+.mockupLabel {
+  font-size: 10px;
+  font-weight: 480;
+  color: #7c6854;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  display: block;
+  margin-bottom: 7px;
+}
+
+.mockupRow {
+  font-size: 12px;
+  font-weight: 400;
+  color: #2e2115;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.mockupRowMuted {
+  color: #7c6854;
+}
+
+.mockupSection {
+  margin-bottom: 14px;
+}
+
+.mockupSection:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Assumption badges ───────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 440;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badgeStrengthened { background: #eef7ea; color: #2f6b3b; }
+.badgeUnvalidated  { background: #f8f0e4; color: #7c6854; }
+.badgeWeakened     { background: #fff1f3; color: #b42318; }
+.badgePersona      { background: #f5e2d0; color: #703315; }
+.badgeValue        { background: #eef7ea; color: #2f6b3b; }
+
+/* ── What You Get ────────────────────────────────────────────────────────── */
+.whatYouGet {
+  padding: 56px 0;
+}
+
+.whatYouGetGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+}
+
+.whatYouGetItem {
+  display: flex;
+  flex-direction: column;
+}
+
+.whatYouGetIcon {
+  width: 28px;
+  height: 28px;
+  color: #a4532b;
+  flex-shrink: 0;
+  margin-bottom: 10px;
+}
+
+.whatYouGetTitle {
+  font-size: 14px;
+  font-weight: 510;
+  color: #2e2115;
+  margin: 0 0 6px;
+}
+
+.whatYouGetBody {
+  font-size: 13px;
+  font-weight: 400;
+  color: #7c6854;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ── Feature Cards ───────────────────────────────────────────────────────── */
+.featureSection {
+  position: relative;
+  padding: 72px 0;
+}
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.featureCard {
+  background: #fffdf8;
+  border: 1px solid #e8d9c4;
+  border-radius: 12px;
+  padding: 20px;
+  transition: border-color 150ms, background 150ms;
+}
+
+.featureCard:hover {
+  border-color: #dacbb4;
+  background: #fffefb;
+}
+
+.featureIconWrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.featureTitle {
+  font-size: 14px;
+  font-weight: 510;
+  color: #2e2115;
+  margin: 0 0 8px;
+}
+
+.featureBody {
+  font-size: 13px;
+  font-weight: 400;
+  color: #7c6854;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── How It Works ────────────────────────────────────────────────────────── */
+.howItWorks {
+  position: relative;
+  padding: 72px 0;
+}
+
+.stepGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-top: 40px;
+}
+
+.stepGrid::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 18%;
+  right: 18%;
+  height: 1px;
+  background: linear-gradient(to right, transparent, #dacbb4, transparent);
+  pointer-events: none;
+}
+
+.step {
+  border-left: 2px solid #dacbb4;
+  padding-left: 18px;
+}
+
+.step:first-child {
+  border-left-color: #a4532b;
+}
+
+.stepNumber {
+  display: block;
+  font-size: 11px;
+  font-weight: 480;
+  color: #7c6854;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+.stepTitle {
+  font-size: 15px;
+  font-weight: 510;
+  color: #2e2115;
+  margin: 0 0 10px;
+}
+
+.stepBody {
+  font-size: 14px;
+  font-weight: 400;
+  color: #7c6854;
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* ── Differentiator ──────────────────────────────────────────────────────── */
+.diff {
+  padding: 72px 0;
+}
+
+.diffGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: start;
+}
+
+.prose {
+  font-size: 15px;
+  font-weight: 400;
+  color: #2e2115;
+  line-height: 1.7;
+  margin: 0 0 20px;
+}
+
+.prose:last-child { margin-bottom: 0; }
+
+.compareCard {
+  background: #fffdf8;
+  border: 1px solid #dacbb4;
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+.compareCardHeader {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.compareCardColLabel {
+  font-size: 11px;
+  font-weight: 480;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.compareCardColLabelMuted { color: #7c6854; }
+.compareCardColLabelAccent { color: #a4532b; }
+
+.compareCardRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid #f0e4d4;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.compareCardRow:last-child { border-bottom: none; }
+
+.compareValMuted { color: #7c6854; }
+.compareValAccent { color: #2e2115; }
+
+/* ── Closing CTA ─────────────────────────────────────────────────────────── */
+.closingCta {
+  padding: 80px 0 96px;
+  text-align: center;
+  flex: 1;
+}
+
+.closingHeading {
+  font-size: clamp(20px, 3vw, 32px);
+  font-weight: 460;
+  color: #2e2115;
+  margin: 0 0 12px;
+}
+
+.closingSub {
+  font-size: 15px;
+  font-weight: 400;
+  color: #7c6854;
+  line-height: 1.6;
+  margin: 0 0 28px;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.footer {
+  border-top: 1px solid #dacbb4;
+  background: #faf4ec;
+  padding: 28px 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.footerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.footerWordmark {
+  font-size: 13px;
+  font-weight: 480;
+  color: #a4532b;
+}
+
+.footerTagline {
+  font-size: 12px;
+  font-weight: 400;
+  color: #7c6854;
+}
+
+.footerLinks {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.footerLink {
+  font-size: 12px;
+  font-weight: 400;
+  color: #7c6854;
+  text-decoration: none;
+  transition: color 120ms;
+}
+
+.footerLink:hover { color: #2e2115; }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .hero { padding: 72px 0 56px; }
+  .tabStrip { gap: 4px; }
+  .tab { padding: 5px 12px; font-size: 12px; }
+  .whatYouGetGrid { grid-template-columns: 1fr; gap: 24px; }
+  .featureGrid { grid-template-columns: 1fr; }
+  .stepGrid { grid-template-columns: 1fr; }
+  .stepGrid::before { display: none; }
+  .diffGrid { grid-template-columns: 1fr; gap: 28px; }
+  .footer { padding: 24px; flex-direction: column; align-items: flex-start; }
+  .navLogin { display: none; }
+}
+
+@media (min-width: 601px) and (max-width: 1336px) {
+  .featureGrid { grid-template-columns: repeat(2, 1fr); }
+}

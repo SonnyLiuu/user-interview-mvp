@@ -1,0 +1,14 @@
+clawtrace
+.claude
+node_modules
+.next
+out
+
+# env
+.env.local
+
+# typescript
+tsconfig.tsbuildinfo
+
+# misc
+.DS_Store
