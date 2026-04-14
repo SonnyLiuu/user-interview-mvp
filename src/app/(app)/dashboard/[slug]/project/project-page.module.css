@@ -1,0 +1,34 @@
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  height: 100%;
+  overflow: hidden;
+  gap: 0;
+}
+
+.briefPane {
+  height: 100%;
+  overflow: hidden;
+  border-right: 1px solid #e8d9c4;
+}
+
+.chatPane {
+  height: 100%;
+  padding: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #faf4ec;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 420px;
+  }
+
+  .briefPane {
+    border-right: none;
+    border-bottom: 1px solid #e8d9c4;
+  }
+}

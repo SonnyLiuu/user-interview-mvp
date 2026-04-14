@@ -16,6 +16,7 @@ export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
   user_id: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  slug: text('slug'),
   intake_status: text('intake_status').default('not_started'),
   is_archived: boolean('is_archived').default(false),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -56,6 +57,9 @@ export const project_intake = pgTable('project_intake', {
   key_assumptions: text('key_assumptions').array(),
   biggest_failure_reasons: text('biggest_failure_reasons').array(),
   personal_connection: text('personal_connection'),
+
+  // Chat history: [{ role: 'assistant' | 'user', content: string }]
+  conversation: jsonb('conversation'),
 
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });

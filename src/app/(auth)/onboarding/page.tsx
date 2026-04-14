@@ -21,9 +21,15 @@ export default function OnboardingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim() }),
       });
+      if (res.status === 409) {
+        const { error: msg } = await res.json() as { error: string };
+        setError(msg);
+        setLoading(false);
+        return;
+      }
       if (!res.ok) throw new Error('Failed to create project');
-      const project = await res.json() as { id: string };
-      router.push(`/project/${project.id}/people`);
+      const project = await res.json() as { id: string; slug: string };
+      router.push(`/dashboard/${project.slug}/people`);
     } catch {
       setError('Something went wrong. Try again.');
       setLoading(false);
@@ -40,7 +46,7 @@ export default function OnboardingPage() {
           <input
             className={styles.input}
             type="text"
-            placeholder="e.g. AI discovery tool for founders"
+            placeholder="e.g. Smart Toaster"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus

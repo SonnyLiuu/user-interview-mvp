@@ -1,0 +1,193 @@
+.brief {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 28px 32px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: #7c6854;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.summary {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #2e2115;
+  margin: 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.listItem,
+.listItemPositive,
+.listItemNegative {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #2e2115;
+  padding-left: 16px;
+  position: relative;
+}
+
+.listItem::before,
+.listItemPositive::before,
+.listItemNegative::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+  color: #b39472;
+}
+
+.listItemPositive::before { color: #5a7a5a; }
+.listItemNegative::before { color: #8b4a3a; }
+
+/* Assumptions */
+.assumptions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.assumption {
+  background: #fffdf8;
+  border: 1px solid #e8d9c4;
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assumptionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.assumptionText {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #2e2115;
+  flex: 1;
+}
+
+.statusBadge {
+  font-size: 11px;
+  font-weight: 450;
+  padding: 3px 8px;
+  border-radius: 20px;
+  flex-shrink: 0;
+  border: 1px solid currentColor;
+}
+
+.status_unvalidated {
+  color: #7c6854;
+  background: #f5eddf;
+  border-color: #d4b896;
+}
+
+.status_strengthened {
+  color: #3d5c3d;
+  background: #edf5ed;
+  border-color: #9dbf9d;
+}
+
+.status_weakened {
+  color: #7a3528;
+  background: #f7eeec;
+  border-color: #d4907e;
+}
+
+.evidence {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 2px solid #e8d9c4;
+}
+
+.evidence li {
+  font-size: 12.5px;
+  color: #7c6854;
+  line-height: 1.5;
+}
+
+/* Recommended conversations */
+.conversations {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.conversation {
+  background: #fffdf8;
+  border: 1px solid #e8d9c4;
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conversationHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.personaType {
+  font-size: 12px;
+  font-weight: 500;
+  color: #2e2115;
+  background: #f5eddf;
+  border: 1px solid #e8d9c4;
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.urgency {
+  font-size: 11.5px;
+  color: #7c6854;
+}
+
+.conversationWhy {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #2e2115;
+  margin: 0;
+}
+
+.conversationLearn {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #5a4a38;
+  margin: 0;
+}
+
+.learnLabel {
+  font-weight: 450;
+  color: #7c6854;
+}

@@ -9,9 +9,9 @@ export default async function ProjectLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ projectId: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { projectId } = await params;
+  const { slug } = await params;
 
   let projectName: string | null = null;
   try {
@@ -19,7 +19,7 @@ export default async function ProjectLayout({
     const [project] = await db
       .select({ name: projects.name })
       .from(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.user_id, userId)))
+      .where(and(eq(projects.slug, slug), eq(projects.user_id, userId)))
       .limit(1);
     projectName = project?.name ?? null;
   } catch {
@@ -28,8 +28,8 @@ export default async function ProjectLayout({
 
   return (
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: '#faf4ec' }}>
-      <AppNav projectId={projectId} projectName={projectName} />
-      <main style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>{children}</main>
+      <AppNav slug={slug} projectName={projectName} />
+      <main style={{ flex: 1, overflow: 'hidden', minWidth: 0, height: '100dvh' }}>{children}</main>
     </div>
   );
 }

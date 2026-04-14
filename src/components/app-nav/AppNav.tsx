@@ -69,8 +69,8 @@ function IconChevron({ down }: { down: boolean }) {
 
 // ── Project switcher ──────────────────────────────────────────────────────────
 
-function ProjectSwitcher({ projectId, projectName, expanded }: {
-  projectId: string | null;
+function ProjectSwitcher({ slug, projectName, expanded }: {
+  slug: string | null;
   projectName: string | null;
   expanded: boolean;
 }) {
@@ -96,9 +96,9 @@ function ProjectSwitcher({ projectId, projectName, expanded }: {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  function select(id: string) {
+  function select(p: Project) {
     setOpen(false);
-    router.push(`/project/${id}/people`);
+    router.push(`/dashboard/${p.slug ?? p.id}/people`);
   }
 
   const displayName = projectName ?? 'Select project';
@@ -127,8 +127,8 @@ function ProjectSwitcher({ projectId, projectName, expanded }: {
             <button
               key={p.id}
               type="button"
-              className={`${styles.projectDropdownItem} ${p.id === projectId ? styles.projectDropdownItemActive : ''}`}
-              onClick={() => select(p.id)}
+              className={`${styles.projectDropdownItem} ${(p.slug ?? p.id) === slug ? styles.projectDropdownItemActive : ''}`}
+              onClick={() => select(p)}
             >
               {p.name}
             </button>
@@ -170,8 +170,8 @@ function NavItem({ href, label, icon, active, expanded }: {
 
 // ── AppNav ────────────────────────────────────────────────────────────────────
 
-export function AppNav({ projectId, projectName }: {
-  projectId?: string | null;
+export function AppNav({ slug, projectName }: {
+  slug?: string | null;
   projectName?: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -206,12 +206,12 @@ export function AppNav({ projectId, projectName }: {
 
   const cls = expanded ? styles.expanded : styles.collapsed;
 
-  const projectNav = projectId
+  const projectNav = slug
     ? [
-        { href: `/project/${projectId}`, label: 'Project', icon: <IconProject />, match: (p: string) => p === `/project/${projectId}` },
-        { href: `/project/${projectId}/people`, label: 'People', icon: <IconPeople />, match: (p: string) => p.startsWith(`/project/${projectId}/people`) },
-        { href: `/project/${projectId}/board`, label: 'Board', icon: <IconBoard />, match: (p: string) => p.startsWith(`/project/${projectId}/board`) },
-        { href: `/project/${projectId}/insights`, label: 'Insights', icon: <IconInsights />, match: (p: string) => p.startsWith(`/project/${projectId}/insights`) },
+        { href: `/dashboard/${slug}/project`, label: 'Project', icon: <IconProject />, match: (p: string) => p.startsWith(`/dashboard/${slug}/project`) },
+        { href: `/dashboard/${slug}/people`, label: 'People', icon: <IconPeople />, match: (p: string) => p.startsWith(`/dashboard/${slug}/people`) },
+        { href: `/dashboard/${slug}/board`, label: 'Board', icon: <IconBoard />, match: (p: string) => p.startsWith(`/dashboard/${slug}/board`) },
+        { href: `/dashboard/${slug}/insights`, label: 'Insights', icon: <IconInsights />, match: (p: string) => p.startsWith(`/dashboard/${slug}/insights`) },
       ]
     : [];
 
@@ -219,7 +219,7 @@ export function AppNav({ projectId, projectName }: {
     <aside className={`${styles.nav} ${cls}`}>
       {/* Project switcher */}
       <ProjectSwitcher
-        projectId={projectId ?? null}
+        slug={slug ?? null}
         projectName={projectName ?? null}
         expanded={expanded}
       />
