@@ -8,6 +8,13 @@
       "when": 1776114085688,
       "tag": "0000_redundant_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776127351582,
+      "tag": "0001_right_annihilus",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,7 @@
 clawtrace
 .claude
+CLAUDE.md
+SYSTEM_DESIGN.md
 node_modules
 .next
 out

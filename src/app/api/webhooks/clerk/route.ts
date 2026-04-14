@@ -26,7 +26,12 @@ export async function POST(req: NextRequest) {
     const d = evt.data;
     const email = (d.email_addresses as Array<{ email_address: string }>)?.[0]?.email_address ?? '';
     const name = [d.first_name, d.last_name].filter(Boolean).join(' ') || email;
-    await db.insert(users).values({ email, name, avatar_url: (d.image_url as string) ?? '' }).onConflictDoNothing();
+    await db.insert(users).values({
+      clerk_user_id: d.id as string,
+      email,
+      name,
+      avatar_url: (d.image_url as string) ?? '',
+    }).onConflictDoNothing();
   }
   return NextResponse.json({ ok: true });
 }

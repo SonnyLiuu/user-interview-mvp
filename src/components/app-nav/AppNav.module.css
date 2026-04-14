@@ -188,6 +188,118 @@
 
 .profileMenuSignOut { color: #a4532b; }
 
+/* ── Project switcher ────────────────────────────────────────────────────── */
+.projectSwitcher {
+  position: relative;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.projectSwitcherBtn {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #e8d9c4;
+  cursor: pointer;
+  font-family: inherit;
+  color: #2e2115;
+  text-align: left;
+  transition: background 100ms;
+  min-width: 0;
+}
+
+.projectSwitcherBtn:hover { background: #f5e2d0; }
+
+.projectSwitcherName {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2e2115;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.projectSwitcherIcon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: #b89c84;
+}
+
+.projectDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 6px;
+  right: 6px;
+  background: #fffdf8;
+  border: 1px solid #e8d9c4;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(46, 33, 21, 0.1);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 160px;
+}
+
+.projectDropdownItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 440;
+  color: #2e2115;
+  border-radius: 7px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 100ms;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.projectDropdownItem:hover { background: #f5e2d0; }
+
+.projectDropdownItemActive {
+  background: #f5e2d0;
+  font-weight: 510;
+}
+
+.projectDropdownDivider {
+  height: 1px;
+  background: #e8d9c4;
+  margin: 3px 0;
+}
+
+.projectDropdownAdd {
+  color: #a4532b;
+  font-weight: 480;
+}
+
+/* ── Section label ───────────────────────────────────────────────────────── */
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 500;
+  color: #b89c84;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 10px 2px;
+  display: block;
+}
+
+.collapsed .sectionLabel { display: none; }
+
 /* ── Logo text ───────────────────────────────────────────────────────────── */
 .logoMark {
   font-size: 15px;

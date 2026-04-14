@@ -1,7 +1,22 @@
-export default function DashboardPage() {
-  return (
-    <main style={{ padding: 24 }}>
-      <h1>Dashboard</h1>
-    </main>
-  );
+import { redirect } from 'next/navigation';
+import { desc, eq, and } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { projects } from '@/lib/db/schema';
+import { getAuthenticatedUserId } from '@/lib/auth';
+
+export default async function DashboardPage() {
+  const userId = await getAuthenticatedUserId();
+
+  const [latest] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.user_id, userId), eq(projects.is_archived, false)))
+    .orderBy(desc(projects.created_at))
+    .limit(1);
+
+  if (latest) {
+    redirect(`/project/${latest.id}/people`);
+  } else {
+    redirect('/onboarding');
+  }
 }

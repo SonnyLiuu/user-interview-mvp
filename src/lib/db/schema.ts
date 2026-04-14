@@ -3,6 +3,7 @@ import { pgTable, text, boolean, integer, timestamp, uuid, jsonb } from 'drizzle
 // ── users ────────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
+  clerk_user_id: text('clerk_user_id').unique(),
   email: text('email').unique().notNull(),
   name: text('name'),
   avatar_url: text('avatar_url'),
