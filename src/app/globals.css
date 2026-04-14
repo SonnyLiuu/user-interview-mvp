@@ -1,5 +1,3 @@
-@import '../lib/clawtrace.tokens.css';
-
 :root {
   color-scheme: light;
 }
@@ -11,7 +9,6 @@
 html,
 body {
   margin: 0;
-  padding: 0;
   min-height: 100%;
   font-family: 'Inter', 'SF Pro Text', 'Segoe UI', sans-serif;
 }
@@ -21,33 +18,3 @@ body {
   color: #2e2115;
 }
 
-.operator {
-  --page-bg: linear-gradient(145deg, #fffefb 0%, #fcf4e8 100%);
-  --panel-bg: #fffdf8;
-  --panel-subtle: #f8f0e4;
-  --panel-sidebar: #f4ebdd;
-  --border: #dacbb4;
-  --text: #2e2115;
-  --muted: #7c6854;
-  --primary: #a4532b;
-  --primary-strong: #853f1d;
-  --accent: #f5e2d0;
-  --accent-text: #703315;
-  --soft: #f6ede3;
-  --soft-text: #5a4534;
-  --agent: #fce9dc;
-  --agent-text: #6f3114;
-  --customer: #fefaf4;
-  --internal: #fff1d7;
-  --internal-text: #8e4f00;
-  --event: #eef7ea;
-  --event-text: #2f6b3b;
-  --warn: #a75a00;
-  --focus: rgba(164, 83, 43, 0.21);
-}
-
-/* ── Shared skeleton pulse animation ────────────────────────────────────── */
-@keyframes ct-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}

@@ -123,15 +123,6 @@ const FEATURES = [
   },
 ];
 
-// ── Compare rows ──────────────────────────────────────────────────────────────
-
-const COMPARE_ROWS = [
-  ['Reply volume', 'Learning velocity'],
-  ['Assumes you know who', 'Starts at idea clarity'],
-  ['Starts at outreach', 'Enters before outreach'],
-  ['Measures pipeline', 'Measures hypothesis'],
-];
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function LandingPage() {
@@ -151,7 +142,7 @@ export function LandingPage() {
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className={styles.hero}>
-        <div className={`${styles.container} ${styles.containerNarrow}`}>
+        <div className={styles.container}>
           <h1 className={styles.heroHeadline}>
             Your personal AI-powered startup forge.
           </h1>
@@ -160,7 +151,7 @@ export function LandingPage() {
             and consolidate insights across conversations to build a smarter, more connected founder.
           </p>
           <Link href="/signup" className={styles.ctaButton}>
-            Get started — it&apos;s free
+            Get started for free
           </Link>
           <span className={styles.ctaNote}>No waitlist. No credit card required.</span>
           <HeroTabs />
@@ -237,7 +228,7 @@ export function LandingPage() {
 
       {/* ── Closing CTA ──────────────────────────────────────────────────── */}
       <section className={styles.closingCta}>
-        <div className={`${styles.container} ${styles.containerNarrow}`}>
+        <div className={styles.container}>
           <h2 className={styles.closingHeading}>Ready to start?</h2>
           <p className={styles.closingSub}>
             Sign up and start your first project in a few minutes. Free to use.
@@ -250,16 +241,20 @@ export function LandingPage() {
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <footer className={styles.footer}>
-        <div className={styles.footerLeft}>
-          <span className={styles.footerWordmark}>Startup Foundry</span>
-          <span className={styles.footerTagline}>
-            AI-powered founder startup validation and outreach, find the right people, get smarter after every conversation.
-          </span>
-        </div>
-        <div className={styles.footerLinks}>
-          <Link href="/privacy" className={styles.footerLink}>Privacy</Link>
-          <Link href="/terms" className={styles.footerLink}>Terms</Link>
-          <span className={styles.footerLink}>© 2026</span>
+        <div className={styles.footerInner}>
+          <div className={styles.footerRow1}>
+            <span className={styles.footerWordmark}>Startup Foundry</span>
+            <div className={styles.footerLinks}>
+              <Link href="/privacy" className={styles.footerLink}>Privacy</Link>
+              <Link href="/terms" className={styles.footerLink}>Terms</Link>
+            </div>
+          </div>
+          <div className={styles.footerRow2}>
+            <span className={styles.footerTagline}>
+              Startup Foundry wants to help new founders get to product-market fit faster and with less wasted time and effort. <br />We are in early access and would love to hear from you: <a href="mailto:placeholder@gmail.com" className={styles.footerEmail}>placeholder@gmail.com</a>
+            </span>
+            <span className={styles.footerCopy}>© 2026 Startup Foundry</span>
+          </div>
         </div>
       </footer>
 

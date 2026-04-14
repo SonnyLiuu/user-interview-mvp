@@ -7,7 +7,7 @@
   background: #fffdf8;
   border-right: 1px solid #e8d9c4;
   flex-shrink: 0;
-  overflow: visible;
+  overflow: visible; /* must stay visible — profile menu overflows the rail */
   transition: width 180ms ease;
   z-index: 10;
 }
@@ -21,13 +21,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
   border-bottom: 1px solid #e8d9c4;
   flex-shrink: 0;
   overflow: hidden;
-  background: #fffdf8;
   text-decoration: none;
-  color: #2e2115;
 }
 
 /* ── Nav sections ────────────────────────────────────────────────────────── */
@@ -44,7 +41,6 @@
 .divider {
   height: 1px;
   background: #e8d9c4;
-  margin: 0;
   flex-shrink: 0;
 }
 
@@ -54,7 +50,7 @@
   gap: 4px;
   padding: 8px 8px 10px;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible;
   min-width: 0;
 }
 
@@ -87,7 +83,6 @@
 .collapsed .item {
   justify-content: center;
   padding: 0;
-  gap: 0;
 }
 
 .itemIcon {
@@ -102,7 +97,7 @@
 .itemIcon svg { width: 18px; height: 18px; }
 
 .itemLabel {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 480;
   flex: 1;
   min-width: 0;
@@ -145,16 +140,64 @@
   object-fit: cover;
 }
 
+/* ── Profile menu ────────────────────────────────────────────────────────── */
+.profileWrap {
+  position: relative;
+}
+
+.profileMenu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 180px;
+  background: #fffdf8;
+  border: 1px solid #e8d9c4;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(46, 33, 21, 0.1);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.profileMenuItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 440;
+  color: #2e2115;
+  border-radius: 7px;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 100ms;
+}
+
+.profileMenuItem:hover { background: #f5e2d0; }
+
+.profileMenuDivider {
+  height: 1px;
+  background: #e8d9c4;
+  margin: 3px 0;
+}
+
+.profileMenuSignOut { color: #a4532b; }
+
 /* ── Logo text ───────────────────────────────────────────────────────────── */
 .logoMark {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 520;
   letter-spacing: 0.02em;
   color: #a4532b;
 }
 
 .logoFull {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.01em;
   color: #a4532b;

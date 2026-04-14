@@ -2,9 +2,9 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
+import { useUser, useClerk } from '@clerk/nextjs';
 import styles from './AppNav.module.css';
 
 const STORAGE_KEY = 'startup-foundry:nav-expanded';
@@ -27,8 +27,22 @@ const MAIN_NAV = [
 
 export function AppNav() {
   const [expanded, setExpanded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const { user } = useUser();
+  const { signOut } = useClerk();
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [menuOpen]);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -73,23 +87,43 @@ export function AppNav() {
       {/* Bottom: account */}
       <div className={styles.divider} />
       <nav className={styles.bottomItems}>
-        <Link
-          href="/account"
-          className={`${styles.item} ${pathname?.startsWith('/account') ? styles.itemActive : ''}`}
-          title={!expanded ? (user?.fullName ?? 'Account') : undefined}
-        >
-          <span className={styles.itemIcon}>
-            {user?.imageUrl ? (
-              <Image src={user.imageUrl} alt="" width={28} height={28} className={styles.avatarImg} unoptimized />
-            ) : (
-              <svg viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                <circle cx="11" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.6"/>
-                <path d="M4 19c0-3.87 3.13-7 7-7s7 3.13 7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-              </svg>
-            )}
-          </span>
-          <span className={styles.itemLabel}>{user?.fullName ?? 'Account'}</span>
-        </Link>
+        <div className={styles.profileWrap} ref={menuRef}>
+          {menuOpen && (
+            <div className={styles.profileMenu}>
+              <Link href="/account" className={styles.profileMenuItem} onClick={() => setMenuOpen(false)}>
+                Account settings
+              </Link>
+              <a href="mailto:feedback@startupfoundry.app" className={styles.profileMenuItem}>
+                Send feedback
+              </a>
+              <div className={styles.profileMenuDivider} />
+              <button
+                className={`${styles.profileMenuItem} ${styles.profileMenuSignOut}`}
+                onClick={() => signOut({ redirectUrl: '/login' })}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            className={`${styles.item} ${menuOpen ? styles.itemActive : ''}`}
+            title={!expanded ? (user?.fullName ?? 'Account') : undefined}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            <span className={styles.itemIcon}>
+              {user?.imageUrl ? (
+                <Image src={user.imageUrl} alt="" width={28} height={28} className={styles.avatarImg} unoptimized />
+              ) : (
+                <svg viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                  <circle cx="11" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.6"/>
+                  <path d="M4 19c0-3.87 3.13-7 7-7s7 3.13 7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                </svg>
+              )}
+            </span>
+            <span className={styles.itemLabel}>{user?.fullName ?? 'Account'}</span>
+          </button>
+        </div>
       </nav>
 
       {/* Handle */}

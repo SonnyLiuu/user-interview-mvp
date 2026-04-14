@@ -17,7 +17,8 @@
 .divider {
   height: 1px;
   background: linear-gradient(to right, transparent, #dacbb4, transparent);
-  width: 1400px;
+  width: 100%;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -27,10 +28,6 @@
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 24px;
-}
-
-.containerNarrow {
-  max-width: 1400px;
 }
 
 /* ── Nav ─────────────────────────────────────────────────────────────────── */
@@ -51,7 +48,7 @@
 }
 
 .wordmark {
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 520;
   letter-spacing: 0.01em;
   color: #a4532b;
@@ -65,7 +62,7 @@
 }
 
 .navLogin {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 440;
   color: #7c6854;
   text-decoration: none;
@@ -75,7 +72,7 @@
 .navLogin:hover { color: #2e2115; }
 
 .navCta {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 480;
   color: #fff8f2;
   background: #a4532b;
@@ -87,10 +84,9 @@
 
 .navCta:hover { background: #853f1d; }
 
-
 /* ── Shared: eyebrow ─────────────────────────────────────────────────────── */
 .eyebrow {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 480;
   color: #a4532b;
   letter-spacing: 0.08em;
@@ -103,7 +99,7 @@
   display: inline-block;
   background: #a4532b;
   color: #fff8f2;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 480;
   padding: 12px 28px;
   border-radius: 10px;
@@ -130,7 +126,7 @@
 }
 
 .heroSub {
-  font-size: clamp(15px, 1.8vw, 18px);
+  font-size: clamp(16px, 1.8vw, 18px);
   font-weight: 400;
   color: #7c6854;
   line-height: 1.6;
@@ -140,7 +136,7 @@
 
 .ctaNote {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   color: #7c6854;
   margin-top: 14px;
@@ -161,7 +157,7 @@
 }
 
 .tab {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 440;
   color: #7c6854;
   background: transparent;
@@ -193,14 +189,14 @@
 }
 
 .mockupCardTitle {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 510;
   color: #2e2115;
   margin: 0 0 2px;
 }
 
 .mockupCardSub {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   color: #7c6854;
   margin: 0 0 12px;
@@ -213,7 +209,7 @@
 }
 
 .mockupLabel {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 480;
   color: #7c6854;
   text-transform: uppercase;
@@ -223,7 +219,7 @@
 }
 
 .mockupRow {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   color: #2e2115;
   margin-bottom: 5px;
@@ -287,14 +283,14 @@
 }
 
 .whatYouGetTitle {
-  font-size: 14px;
+  font-size: 19px;
   font-weight: 510;
   color: #2e2115;
   margin: 0 0 6px;
 }
 
 .whatYouGetBody {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 400;
   color: #7c6854;
   line-height: 1.55;
@@ -303,7 +299,6 @@
 
 /* ── Feature Cards ───────────────────────────────────────────────────────── */
 .featureSection {
-  position: relative;
   padding: 72px 0;
 }
 
@@ -338,138 +333,20 @@
 }
 
 .featureTitle {
-  font-size: 14px;
+  font-size: 19px;
   font-weight: 510;
   color: #2e2115;
   margin: 0 0 8px;
 }
 
 .featureBody {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 400;
   color: #7c6854;
   line-height: 1.6;
   margin: 0;
 }
 
-/* ── How It Works ────────────────────────────────────────────────────────── */
-.howItWorks {
-  position: relative;
-  padding: 72px 0;
-}
-
-.stepGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 32px;
-  margin-top: 40px;
-}
-
-.stepGrid::before {
-  content: '';
-  position: absolute;
-  top: 14px;
-  left: 18%;
-  right: 18%;
-  height: 1px;
-  background: linear-gradient(to right, transparent, #dacbb4, transparent);
-  pointer-events: none;
-}
-
-.step {
-  border-left: 2px solid #dacbb4;
-  padding-left: 18px;
-}
-
-.step:first-child {
-  border-left-color: #a4532b;
-}
-
-.stepNumber {
-  display: block;
-  font-size: 11px;
-  font-weight: 480;
-  color: #7c6854;
-  letter-spacing: 0.06em;
-  margin-bottom: 10px;
-}
-
-.stepTitle {
-  font-size: 15px;
-  font-weight: 510;
-  color: #2e2115;
-  margin: 0 0 10px;
-}
-
-.stepBody {
-  font-size: 14px;
-  font-weight: 400;
-  color: #7c6854;
-  line-height: 1.65;
-  margin: 0;
-}
-
-/* ── Differentiator ──────────────────────────────────────────────────────── */
-.diff {
-  padding: 72px 0;
-}
-
-.diffGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 48px;
-  align-items: start;
-}
-
-.prose {
-  font-size: 15px;
-  font-weight: 400;
-  color: #2e2115;
-  line-height: 1.7;
-  margin: 0 0 20px;
-}
-
-.prose:last-child { margin-bottom: 0; }
-
-.compareCard {
-  background: #fffdf8;
-  border: 1px solid #dacbb4;
-  border-radius: 12px;
-  padding: 20px 24px;
-}
-
-.compareCardHeader {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.compareCardColLabel {
-  font-size: 11px;
-  font-weight: 480;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  margin: 0;
-}
-
-.compareCardColLabelMuted { color: #7c6854; }
-.compareCardColLabelAccent { color: #a4532b; }
-
-.compareCardRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid #f0e4d4;
-  font-size: 13px;
-  font-weight: 400;
-}
-
-.compareCardRow:last-child { border-bottom: none; }
-
-.compareValMuted { color: #7c6854; }
-.compareValAccent { color: #2e2115; }
 
 /* ── Closing CTA ─────────────────────────────────────────────────────────── */
 .closingCta {
@@ -486,7 +363,7 @@
 }
 
 .closingSub {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 400;
   color: #7c6854;
   line-height: 1.6;
@@ -497,40 +374,63 @@
 .footer {
   border-top: 1px solid #dacbb4;
   background: #faf4ec;
-  padding: 28px 48px;
+  padding: 28px 0;
+}
+
+.footerInner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.footerRow1 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
 }
 
-.footerLeft {
+.footerRow2 {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 32px;
+  margin-top: 10px;
 }
 
 .footerWordmark {
-  font-size: 13px;
-  font-weight: 480;
+  font-size: 14px;
+  font-weight: 500;
   color: #a4532b;
 }
 
 .footerTagline {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   color: #7c6854;
+  line-height: 1.6;
+  max-width: 680px;
 }
+
+.footerEmail {
+  color: #7c6854;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 120ms;
+}
+
+.footerEmail:hover { color: #2e2115; }
 
 .footerLinks {
   display: flex;
-  gap: 20px;
+  gap: 16px;
   align-items: center;
 }
 
 .footerLink {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   color: #7c6854;
   text-decoration: none;
@@ -539,6 +439,14 @@
 
 .footerLink:hover { color: #2e2115; }
 
+.footerCopy {
+  font-size: 12px;
+  font-weight: 400;
+  color: #b89c84;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .hero { padding: 72px 0 56px; }
@@ -546,13 +454,11 @@
   .tab { padding: 5px 12px; font-size: 12px; }
   .whatYouGetGrid { grid-template-columns: 1fr; gap: 24px; }
   .featureGrid { grid-template-columns: 1fr; }
-  .stepGrid { grid-template-columns: 1fr; }
-  .stepGrid::before { display: none; }
-  .diffGrid { grid-template-columns: 1fr; gap: 28px; }
-  .footer { padding: 24px; flex-direction: column; align-items: flex-start; }
+  .footerRow1 { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .footerRow2 { flex-direction: column; gap: 12px; }
   .navLogin { display: none; }
 }
 
-@media (min-width: 601px) and (max-width: 1336px) {
+@media (min-width: 601px) and (max-width: 900px) {
   .featureGrid { grid-template-columns: repeat(2, 1fr); }
 }
