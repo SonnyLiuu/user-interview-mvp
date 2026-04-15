@@ -1,6 +1,6 @@
 # Startup Foundry
 
-An AI-powered founder discovery copilot. Pressure-test your startup idea, find the right people to learn from, prepare smarter outreach and conversations, and get better after every call.
+This tool helps new founders. It helps brainstorm with you to solidify your goals and find the most promising parts of your idea, while meaningfully pushing back when it senses ambiguity. Then end result will be a clear actionable foundation. Using this foundation it will allow deep analysis of people you are interested in contacting in the context of your business idea. This allows for a tool that will deeply help with the outreach challenge that new founders face when gathering information. The interface revolves around this foundation and tracks the people you reach out to in varying stages via CRM, also taking care of outbound email/message drafts, briefs before scheduled calls, and after call debriefs that help you learn more from every call. By viewing these insights, especially across multiple calls you can find patterns and shortcomings to improve upon with your pitch, tone, and balance your outreach between the right people with less gaps.
 
 ## What it does
 
