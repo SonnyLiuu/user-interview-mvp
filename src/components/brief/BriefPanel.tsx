@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { ProjectBrief } from '@/lib/db/schema';
+import { backendClientFetch } from '@/lib/backend-client';
+import type { ProjectBrief } from '@/lib/backend-types';
 import BriefView from './BriefView';
 import styles from './BriefPanel.module.css';
 
@@ -24,7 +25,7 @@ export default function BriefPanel({ projectId, initialBrief, intakeStatus }: Pr
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchBriefState = useCallback(async () => {
-    const res = await fetch(`/api/projects/${projectId}/brief`);
+    const res = await backendClientFetch(`/v1/projects/${projectId}/brief`);
     if (!res.ok) return null;
     return await res.json() as BriefPayload;
   }, [projectId]);
@@ -51,7 +52,7 @@ export default function BriefPanel({ projectId, initialBrief, intakeStatus }: Pr
 
   async function handleRefresh() {
     setRefreshing(true);
-    const res = await fetch(`/api/projects/${projectId}/brief/refresh`, { method: 'POST' });
+    const res = await backendClientFetch(`/v1/projects/${projectId}/brief/refresh`, { method: 'POST' });
     if (res.ok) {
       setStatus('generating');
     }

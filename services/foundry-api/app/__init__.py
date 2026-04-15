@@ -1,0 +1,1 @@
+"""Startup Foundry FastAPI backend."""

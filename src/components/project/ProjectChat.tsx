@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { backendClientFetch } from '@/lib/backend-client';
+import { useFoundation } from '@/components/brief/FoundationContext';
+import type { Foundation } from '@/lib/backend-types';
 import styles from './ProjectChat.module.css';
 
 type Message = { role: 'assistant' | 'user'; content: string };
@@ -15,6 +18,50 @@ type Props = {
   fullPage?: boolean;
   centerHeading?: string;
 };
+
+// ── Patch helpers ─────────────────────────────────────────────────────────────
+
+// Strips {"foundation_patch": ...} from the end of any content string.
+// Called on every render during streaming so the JSON never appears in the UI.
+function stripFoundationPatch(content: string): string {
+  const idx = content.lastIndexOf('{"foundation_patch":');
+  return idx !== -1 ? content.slice(0, idx).trimEnd() : content;
+}
+
+// Extracts the patch object from the completed response. Uses brace-counting
+// to handle nested structures (arrays, nested objects).
+function extractFoundationPatch(content: string): Partial<Foundation> | null {
+  const marker = '{"foundation_patch":';
+  const idx = content.lastIndexOf(marker);
+  if (idx === -1) return null;
+
+  const fragment = content.slice(idx);
+  let depth = 0;
+  let end = -1;
+  for (let i = 0; i < fragment.length; i++) {
+    if (fragment[i] === '{') depth++;
+    else if (fragment[i] === '}') {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end === -1) return null;
+
+  try {
+    const parsed = JSON.parse(fragment.slice(0, end + 1)) as { foundation_patch?: Partial<Foundation> };
+    return parsed.foundation_patch ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function displayContent(content: string): string {
+  return stripFoundationPatch(content)
+    .replace(/\{"intake_complete":\s*true\}/g, '')
+    .trim();
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ProjectChat({
   projectId,
@@ -33,11 +80,13 @@ export default function ProjectChat({
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Foundation context — null when ProjectChat is used outside a FoundationProvider
+  const foundationCtx = useFoundation();
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streaming]);
 
-  // If conversation is empty and no brief, send initial greeting
   const initialized = useRef(false);
   const triggerOpener = useCallback(async () => {
     if (initialized.current) return;
@@ -45,10 +94,9 @@ export default function ProjectChat({
     setStreaming(true);
 
     let accumulated = '';
-    const updated: Message[] = [];
     setMessages([]);
 
-    const res = await fetch(`/api/projects/${projectId}/intake/chat`, {
+    const res = await backendClientFetch(`/v1/projects/${projectId}/intake/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: '__init__' }),
@@ -67,9 +115,7 @@ export default function ProjectChat({
       setMessages([{ role: 'assistant', content: accumulated }]);
     }
 
-    const finalMsg: Message = { role: 'assistant', content: accumulated };
-    updated.push(finalMsg);
-    setMessages([...updated]);
+    setMessages([{ role: 'assistant', content: accumulated }]);
     setStreaming(false);
   }, [projectId]);
 
@@ -89,10 +135,13 @@ export default function ProjectChat({
     setMessages(newMessages);
     setStreaming(true);
 
-    const res = await fetch(`/api/projects/${projectId}/intake/chat`, {
+    // Send last 8 messages as conversation history for the foundation advisor
+    const recentMessages = messages.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+
+    const res = await backendClientFetch(`/v1/projects/${projectId}/intake/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: text, recentMessages }),
     });
 
     if (!res.ok || !res.body) {
@@ -115,6 +164,12 @@ export default function ProjectChat({
 
     setStreaming(false);
 
+    // Apply foundation patch if the advisor included one
+    if (foundationCtx) {
+      const patch = extractFoundationPatch(accumulated);
+      if (patch) foundationCtx.applyPatch(patch);
+    }
+
     if (accumulated.includes('"intake_complete": true')) {
       setIntakeJustCompleted(true);
       onIntakeComplete?.();
@@ -126,11 +181,6 @@ export default function ProjectChat({
       e.preventDefault();
       sendMessage();
     }
-  }
-
-  // Strip the JSON marker from display
-  function displayContent(content: string) {
-    return content.replace(/\{"intake_complete":\s*true\}/g, '').trim();
   }
 
   const title = titleOverride ?? (hasBrief ? 'Ongoing Advisor' : 'Founder Office Hours');
@@ -186,7 +236,7 @@ export default function ProjectChat({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message…"
+          placeholder="Propose an edit..."
           rows={fullPage ? 1 : 2}
           disabled={streaming}
         />

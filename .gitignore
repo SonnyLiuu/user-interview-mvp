@@ -8,6 +8,10 @@ out
 
 # env
 .env.local
+services/foundry-api/.env
+services/foundry-api/.venv
+**/__pycache__/
+*.pyc
 
 # typescript
 tsconfig.tsbuildinfo

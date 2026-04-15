@@ -1,4 +1,67 @@
 import { pgTable, text, boolean, integer, timestamp, uuid, jsonb } from 'drizzle-orm/pg-core';
+import { customType } from 'drizzle-orm/pg-core';
+
+// Custom type for text arrays with proper typing
+const textArray = customType<{ data: string[]; driverData: string[]; config?: { length?: number } }>({
+  dataType: (config) => {
+    if (config?.length) {
+      return `text[${config.length}]`;
+    }
+    return 'text[]';
+  },
+  fromDriver: (value: string[]): string[] => value,
+  toDriver: (value: string[]): string[] => value,
+});
+
+// Type definitions for complex fields
+export type ChatMessage = {
+  role: 'assistant' | 'user';
+  content: string;
+  timestamp?: string;
+};
+
+export type BriefAssumption = {
+  assumption: string;
+  status: 'unvalidated' | 'strengthened' | 'weakened';
+  evidence: string[];
+};
+
+export type RecommendedConversation = {
+  persona_type: string;
+  why: string;
+  what_to_learn: string;
+  urgency: 'high' | 'medium' | 'low';
+};
+
+export type CrawledContent = {
+  title?: string;
+  description?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type PersonAnalysis = {
+  summary?: string;
+  key_insights?: string[];
+  recommended_questions?: string[];
+  risk_factors?: string[];
+  confidence_score?: number;
+};
+
+export type OutreachContent = {
+  subject?: string;
+  body?: string;
+  tone?: string;
+  cta?: string;
+};
+
+export type CallPrepContent = {
+  objective?: string;
+  goals?: string[];
+  questions?: string[];
+  signals?: string[];
+  closing?: string;
+};
 
 // ── users ────────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
@@ -54,12 +117,12 @@ export const project_intake = pgTable('project_intake', {
   narrow_wedge: text('narrow_wedge'),
 
   // Section 5: Risks and Assumptions
-  key_assumptions: text('key_assumptions').array(),
-  biggest_failure_reasons: text('biggest_failure_reasons').array(),
+  key_assumptions: textArray('key_assumptions'),
+  biggest_failure_reasons: textArray('biggest_failure_reasons'),
   personal_connection: text('personal_connection'),
 
   // Chat history: [{ role: 'assistant' | 'user', content: string }]
-  conversation: jsonb('conversation'),
+  conversation: jsonb('conversation').$type<ChatMessage[]>(),
 
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -70,11 +133,11 @@ export const project_briefs = pgTable('project_briefs', {
   project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
 
   idea_summary: text('idea_summary'),
-  strengths: text('strengths').array(),
-  weaknesses: text('weaknesses').array(),
-  most_promising_avenues: text('most_promising_avenues').array(),
-  recommended_conversations: jsonb('recommended_conversations'),
-  assumptions: jsonb('assumptions'),
+  strengths: textArray('strengths'),
+  weaknesses: textArray('weaknesses'),
+  most_promising_avenues: textArray('most_promising_avenues'),
+  recommended_conversations: jsonb('recommended_conversations').$type<RecommendedConversation[]>(),
+  assumptions: jsonb('assumptions').$type<BriefAssumption[]>(),
 
   debrief_count_at_generation: integer('debrief_count_at_generation').default(0),
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
@@ -91,15 +154,15 @@ export const people = pgTable('people', {
   company: text('company'),
   persona_type: text('persona_type'),
 
-  source_urls: text('source_urls').array(),
+  source_urls: textArray('source_urls'),
   raw_pasted_text: text('raw_pasted_text'),
-  additional_context: text('additional_context').array(),
+  additional_context: textArray('additional_context'),
 
   crawl_status: text('crawl_status').default('pending'),
-  crawled_content: jsonb('crawled_content'),
+  crawled_content: jsonb('crawled_content').$type<CrawledContent>(),
   crawl_error: text('crawl_error'),
 
-  analysis: jsonb('analysis'),
+  analysis: jsonb('analysis').$type<PersonAnalysis>(),
   analysis_version: integer('analysis_version').default(0),
   analysis_status: text('analysis_status').default('pending'),
 
@@ -115,7 +178,7 @@ export const outreach = pgTable('outreach', {
   id: uuid('id').primaryKey().defaultRandom(),
   person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
   channel: text('channel').notNull(),
-  content: jsonb('content'),
+  content: jsonb('content').$type<OutreachContent>(),
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
   is_current: boolean('is_current').default(true),
 });
@@ -124,12 +187,7 @@ export const outreach = pgTable('outreach', {
 export const call_prep = pgTable('call_prep', {
   id: uuid('id').primaryKey().defaultRandom(),
   person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
-  objective: text('objective'),
-  learning_goals: text('learning_goals').array(),
-  question_sequence: jsonb('question_sequence'),
-  signals_to_watch: text('signals_to_watch').array(),
-  mistakes_to_avoid: text('mistakes_to_avoid').array(),
-  closing_question: text('closing_question'),
+  content: jsonb('content').$type<CallPrepContent>(),
   is_reviewed: boolean('is_reviewed').default(false),
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
   reviewed_at: timestamp('reviewed_at', { withTimezone: true }),

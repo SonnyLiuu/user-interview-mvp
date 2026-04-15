@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { backendClientFetch } from '@/lib/backend-client';
 import styles from './OnboardingChat.module.css';
 import type { SlotKey } from '@/lib/onboarding/slot-definitions';
 
@@ -102,7 +103,7 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
     setError('');
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/onboarding/chat`, {
+      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: '__init__' }),
@@ -135,7 +136,7 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
     setError('');
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/onboarding/chat`, {
+      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'kickoff', message: text }),
@@ -161,7 +162,7 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
     setError('');
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/onboarding/chat`, {
+      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -191,7 +192,7 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
     setError('');
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/onboarding/chat`, {
+      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -220,7 +221,7 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
     setError('');
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/onboarding/chat`, {
+      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'finish' }),
@@ -271,11 +272,15 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
         {error && (
           <div className={styles.finishArea}>
             <p className={styles.finishText}>{error}</p>
-            {messages.length === 0 && (
+            {messages.length === 0 ? (
               <button className={styles.finishBtn} onClick={() => void loadChat()}>
                 Retry
               </button>
-            )}
+            ) : isFinishable && !currentTurn ? (
+              <button className={styles.finishBtn} onClick={() => void finish()}>
+                Generate Foundation -&gt;
+              </button>
+            ) : null}
           </div>
         )}
         {/* Kickoff phase — free text */}
@@ -368,7 +373,7 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
         )}
 
         {/* Finish prompt */}
-        {phase === 'choices' && !submitting && !currentTurn && isFinishable && (
+        {phase === 'choices' && !submitting && !currentTurn && isFinishable && !error && (
           <div className={styles.finishArea}>
             <p className={styles.finishText}>
               That&apos;s enough to build your Foundation. Ready to continue?

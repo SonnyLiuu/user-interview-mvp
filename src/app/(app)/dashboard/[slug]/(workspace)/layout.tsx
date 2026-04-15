@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { AppNav } from '@/components/app-nav/AppNav';
-import { getAuthenticatedUserId } from '@/lib/auth';
-import { findOwnedProjectBySlugOrId, listOwnedProjects } from '@/lib/projects';
+import { getProjectBySlugOrId, getWorkspaceSummary } from '@/lib/backend-server';
 
 export default async function ProjectWorkspaceLayout({
   children,
@@ -11,15 +10,16 @@ export default async function ProjectWorkspaceLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-
-  const userId = await getAuthenticatedUserId();
-  const [project, initialProjects] = await Promise.all([
-    findOwnedProjectBySlugOrId(userId, slug),
-    listOwnedProjects(userId),
-  ]);
-  if (!project) {
+  const lookup = await getProjectBySlugOrId(slug);
+  if (!lookup?.project) {
     return redirect('/dashboard');
   }
+  const { project } = lookup;
+  const summary = await getWorkspaceSummary(project.id);
+  if (!summary) {
+    return redirect('/dashboard');
+  }
+  const { projects: initialProjects } = summary;
 
   return (
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: '#faf4ec' }}>

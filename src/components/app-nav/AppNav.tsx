@@ -6,7 +6,9 @@ import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useUser, useClerk } from '@clerk/nextjs';
 import styles from './AppNav.module.css';
-import { getProjectPathSegment, type ProjectNavItem } from '@/lib/projects';
+import { backendClientFetch } from '@/lib/backend-client';
+import type { ProjectNavItem } from '@/lib/backend-types';
+import { getProjectPathSegment } from '@/lib/projects';
 
 const STORAGE_KEY = 'startup-foundry:nav-expanded';
 
@@ -111,7 +113,7 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
   const router = useRouter();
 
   async function loadProjects() {
-    fetch('/api/projects')
+    backendClientFetch('/v1/projects')
       .then((r) => r.json())
       .then((data: ProjectNavItem[]) => setProjects(data))
       .catch(() => {});
@@ -203,7 +205,7 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
     setEditError('');
 
     try {
-      const res = await fetch(`/api/projects/${editTarget.id}`, {
+      const res = await backendClientFetch(`/v1/projects/${editTarget.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmedName }),
@@ -243,7 +245,7 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
     setDeleteError('');
 
     try {
-      const res = await fetch(`/api/projects/${deleteTarget.id}`, { method: 'DELETE' });
+      const res = await backendClientFetch(`/v1/projects/${deleteTarget.id}`, { method: 'DELETE' });
       if (!res.ok) {
         setDeleteError('Could not delete project. Please try again.');
         setDeleting(false);

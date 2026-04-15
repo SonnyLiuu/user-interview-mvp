@@ -1,6 +1,7 @@
 import type { AIProvider } from '@/ai/providers/base';
 import { anthropicProvider } from '@/ai/providers/anthropic';
 import { openaiProvider } from '@/ai/providers/openai';
+import { env } from '@/lib/server-env';
 
 export type AITaskName =
   | 'onboarding.extractKickoffIdea'
@@ -14,7 +15,7 @@ type ModelRoute = {
 };
 
 function getConfiguredProvider(): 'anthropic' | 'openai' {
-  return process.env.AI_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
+  return env.AI_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
 }
 
 const DEFAULT_MODELS: Record<'anthropic' | 'openai', string> = {

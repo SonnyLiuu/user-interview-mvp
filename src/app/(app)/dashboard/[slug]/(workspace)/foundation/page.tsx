@@ -1,13 +1,11 @@
-import { eq, and, desc } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { project_intake, project_briefs, project_foundations } from '@/lib/db/schema';
-import { getAuthenticatedUserId } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import BriefPanel from '@/components/brief/BriefPanel';
-import FoundationView, { type Foundation } from '@/components/brief/FoundationView';
+import FoundationView from '@/components/brief/FoundationView';
+import { FoundationProvider } from '@/components/brief/FoundationContext';
 import ProjectPageClient from './ProjectPageClient';
 import styles from './project-page.module.css';
-import { findOwnedProjectBySlugOrId, getProjectPathSegment } from '@/lib/projects';
+import { getFoundationView, getProjectBySlugOrId } from '@/lib/backend-server';
+import { getProjectPathSegment } from '@/lib/projects';
 
 export default async function ProjectPage({
   params,
@@ -15,15 +13,8 @@ export default async function ProjectPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-
-  let userId: string;
-  try {
-    userId = await getAuthenticatedUserId();
-  } catch {
-    redirect('/login');
-  }
-
-  const project = await findOwnedProjectBySlugOrId(userId, slug);
+  const lookup = await getProjectBySlugOrId(slug);
+  const project = lookup?.project;
 
   if (!project) redirect('/dashboard');
 
@@ -31,55 +22,38 @@ export default async function ProjectPage({
     redirect(`/dashboard/${getProjectPathSegment(project)}/foundation`);
   }
 
-  // Check for new-style foundation first
-  const [foundationRow] = await db
-    .select()
-    .from(project_foundations)
-    .where(eq(project_foundations.project_id, project.id))
-    .orderBy(desc(project_foundations.generated_at))
-    .limit(1);
-
-  if (foundationRow?.foundation_json) {
-    const foundation = foundationRow.foundation_json as Foundation;
-    return (
-      <div className={styles.briefPane} style={{ borderRight: 'none' }}>
-        <FoundationView foundation={foundation} />
-      </div>
-    );
+  const foundationView = await getFoundationView(project.id);
+  if (!foundationView) {
+    redirect('/dashboard');
   }
 
-  // Fall back to old brief + chat layout
-  const [intake] = await db
-    .select()
-    .from(project_intake)
-    .where(eq(project_intake.project_id, project.id))
-    .limit(1);
-
-  const [brief] = await db
-    .select()
-    .from(project_briefs)
-    .where(and(eq(project_briefs.project_id, project.id), eq(project_briefs.is_current, true)))
-    .limit(1);
-
-  type ConvMsg = { role: 'assistant' | 'user'; content: string };
-  const conversation = (intake?.conversation as ConvMsg[] | null) ?? [];
+  const hasFoundation = foundationView.foundation !== null;
 
   return (
-    <div className={styles.layout}>
-      <div className={styles.briefPane}>
-        <BriefPanel
-          projectId={project.id}
-          initialBrief={brief ?? null}
-          intakeStatus={project.intake_status ?? 'not_started'}
-        />
+    <FoundationProvider
+      projectId={project.id}
+      initialFoundation={foundationView.foundation ?? { summary: '', targetUser: '', painPoint: '', valueProp: '', idealPeopleTypes: [] }}
+    >
+      <div className={styles.layout}>
+        <div className={styles.briefPane}>
+          {hasFoundation ? (
+            <FoundationView projectId={project.id} initialFoundation={foundationView.foundation!} />
+          ) : (
+            <BriefPanel
+              projectId={project.id}
+              initialBrief={foundationView.brief}
+              intakeStatus={foundationView.intakeStatus}
+            />
+          )}
+        </div>
+        <div className={styles.chatPane}>
+          <ProjectPageClient
+            projectId={project.id}
+            initialConversation={foundationView.conversation}
+            hasBrief={hasFoundation || !!foundationView.brief}
+          />
+        </div>
       </div>
-      <div className={styles.chatPane}>
-        <ProjectPageClient
-          projectId={project.id}
-          initialConversation={conversation}
-          hasBrief={!!brief}
-        />
-      </div>
-    </div>
+    </FoundationProvider>
   );
 }

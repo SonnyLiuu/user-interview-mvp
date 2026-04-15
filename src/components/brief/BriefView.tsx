@@ -1,4 +1,4 @@
-import type { ProjectBrief } from '@/lib/db/schema';
+import type { ProjectBrief } from '@/lib/backend-types';
 import styles from './BriefView.module.css';
 
 type Assumption = {

@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { AIProviderError } from '@/lib/errors';
+import { env } from '@/lib/server-env';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
@@ -11,7 +13,9 @@ export async function generateText(prompt: string, model = DEFAULT_MODEL): Promi
     messages: [{ role: 'user', content: prompt }],
   });
   const block = msg.content[0];
-  if (block.type !== 'text') throw new Error('Unexpected response type from Anthropic');
+  if (block.type !== 'text') {
+    throw new AIProviderError('Unexpected response type from Anthropic API', 'anthropic');
+  }
   return block.text;
 }
 
@@ -24,6 +28,8 @@ export async function generateObject<T>(prompt: string, schema: object, model = 
     messages: [{ role: 'user', content: prompt }],
   });
   const block = msg.content[0];
-  if (block.type !== 'tool_use') throw new Error('Expected tool use response from Anthropic');
+  if (block.type !== 'tool_use') {
+    throw new AIProviderError('Expected tool use response from Anthropic API', 'anthropic');
+  }
   return block.input as T;
 }

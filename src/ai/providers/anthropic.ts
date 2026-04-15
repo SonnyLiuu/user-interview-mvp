@@ -1,9 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AIProvider, AIJsonRequest } from './base';
+import { AIProviderError } from '@/lib/errors';
+import { env } from '@/lib/server-env';
 
 export const anthropicProvider: AIProvider = {
   async generateJson<T>(input: AIJsonRequest): Promise<T> {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
     const systemMessages = input.messages.filter((m) => m.role === 'system');
     const chatMessages = input.messages.filter((m) => m.role !== 'system');
@@ -24,7 +26,9 @@ export const anthropicProvider: AIProvider = {
     });
 
     const block = msg.content[0];
-    if (block.type !== 'tool_use') throw new Error('Expected tool_use response from Anthropic');
+    if (block.type !== 'tool_use') {
+      throw new AIProviderError('Expected tool_use response from Anthropic API', 'anthropic');
+    }
     return block.input as T;
   },
 };

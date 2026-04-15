@@ -1,11 +1,9 @@
-import { getAuthenticatedUserId } from '@/lib/auth';
-import { listOwnedProjects } from '@/lib/projects';
+import { listProjects } from '@/lib/backend-server';
 import OnboardingForm from './OnboardingForm';
 import styles from './onboarding.module.css';
 
 export default async function OnboardingPage() {
-  const userId = await getAuthenticatedUserId();
-  const projects = await listOwnedProjects(userId);
+  const projects = await listProjects();
   const existingProjectNames = projects.map((project) => project.name);
 
   return (

@@ -16,7 +16,6 @@ An AI-powered founder discovery copilot. Pressure-test your startup idea, find t
 - [Neon](https://neon.tech) — serverless Postgres
 - [Drizzle ORM](https://orm.drizzle.team)
 - [Anthropic SDK](https://docs.anthropic.com) — AI
-- [Inngest](https://www.inngest.com) — background jobs
 
 ## Getting started
 

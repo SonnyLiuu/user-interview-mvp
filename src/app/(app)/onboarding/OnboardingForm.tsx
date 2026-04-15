@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { backendClientFetch } from '@/lib/backend-client';
 import styles from './onboarding.module.css';
 
 function normalizeProjectName(value: string) {
@@ -38,7 +39,7 @@ export default function OnboardingForm({
     setError('');
 
     try {
-      const res = await fetch('/api/projects', {
+      const res = await backendClientFetch('/v1/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmedName }),
