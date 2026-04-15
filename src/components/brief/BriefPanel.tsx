@@ -5,6 +5,13 @@ import type { ProjectBrief } from '@/lib/db/schema';
 import BriefView from './BriefView';
 import styles from './BriefPanel.module.css';
 
+type BriefStatus = 'not_started' | 'generating' | 'complete' | 'generation_failed';
+
+type BriefPayload = {
+  brief: ProjectBrief | null;
+  status: BriefStatus | string;
+};
+
 type Props = {
   projectId: string;
   initialBrief: ProjectBrief | null;
@@ -16,36 +23,38 @@ export default function BriefPanel({ projectId, initialBrief, intakeStatus }: Pr
   const [status, setStatus] = useState(intakeStatus);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchBrief = useCallback(async () => {
+  const fetchBriefState = useCallback(async () => {
     const res = await fetch(`/api/projects/${projectId}/brief`);
-    if (res.ok) {
-      const data = await res.json() as ProjectBrief | null;
-      setBrief(data);
-    }
+    if (!res.ok) return null;
+    return await res.json() as BriefPayload;
   }, [projectId]);
 
   // Poll while brief is generating
   useEffect(() => {
-    if (status !== 'generating' || brief) return;
+    if (status !== 'generating') return;
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/projects/${projectId}/brief`);
-      if (res.ok) {
-        const data = await res.json() as ProjectBrief | null;
-        if (data) {
-          setBrief(data);
-          setStatus('complete');
-          clearInterval(interval);
-        }
+      const data = await fetchBriefState();
+      if (!data) return;
+
+      if (data.brief) {
+        setBrief(data.brief);
+      }
+
+      setStatus(data.status);
+
+      if (data.status === 'complete' || data.status === 'generation_failed') {
+        clearInterval(interval);
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [status, brief, projectId]);
+  }, [status, fetchBriefState]);
 
   async function handleRefresh() {
     setRefreshing(true);
-    await fetch(`/api/projects/${projectId}/brief/refresh`, { method: 'POST' });
-    setBrief(null);
-    setStatus('generating');
+    const res = await fetch(`/api/projects/${projectId}/brief/refresh`, { method: 'POST' });
+    if (res.ok) {
+      setStatus('generating');
+    }
     setRefreshing(false);
   }
 
@@ -54,7 +63,6 @@ export default function BriefPanel({ projectId, initialBrief, intakeStatus }: Pr
     const handler = (e: CustomEvent) => {
       if ((e as CustomEvent<{ projectId: string }>).detail.projectId === projectId) {
         setStatus('generating');
-        setBrief(null);
       }
     };
     window.addEventListener('intake-complete', handler as EventListener);
@@ -66,7 +74,21 @@ export default function BriefPanel({ projectId, initialBrief, intakeStatus }: Pr
       <div className={styles.panel}>
         <div className={styles.generating}>
           <span className={styles.generatingLabel}>Generating brief</span>
-          <span className={styles.generatingHint}>Usually takes 10–20 seconds.</span>
+          <span className={styles.generatingHint}>Usually takes 10-20 seconds.</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'generation_failed') {
+    return (
+      <div className={styles.panel}>
+        <div className={styles.empty}>
+          <p className={styles.emptyText}>Brief generation failed.</p>
+          <p className={styles.emptyHint}>You can retry without losing the current project context.</p>
+          <button className={styles.refreshBtn} onClick={handleRefresh} disabled={refreshing}>
+            {refreshing ? 'Retrying...' : 'Retry'}
+          </button>
         </div>
       </div>
     );
@@ -92,9 +114,15 @@ export default function BriefPanel({ projectId, initialBrief, intakeStatus }: Pr
       <div className={styles.briefHeader}>
         <span className={styles.briefLabel}>Project Brief</span>
         <button className={styles.refreshBtn} onClick={handleRefresh} disabled={refreshing}>
-          {refreshing ? 'Refreshing…' : 'Refresh'}
+          {refreshing ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
+      {status === 'generating' && (
+        <div className={styles.generating}>
+          <span className={styles.generatingLabel}>Refreshing brief</span>
+          <span className={styles.generatingHint}>Keeping the current brief visible until the new one is ready.</span>
+        </div>
+      )}
       <div className={styles.briefContent}>
         <BriefView brief={brief} />
       </div>

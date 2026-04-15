@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { projects, project_intake } from '@/lib/db/schema';
+import { projects, project_briefs, project_intake } from '@/lib/db/schema';
 import { getAuthenticatedUserId } from '@/lib/auth';
+import { textRouteError } from '@/lib/api';
 import { extractIntakeFields } from '@/lib/ai/extract-intake';
 import { inngest } from '@/inngest/client';
 
@@ -25,6 +26,22 @@ If the project already has a brief (you'll be told), act as an ongoing advisor â
 type ConversationMessage = { role: 'assistant' | 'user'; content: string };
 
 type Params = { params: Promise<{ projectId: string }> };
+
+function getSystemPrompt(hasBrief: boolean): string {
+  if (hasBrief) {
+    return `${INTAKE_SYSTEM_PROMPT}
+
+This project already has a current brief.
+Stay in ongoing advisor mode.
+Do not output {"intake_complete": true}.
+Do not restart the structured intake flow.`;
+  }
+
+  return `${INTAKE_SYSTEM_PROMPT}
+
+This project does not have a brief yet.
+Run the structured intake flow and only output {"intake_complete": true} once you truly have enough information.`;
+}
 
 function getProvider(): 'openai' | 'anthropic' {
   return process.env.AI_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
@@ -106,6 +123,13 @@ export async function POST(req: NextRequest, { params }: Params) {
       .limit(1);
     if (!project) return new Response('Not found', { status: 404 });
 
+    const [brief] = await db
+      .select({ id: project_briefs.id })
+      .from(project_briefs)
+      .where(and(eq(project_briefs.project_id, projectId), eq(project_briefs.is_current, true)))
+      .limit(1);
+    const hasBrief = !!brief;
+
     const { message } = await req.json() as { message: string };
     if (!message?.trim()) return new Response('Message required', { status: 400 });
 
@@ -131,12 +155,13 @@ export async function POST(req: NextRequest, { params }: Params) {
         : updatedConversation.map((m) => ({ role: m.role, content: m.content }));
 
     let fullResponse = '';
+    const systemPrompt = getSystemPrompt(hasBrief);
 
     const provider = getProvider();
     const providerStream =
       provider === 'anthropic'
-        ? await streamFromAnthropic(INTAKE_SYSTEM_PROMPT, apiMessages)
-        : await streamFromOpenAI(INTAKE_SYSTEM_PROMPT, apiMessages);
+        ? await streamFromAnthropic(systemPrompt, apiMessages)
+        : await streamFromOpenAI(systemPrompt, apiMessages);
 
     const readable = new ReadableStream({
       async start(controller) {
@@ -174,7 +199,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         }
 
         // Check for intake completion signal
-        if (fullResponse.includes('"intake_complete": true')) {
+        if (!hasBrief && fullResponse.includes('"intake_complete": true')) {
           try {
             const fields = await extractIntakeFields(finalConversation);
             await db
@@ -201,8 +226,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         'X-Content-Type-Options': 'nosniff',
       },
     });
-  } catch (err) {
-    console.error('Intake chat error:', err);
-    return new Response('Unauthorized', { status: 401 });
+  } catch (error) {
+    return textRouteError(error, 'Failed to process intake chat');
   }
 }

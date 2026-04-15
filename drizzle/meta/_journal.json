@@ -15,6 +15,13 @@
       "when": 1776127351582,
       "tag": "0001_right_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776205311356,
+      "tag": "0002_cheerful_mauler",
+      "breakpoints": true
     }
   ]
 }

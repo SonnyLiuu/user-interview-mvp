@@ -10,9 +10,22 @@ type Props = {
   initialConversation: Message[];
   hasBrief: boolean;
   onIntakeComplete?: () => void;
+  titleOverride?: string;
+  subtitleOverride?: string;
+  fullPage?: boolean;
+  centerHeading?: string;
 };
 
-export default function ProjectChat({ projectId, initialConversation, hasBrief, onIntakeComplete }: Props) {
+export default function ProjectChat({
+  projectId,
+  initialConversation,
+  hasBrief,
+  onIntakeComplete,
+  titleOverride,
+  subtitleOverride,
+  fullPage,
+  centerHeading,
+}: Props) {
   const [messages, setMessages] = useState<Message[]>(initialConversation);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -120,17 +133,21 @@ export default function ProjectChat({ projectId, initialConversation, hasBrief, 
     return content.replace(/\{"intake_complete":\s*true\}/g, '').trim();
   }
 
-  const title = hasBrief ? 'Ongoing Advisor' : 'Founder Office Hours';
-  const subtitle = hasBrief
+  const title = titleOverride ?? (hasBrief ? 'Ongoing Advisor' : 'Founder Office Hours');
+  const subtitle = subtitleOverride ?? (hasBrief
     ? 'Refine your thinking, explore new angles, update assumptions.'
-    : 'A structured conversation to build your project brief.';
+    : 'Make edits to your foundation brief, or add more information about your project.');
+
+  const isEmpty = fullPage && messages.length === 0 && !streaming;
 
   return (
-    <div className={styles.chat}>
-      <div className={styles.header}>
-        <span className={styles.title}>{title}</span>
-        <span className={styles.subtitle}>{subtitle}</span>
-      </div>
+    <div className={[styles.chat, fullPage && styles.chatFullPage, isEmpty && styles.chatEmpty].filter(Boolean).join(' ')}>
+      {!fullPage && (
+        <div className={styles.header}>
+          <span className={styles.title}>{title}</span>
+          <span className={styles.subtitle}>{subtitle}</span>
+        </div>
+      )}
 
       <div className={styles.messages}>
         {messages.map((m, i) => (
@@ -158,6 +175,10 @@ export default function ProjectChat({ projectId, initialConversation, hasBrief, 
         <div ref={bottomRef} />
       </div>
 
+      {isEmpty && centerHeading && (
+        <p className={styles.centerHeading}>{centerHeading}</p>
+      )}
+
       <div className={styles.inputRow}>
         <textarea
           ref={textareaRef}
@@ -166,7 +187,7 @@ export default function ProjectChat({ projectId, initialConversation, hasBrief, 
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a message…"
-          rows={2}
+          rows={fullPage ? 1 : 2}
           disabled={streaming}
         />
         <button

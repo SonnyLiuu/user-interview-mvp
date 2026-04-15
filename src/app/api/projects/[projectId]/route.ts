@@ -3,6 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { getAuthenticatedUserId } from '@/lib/auth';
+import { jsonRouteError } from '@/lib/api';
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -22,8 +23,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const project = await getOwnedProject(userId, projectId);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json(project);
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (error) {
+    return jsonRouteError(error, 'Failed to load project');
   }
 }
 
@@ -34,9 +35,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const project = await getOwnedProject(userId, projectId);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const body = await req.json() as { name?: string; is_archived?: boolean };
+    const body = await req.json() as { name?: string; is_archived?: boolean; slug?: string };
+    if (body.slug !== undefined) {
+      return NextResponse.json({ error: 'Project slugs are immutable' }, { status: 400 });
+    }
+
     const updates: Partial<typeof project> = {};
-    if (body.name !== undefined) updates.name = body.name;
+    if (body.name !== undefined) {
+      const trimmedName = body.name.trim();
+      if (!trimmedName) {
+        return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 });
+      }
+      updates.name = trimmedName;
+    }
     if (body.is_archived !== undefined) updates.is_archived = body.is_archived;
 
     const [updated] = await db
@@ -46,8 +57,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
       .returning();
 
     return NextResponse.json(updated);
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (error) {
+    return jsonRouteError(error, 'Failed to update project');
   }
 }
 
@@ -64,7 +75,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       .where(eq(projects.id, projectId));
 
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (error) {
+    return jsonRouteError(error, 'Failed to archive project');
   }
 }

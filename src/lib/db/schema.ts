@@ -184,6 +184,45 @@ export const insights = pgTable('insights', {
   is_current: boolean('is_current').default(true),
 });
 
+// ── onboarding_sessions ───────────────────────────────────────────────────────
+export const onboarding_sessions = pgTable('onboarding_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).unique(),
+  status: text('status').default('active'), // 'active' | 'ready' | 'completed'
+  current_slot: text('current_slot'),
+  started_at: timestamp('started_at', { withTimezone: true }).defaultNow(),
+  completed_at: timestamp('completed_at', { withTimezone: true }),
+  progress_json: jsonb('progress_json'),
+});
+
+// ── onboarding_messages ───────────────────────────────────────────────────────
+export const onboarding_messages = pgTable('onboarding_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  session_id: uuid('session_id').references(() => onboarding_sessions.id, { onDelete: 'cascade' }),
+  project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'assistant' | 'user'
+  content: text('content').notNull(),
+  message_type: text('message_type'), // 'question' | 'choice_answer' | 'custom_answer' | 'system'
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// ── onboarding_state ──────────────────────────────────────────────────────────
+export const onboarding_state = pgTable('onboarding_state', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).unique(),
+  state_json: jsonb('state_json'),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// ── project_foundations ───────────────────────────────────────────────────────
+export const project_foundations = pgTable('project_foundations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  foundation_json: jsonb('foundation_json'),
+  generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
 // ── Inferred types ────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type Project = typeof projects.$inferSelect;
@@ -195,3 +234,7 @@ export type CallPrep = typeof call_prep.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;
 export type Debrief = typeof debriefs.$inferSelect;
 export type Insight = typeof insights.$inferSelect;
+export type OnboardingSession = typeof onboarding_sessions.$inferSelect;
+export type OnboardingMessage = typeof onboarding_messages.$inferSelect;
+export type OnboardingStateRow = typeof onboarding_state.$inferSelect;
+export type ProjectFoundation = typeof project_foundations.$inferSelect;

@@ -251,9 +251,9 @@ export function LandingPage() {
           </div>
           <div className={styles.footerRow2}>
             <span className={styles.footerTagline}>
-              Startup Foundry wants to help new founders get to product-market fit faster and with less wasted time and effort. <br />We are in early access and would love to hear from you: <a href="mailto:placeholder@gmail.com" className={styles.footerEmail}>placeholder@gmail.com</a>
+              Startup Foundry wants to help new founders get to product-market fit faster and with less wasted time and effort. <br />We are in early access and would love to hear from you: <a href="mailto:feedback@startupfoundry.app" className={styles.footerEmail}>feedback@startupfoundry.app</a>
             </span>
-            <span className={styles.footerCopy}>© 2026 Startup Foundry</span>
+            <span className={styles.footerCopy}>&copy; 2026 Startup Foundry</span>
           </div>
         </div>
       </footer>

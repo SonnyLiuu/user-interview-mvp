@@ -6,5 +6,5 @@ export default async function ProjectRootPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  redirect(`/dashboard/${slug}/project`);
+  redirect(`/dashboard/${slug}/foundation`);
 }

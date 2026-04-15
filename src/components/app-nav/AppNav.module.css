@@ -13,7 +13,7 @@
 }
 
 .collapsed { width: 56px; }
-.expanded  { width: 170px; }
+.expanded  { width: 220px; }
 
 /* ── Logo ────────────────────────────────────────────────────────────────── */
 .logo {
@@ -195,6 +195,12 @@
   overflow: visible;
 }
 
+.projectSwitcherHeader {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid #e8d9c4;
+}
+
 .projectSwitcherBtn {
   width: 100%;
   height: 44px;
@@ -204,7 +210,6 @@
   padding: 0 10px;
   background: none;
   border: none;
-  border-bottom: 1px solid #e8d9c4;
   cursor: pointer;
   font-family: inherit;
   color: #2e2115;
@@ -214,6 +219,30 @@
 }
 
 .projectSwitcherBtn:hover { background: #f5e2d0; }
+
+.projectEditButton {
+  width: 34px;
+  flex-shrink: 0;
+  border: none;
+  border-right: 1px solid #e8d9c4;
+  background: transparent;
+  color: #8c6e57;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+
+.projectEditButton:hover {
+  background: #f5e2d0;
+  color: #2e2115;
+}
+
+.projectEditButton svg {
+  width: 15px;
+  height: 15px;
+}
 
 .projectSwitcherName {
   flex: 1;
@@ -250,6 +279,13 @@
   min-width: 160px;
 }
 
+.projectDropdownRow {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border-radius: 7px;
+}
+
 .projectDropdownItem {
   display: block;
   width: 100%;
@@ -276,6 +312,36 @@
   font-weight: 510;
 }
 
+.projectDropdownRow .projectDropdownItemActive,
+.projectDropdownRow.projectDropdownItemActive .projectDropdownItem,
+.projectDropdownRow.projectDropdownItemActive .projectDeleteButton {
+  background: #f5e2d0;
+}
+
+.projectDeleteButton {
+  width: 34px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #b04d2a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 100ms, color 100ms;
+}
+
+.projectDeleteButton:hover {
+  background: #f8d9cb;
+  color: #8f3415;
+}
+
+.projectDeleteButton svg {
+  width: 15px;
+  height: 15px;
+}
+
 .projectDropdownDivider {
   height: 1px;
   background: #e8d9c4;
@@ -285,6 +351,119 @@
 .projectDropdownAdd {
   color: #a4532b;
   font-weight: 480;
+}
+
+.projectDeleteConfirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.projectDeleteOverlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(37, 24, 14, 0.34);
+  backdrop-filter: blur(4px);
+  z-index: 300;
+}
+
+.projectDeleteModal {
+  width: min(100%, 440px);
+  background: #fffdf8;
+  border: 1px solid #e8d9c4;
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 24px 64px rgba(46, 33, 21, 0.18);
+}
+
+.projectDeleteTitle {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 620;
+  color: #2e2115;
+}
+
+.projectDeleteCopy {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #6f5845;
+}
+
+.projectDeleteHint {
+  margin: -2px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #8a705a;
+}
+
+.projectDeleteInput {
+  width: 100%;
+  border: 1px solid #d8c5ae;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+  color: #2e2115;
+  background: #fff;
+}
+
+.projectDeleteInput:focus {
+  outline: none;
+  border-color: #b57649;
+  box-shadow: 0 0 0 3px rgba(181, 118, 73, 0.14);
+}
+
+.projectDeleteError {
+  margin: -4px 0 0;
+  font-size: 13px;
+  color: #a53f1f;
+}
+
+.projectDeleteActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+  gap: 8px;
+}
+
+.projectDeleteCancel,
+.projectDeleteDanger {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 560;
+  cursor: pointer;
+  transition: background 100ms, color 100ms, opacity 100ms;
+}
+
+.projectDeleteCancel {
+  background: #f5ede3;
+  color: #5f4a39;
+}
+
+.projectDeleteDanger {
+  background: #b04d2a;
+  color: #fff8f3;
+}
+
+.projectDeleteCancel:hover:not(:disabled) {
+  background: #eadbc9;
+}
+
+.projectDeleteDanger:hover:not(:disabled) {
+  background: #963d1d;
+}
+
+.projectDeleteCancel:disabled,
+.projectDeleteDanger:disabled {
+  cursor: default;
+  opacity: 0.65;
 }
 
 /* ── Section label ───────────────────────────────────────────────────────── */

@@ -1,5 +1,5 @@
 export type PersonaType = 'potential_user' | 'buyer' | 'operator' | 'domain_expert' | 'skeptic' | 'connector';
-export type IntakeStatus = 'not_started' | 'in_progress' | 'complete';
+export type IntakeStatus = 'not_started' | 'in_progress' | 'generating' | 'complete' | 'generation_failed';
 export type CrawlStatus = 'pending' | 'crawling' | 'done' | 'failed';
 export type AnalysisStatus = 'pending' | 'analyzing' | 'done' | 'failed';
 export type BoardStatus = 'bookmarked' | 'contacted' | 'scheduled' | 'completed';

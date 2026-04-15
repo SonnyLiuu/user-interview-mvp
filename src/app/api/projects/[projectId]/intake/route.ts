@@ -3,6 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects, project_intake } from '@/lib/db/schema';
 import { getAuthenticatedUserId } from '@/lib/auth';
+import { jsonRouteError } from '@/lib/api';
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -38,7 +39,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       .returning();
 
     return NextResponse.json(created);
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch (error) {
+    return jsonRouteError(error, 'Failed to load intake');
   }
 }

@@ -3,6 +3,7 @@ import { desc, eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { getAuthenticatedUserId } from '@/lib/auth';
+import { getProjectPathSegment } from '@/lib/projects';
 
 export default async function DashboardPage() {
   const userId = await getAuthenticatedUserId();
@@ -15,7 +16,7 @@ export default async function DashboardPage() {
     .limit(1);
 
   if (latest) {
-    redirect(`/dashboard/${latest.slug ?? latest.id}/people`);
+    redirect(`/dashboard/${getProjectPathSegment(latest)}/foundation`);
   } else {
     redirect('/onboarding');
   }

@@ -1,0 +1,259 @@
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Empty state: center the kickoff input ───────────────────────────────── */
+.chatEmpty {
+  justify-content: center;
+}
+
+.chatEmpty .messages {
+  flex: 0;
+  overflow: hidden;
+}
+
+/* ── Transcript ───────────────────────────────────────────────────────────── */
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.assistantMsg {
+  align-self: flex-start;
+  max-width: 88%;
+  background: #f5eddf;
+  border: 1px solid #e8d9c4;
+  border-radius: 4px 12px 12px 12px;
+  padding: 10px 14px;
+}
+
+.userMsg {
+  align-self: flex-end;
+  max-width: 80%;
+  background: #2e2115;
+  border-radius: 12px 4px 12px 12px;
+  padding: 10px 14px;
+}
+
+.userMsg .msgContent {
+  color: #faf4ec;
+}
+
+.msgContent {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #2e2115;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+/* ── Typing indicator ────────────────────────────────────────────────────── */
+.typing {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.typing span {
+  width: 5px;
+  height: 5px;
+  background: #7c6854;
+  border-radius: 50%;
+  animation: bounce 1.2s infinite;
+}
+
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ── Input area ──────────────────────────────────────────────────────────── */
+.inputArea {
+  flex-shrink: 0;
+  padding-bottom: 28px;
+}
+
+/* ── Kickoff (free text) ─────────────────────────────────────────────────── */
+.kickoffHeading {
+  font-size: 20px;
+  font-weight: 430;
+  color: #715b49;
+  letter-spacing: -0.01em;
+  text-align: center;
+  margin: 0 0 20px;
+}
+
+.kickoffRow {
+  display: flex;
+  gap: 8px;
+  background: #fffdf8;
+  border: 1px solid #e0d3c2;
+  border-radius: 12px;
+  padding: 8px;
+  align-items: flex-end;
+}
+
+.kickoffTextarea {
+  flex: 1;
+  resize: none;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  font-family: inherit;
+  color: #2e2115;
+  outline: none;
+}
+
+.kickoffTextarea::placeholder {
+  color: #a8917e;
+}
+
+.kickoffTextarea:disabled {
+  opacity: 0.6;
+}
+
+/* ── Shared send button ──────────────────────────────────────────────────── */
+.sendBtn {
+  padding: 8px 18px;
+  background: #a4532b;
+  color: #faf4ec;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 450;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: center;
+  transition: opacity 120ms;
+}
+
+.sendBtn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.sendBtn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ── Choices ─────────────────────────────────────────────────────────────── */
+.choicesArea {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choiceGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.choiceBtn {
+  padding: 9px 16px;
+  background: #fffdf8;
+  border: 1px solid #d4bfa6;
+  border-radius: 20px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #2e2115;
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.choiceBtn:hover:not(:disabled) {
+  background: #f5eddf;
+  border-color: #b39472;
+}
+
+.choiceBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.somethingElseBtn {
+  background: transparent;
+  border-color: #c9b89e;
+  color: #7c6854;
+}
+
+.somethingElseBtn:hover:not(:disabled) {
+  background: #faf4ec;
+  color: #2e2115;
+}
+
+/* ── Custom text input ───────────────────────────────────────────────────── */
+.customInputRow {
+  display: flex;
+  gap: 8px;
+  background: #fffdf8;
+  border: 1px solid #e0d3c2;
+  border-radius: 12px;
+  padding: 8px;
+  align-items: flex-end;
+}
+
+.customTextarea {
+  flex: 1;
+  resize: none;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  font-family: inherit;
+  color: #2e2115;
+  outline: none;
+}
+
+.customTextarea::placeholder {
+  color: #a8917e;
+}
+
+/* ── Finish prompt ───────────────────────────────────────────────────────── */
+.finishArea {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 0 4px;
+}
+
+.finishText {
+  font-size: 14px;
+  color: #715b49;
+  margin: 0;
+}
+
+.finishBtn {
+  padding: 10px 22px;
+  background: #a4532b;
+  color: #faf4ec;
+  border: none;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 450;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 120ms;
+}
+
+.finishBtn:hover {
+  opacity: 0.85;
+}

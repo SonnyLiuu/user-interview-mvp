@@ -105,7 +105,7 @@
 .inputRow {
   display: flex;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 8px 8px;
   border-top: 1px solid #e8d9c4;
   background: #faf4ec;
   flex-shrink: 0;
@@ -156,4 +156,72 @@
 .sendBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Full-page mode — used on the intake/setup screen */
+.chatFullPage {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.chatFullPage .messages {
+  padding: 16px 0;
+}
+
+.chatFullPage .inputRow {
+  background: #fffdf8;
+  border: 1px solid #e0d3c2;
+  border-radius: 12px;
+  padding: 8px;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.chatFullPage .textarea {
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  resize: none;
+  align-self: center;
+}
+
+.chatFullPage .textarea:focus {
+  border-color: transparent;
+}
+
+.chatFullPage .sendBtn {
+  align-self: center;
+  background: #a4532b;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 13px;
+}
+
+.chatFullPage .sendBtn:disabled {
+  opacity: 0.65;
+}
+
+/* Centered input state — before any messages exist */
+.chatEmpty {
+  justify-content: center;
+}
+
+.centerHeading {
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 430;
+  color: #715b49;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+
+.chatEmpty .messages {
+  flex: 0;
+  overflow: hidden;
+}
+
+.chatEmpty .inputRow {
+  border-top: none;
 }
