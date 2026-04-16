@@ -39,13 +39,14 @@ export const updateProjectSchema = z.object({
 // Person-related schemas
 export const createPersonSchema = z.object({
   project_id: uuidSchema,
-  name: nonEmptyString,
+  name: z.string().optional(),  // populated after crawl when not provided
   title: z.string().optional(),
   company: z.string().optional(),
   persona_type: z.enum(['potential_user', 'buyer', 'operator', 'domain_expert', 'skeptic', 'connector']).optional(),
-  source_urls: z.array(urlSchema).optional(),
+  source_urls: z.array(urlSchema).min(1, 'At least one URL is required'),
   raw_pasted_text: z.string().optional(),
   additional_context: z.array(z.string()).optional(),
+  research_depth: z.enum(['quick', 'deep']).default('deep'),
 });
 
 export const updatePersonSchema = z.object({

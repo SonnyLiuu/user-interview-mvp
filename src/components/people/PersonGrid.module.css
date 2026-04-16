@@ -1,0 +1,23 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gapBanner {
+  margin: 0;
+  font-size: 13px;
+  color: #7c6854;
+  font-weight: 460;
+  padding: 10px 14px;
+  background: #fef3e2;
+  border: 1px solid #f0d9a8;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}

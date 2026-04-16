@@ -1,0 +1,39 @@
+.bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 5px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 480;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.label {
+  font-size: 12px;
+}
+
+/* ── Variants ────────────────────────────────────────────────────────────── */
+
+.user    { background: #e8f0f8; color: #2d5f8f; border-color: #c8ddef; }
+.buyer   { background: #e6f2ec; color: #256644; border-color: #b8dfc8; }
+.operator { background: #ede8f5; color: #5a3a94; border-color: #d0c4e8; }
+.expert  { background: #fef3e2; color: #7a4e12; border-color: #f0d9a8; }
+.skeptic { background: #f0ede9; color: #5a4234; border-color: #ddd0c4; }
+.connector { background: #e2f3f2; color: #1a6b64; border-color: #b4dedd; }

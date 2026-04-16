@@ -1,0 +1,295 @@
+.page {
+  height: 100dvh;
+  overflow-y: auto;
+  background: #faf4ec;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Back button ─────────────────────────────────────────────────────────── */
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 460;
+  color: #7c6854;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 18px 28px 0;
+  transition: color 100ms;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.backBtn:hover { color: #2e2115; }
+
+.backIcon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Content ─────────────────────────────────────────────────────────────── */
+
+.content {
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px 32px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 0 24px;
+  border-bottom: 1px solid #e8d9c4;
+  margin-bottom: 28px;
+}
+
+.headerMain {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headerIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 520;
+  color: #2e2115;
+  line-height: 1.1;
+}
+
+.role {
+  margin: 0;
+  font-size: 14px;
+  color: #7c6854;
+}
+
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.headerActions {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.whyMatter {
+  margin: 0;
+  font-size: 15px;
+  color: #5f4a39;
+  line-height: 1.55;
+  font-weight: 430;
+  font-style: italic;
+}
+
+.analyzingNote {
+  margin: 0;
+  font-size: 13px;
+  color: #7c6854;
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Section ─────────────────────────────────────────────────────────────── */
+
+.section {
+  padding: 22px 0;
+  border-bottom: 1px solid #f0e4d4;
+}
+
+.section:last-child {
+  border-bottom: none;
+}
+
+.sectionTitle {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #8a705a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Prose ───────────────────────────────────────────────────────────────── */
+
+.prose {
+  margin: 0;
+  font-size: 14.5px;
+  color: #3a2a1e;
+  line-height: 1.65;
+}
+
+/* ── Lists ───────────────────────────────────────────────────────────────── */
+
+.list {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.listItem {
+  font-size: 14px;
+  color: #3a2a1e;
+  line-height: 1.5;
+}
+
+.questionList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  counter-reset: question;
+}
+
+.question {
+  font-size: 14px;
+  color: #3a2a1e;
+  line-height: 1.55;
+  padding-left: 28px;
+  position: relative;
+  counter-increment: question;
+}
+
+.question::before {
+  content: counter(question);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 20px;
+  height: 20px;
+  background: #f0e4d4;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 500;
+  color: #7c5a3a;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* ── Contact ─────────────────────────────────────────────────────────────── */
+
+.contactGrid {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.contactKey {
+  font-size: 12.5px;
+  color: #8a705a;
+  font-weight: 460;
+  line-height: 1.5;
+}
+
+.contactVal {
+  font-size: 13px;
+  color: #3a2a1e;
+  line-height: 1.5;
+  word-break: break-all;
+  margin: 0;
+}
+
+.contactLink {
+  color: #a4532b;
+  text-decoration: none;
+}
+
+.contactLink:hover { text-decoration: underline; }
+
+.notFound {
+  margin: 0;
+  font-size: 13.5px;
+  color: #8a705a;
+}
+
+/* ── Sources ─────────────────────────────────────────────────────────────── */
+
+.sourceList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sourceList li { font-size: 13px; }
+
+/* ── Add context ─────────────────────────────────────────────────────────── */
+
+.contextHint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #7c6854;
+  line-height: 1.45;
+}
+
+.addContextBtn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 480;
+  color: #a4532b;
+  background: none;
+  border: 1px solid #d8c5ae;
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms;
+}
+
+.addContextBtn:hover:not(:disabled) { background: #f5ede3; border-color: #c5a882; }
+.addContextBtn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Outreach stub ───────────────────────────────────────────────────────── */
+
+.outreachStub {
+  background: #f5ede3;
+  border: 1px dashed #d8c5ae;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stubText {
+  margin: 0;
+  font-size: 13px;
+  color: #8a705a;
+  text-align: center;
+}

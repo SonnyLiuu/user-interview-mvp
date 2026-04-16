@@ -40,12 +40,28 @@ export type CrawledContent = {
   metadata?: Record<string, unknown>;
 };
 
+export type ContactInfo = {
+  email?: string;
+  twitter?: string;
+  website?: string;
+  linkedin?: string;
+};
+
 export type PersonAnalysis = {
+  // Extracted identity — written back to dedicated columns after crawl
+  name?: string;
+  title?: string;
+  company?: string;
+  persona_type?: string;
+  // Analysis content
   summary?: string;
   key_insights?: string[];
   recommended_questions?: string[];
   risk_factors?: string[];
   confidence_score?: number;
+  relevance_rank?: 'low' | 'medium' | 'high';
+  why_they_matter?: string;
+  contact_info?: ContactInfo;
 };
 
 export type OutreachContent = {
@@ -166,7 +182,11 @@ export const people = pgTable('people', {
   analysis_version: integer('analysis_version').default(0),
   analysis_status: text('analysis_status').default('pending'),
 
-  board_status: text('board_status').default('bookmarked'),
+  relevance_rank: text('relevance_rank'),
+  research_depth: text('research_depth').default('deep'),
+  expires_at: timestamp('expires_at', { withTimezone: true }),
+
+  board_status: text('board_status'),
   call_scheduled_at: timestamp('call_scheduled_at', { withTimezone: true }),
 
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
