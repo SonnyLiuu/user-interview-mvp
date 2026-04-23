@@ -18,6 +18,7 @@ One of the tallest challenges for new founders with limited networks is outreach
 - [Neon](https://neon.tech) — serverless Postgres
 - [Drizzle ORM](https://orm.drizzle.team)
 - [Anthropic SDK](https://docs.anthropic.com) — AI
+- [OpenAI SDK](https://developers.openai.com/api/docs) - AI
 
 ## Getting started
 
