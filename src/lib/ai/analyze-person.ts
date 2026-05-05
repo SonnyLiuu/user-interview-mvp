@@ -8,10 +8,20 @@ type ProjectContext = {
   most_promising_avenues?: string[] | null;
 };
 
+const MAX_CRAWLED_CONTENT_CHARS = 24_000;
+
+function limitCrawledContent(content: string) {
+  if (content.length <= MAX_CRAWLED_CONTENT_CHARS) {
+    return content;
+  }
+  return `${content.slice(0, MAX_CRAWLED_CONTENT_CHARS)}\n\n[Content truncated before analysis.]`;
+}
+
 export async function analyzePerson(
   crawledContent: string,
   projectContext: ProjectContext
 ): Promise<PersonAnalysis> {
+  const analysisContent = limitCrawledContent(crawledContent);
   const prompt = `You are an expert at helping early-stage founders identify the most valuable people to learn from during customer discovery.
 
 FOUNDER'S PROJECT CONTEXT:
@@ -21,7 +31,7 @@ Key assumptions to validate: ${projectContext.key_assumptions?.join('; ') ?? 'No
 Most promising avenues: ${projectContext.most_promising_avenues?.join('; ') ?? 'Not specified'}
 
 CRAWLED INFORMATION ABOUT THIS PERSON:
-${crawledContent}
+${analysisContent}
 
 Analyze this person's relevance to the founder's discovery goals. Be honest and specific — do not inflate relevance. If this person is genuinely a weak match, say so.
 

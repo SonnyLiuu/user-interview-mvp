@@ -14,9 +14,7 @@ function getClient() {
   return client;
 }
 
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
-
-export async function generateObject<T>(prompt: string, schema: object, model = DEFAULT_MODEL): Promise<T> {
+export async function generateObject<T>(prompt: string, schema: object, model = env.ANTHROPIC_MODEL): Promise<T> {
   const msg = await getClient().messages.create({
     model,
     max_tokens: 4096,

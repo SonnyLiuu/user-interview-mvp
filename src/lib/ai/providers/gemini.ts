@@ -14,9 +14,7 @@ function getClient() {
   return client;
 }
 
-const DEFAULT_MODEL = 'gemini-2.0-flash';
-
-export async function generateObject<T>(prompt: string, schema: object, model = DEFAULT_MODEL): Promise<T> {
+export async function generateObject<T>(prompt: string, schema: object, model = env.GEMINI_MODEL): Promise<T> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const genModel = getClient().getGenerativeModel({
     model,

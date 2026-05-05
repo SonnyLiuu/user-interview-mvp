@@ -34,6 +34,28 @@ def _parse_json_response(raw: str, provider: str) -> dict:
     return parsed
 
 
+def _is_json_response_error(exc: AIServiceError) -> bool:
+    message = str(exc)
+    return "valid JSON" in message or "JSON was not an object" in message
+
+
+def _with_json_retry_instruction(messages: list[dict], schema_hint: str) -> list[dict]:
+    if not messages:
+        return messages
+    retry_messages = [*messages]
+    last = retry_messages[-1]
+    retry_messages[-1] = {
+        **last,
+        "content": (
+            f"{last['content']}\n\n"
+            "Your previous response could not be parsed as the required JSON object. "
+            "Return exactly one valid JSON object, with no markdown fences, prose, comments, or trailing text. "
+            f"Schema hint:\n{schema_hint}"
+        ),
+    }
+    return retry_messages
+
+
 async def _await_provider(coro, provider: str, timeout: float, operation: str):
     try:
         return await asyncio.wait_for(coro, timeout=timeout)
@@ -45,7 +67,7 @@ async def _await_provider(coro, provider: str, timeout: float, operation: str):
         raise AIServiceError(f"{operation} failed: {exc}", provider) from exc
 
 
-async def _generate_json(messages: list[dict], schema_hint: str) -> dict:
+async def _generate_json_once(messages: list[dict], schema_hint: str) -> dict:
     settings = get_settings()
     provider = _read_provider()
     timeout = settings.ai_request_timeout_seconds
@@ -113,6 +135,15 @@ async def _generate_json(messages: list[dict], schema_hint: str) -> dict:
     )
     content = response.choices[0].message.content or "{}"
     return _parse_json_response(content, provider)
+
+
+async def _generate_json(messages: list[dict], schema_hint: str) -> dict:
+    try:
+        return await _generate_json_once(messages, schema_hint)
+    except AIServiceError as exc:
+        if not _is_json_response_error(exc):
+            raise
+        return await _generate_json_once(_with_json_retry_instruction(messages, schema_hint), schema_hint)
 
 
 async def extract_kickoff_idea(user_message: str) -> dict:

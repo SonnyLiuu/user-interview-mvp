@@ -11,6 +11,9 @@ interface EnvConfig {
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
+  OPENAI_MODEL: string;
+  ANTHROPIC_MODEL: string;
+  GEMINI_MODEL: string;
 }
 
 type EnvState = {
@@ -72,6 +75,9 @@ function buildFallbackConfig(): EnvConfig {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
   };
 }
 
@@ -109,6 +115,9 @@ function readAndValidateEnvironment(): EnvConfig {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
   };
 }
 

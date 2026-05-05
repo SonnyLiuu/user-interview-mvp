@@ -14,9 +14,7 @@ function getClient() {
   return client;
 }
 
-const DEFAULT_MODEL = 'gpt-4o';
-
-export async function generateObject<T>(prompt: string, schema: object, model = DEFAULT_MODEL): Promise<T> {
+export async function generateObject<T>(prompt: string, schema: object, model = env.OPENAI_MODEL): Promise<T> {
   const res = await getClient().chat.completions.create({
     model,
     messages: [{ role: 'user', content: prompt }],
