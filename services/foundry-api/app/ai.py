@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import AsyncIterator
 
@@ -7,36 +8,142 @@ from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
 from .config import get_settings
+from .errors import AIServiceError
 
 
-async def _generate_json(messages: list[dict], model: str, schema_hint: str) -> dict:
+def _read_provider() -> str:
     settings = get_settings()
-    provider = settings.ai_provider if settings.ai_provider in {"openai", "anthropic"} else "openai"
+    provider = settings.ai_provider.strip().lower()
+    return provider if provider in {"openai", "anthropic", "gemini"} else "openai"
+
+
+def _parse_json_response(raw: str, provider: str) -> dict:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.removeprefix("```json").removeprefix("```").strip()
+        text = text.removesuffix("```").strip()
+
+    try:
+        parsed = json.loads(text or "{}")
+    except json.JSONDecodeError as exc:
+        raise AIServiceError("AI response was not valid JSON", provider) from exc
+
+    if not isinstance(parsed, dict):
+        raise AIServiceError("AI response JSON was not an object", provider)
+
+    return parsed
+
+
+def _is_json_response_error(exc: AIServiceError) -> bool:
+    message = str(exc)
+    return "valid JSON" in message or "JSON was not an object" in message
+
+
+def _with_json_retry_instruction(messages: list[dict], schema_hint: str) -> list[dict]:
+    if not messages:
+        return messages
+    retry_messages = [*messages]
+    last = retry_messages[-1]
+    retry_messages[-1] = {
+        **last,
+        "content": (
+            f"{last['content']}\n\n"
+            "Your previous response could not be parsed as the required JSON object. "
+            "Return exactly one valid JSON object, with no markdown fences, prose, comments, or trailing text. "
+            f"Schema hint:\n{schema_hint}"
+        ),
+    }
+    return retry_messages
+
+
+async def _await_provider(coro, provider: str, timeout: float, operation: str):
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout)
+    except TimeoutError as exc:
+        raise AIServiceError(f"{operation} timed out", provider) from exc
+    except AIServiceError:
+        raise
+    except Exception as exc:
+        raise AIServiceError(f"{operation} failed: {exc}", provider) from exc
+
+
+async def _generate_json_once(messages: list[dict], schema_hint: str) -> dict:
+    settings = get_settings()
+    provider = _read_provider()
+    timeout = settings.ai_request_timeout_seconds
+
     if provider == "anthropic":
         if not settings.anthropic_api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is not configured")
+            raise AIServiceError("ANTHROPIC_API_KEY is not configured", provider)
         client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        response = await client.messages.create(
-            model=model,
-            max_tokens=4096,
-            messages=[{"role": "user", "content": f"{messages[0]['content']}\n\nReturn strict JSON only. Schema hint:\n{schema_hint}"}],
+        response = await _await_provider(
+            client.messages.create(
+                model=settings.anthropic_model,
+                max_tokens=4096,
+                messages=[{"role": "user", "content": f"{messages[0]['content']}\n\nReturn strict JSON only. Schema hint:\n{schema_hint}"}],
+            ),
+            provider,
+            timeout,
+            "Anthropic request",
         )
         text_blocks = [block.text for block in response.content if getattr(block, "type", "") == "text"]
-        return json.loads("".join(text_blocks) or "{}")
+        return _parse_json_response("".join(text_blocks), provider)
+
+    if provider == "gemini":
+        if not settings.gemini_api_key:
+            raise AIServiceError("GEMINI_API_KEY is not configured", provider)
+        try:
+            import google.generativeai as genai
+        except ImportError as exc:
+            raise AIServiceError(
+                "google-generativeai is not installed. Run `pip install -r requirements.txt` "
+                "or set AI_PROVIDER to openai/anthropic.",
+                provider,
+            ) from exc
+        genai.configure(api_key=settings.gemini_api_key)
+        gemini_model = genai.GenerativeModel(
+            model_name=settings.gemini_model,
+            generation_config={"response_mime_type": "application/json"},
+        )
+        prompt = f"{messages[0]['content']}\n\nReturn strict JSON only. Schema hint:\n{schema_hint}"
+        response = await _await_provider(
+            gemini_model.generate_content_async(
+                prompt,
+                request_options={"timeout": timeout},
+            ),
+            provider,
+            timeout + 5,
+            "Gemini request",
+        )
+        return _parse_json_response(response.text or "{}", provider)
 
     if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured")
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
-    response = await client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": f"You are a JSON API. Respond with valid JSON only. Use this exact schema:\n{schema_hint}"},
-            *[{"role": msg["role"], "content": msg["content"]} for msg in messages],
-        ],
-        response_format={"type": "json_object"},
+        raise AIServiceError("OPENAI_API_KEY is not configured", provider)
+    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=timeout)
+    response = await _await_provider(
+        client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": f"You are a JSON API. Respond with valid JSON only. Use this exact schema:\n{schema_hint}"},
+                *[{"role": msg["role"], "content": msg["content"]} for msg in messages],
+            ],
+            response_format={"type": "json_object"},
+        ),
+        provider,
+        timeout + 5,
+        "OpenAI request",
     )
     content = response.choices[0].message.content or "{}"
-    return json.loads(content)
+    return _parse_json_response(content, provider)
+
+
+async def _generate_json(messages: list[dict], schema_hint: str) -> dict:
+    try:
+        return await _generate_json_once(messages, schema_hint)
+    except AIServiceError as exc:
+        if not _is_json_response_error(exc):
+            raise
+        return await _generate_json_once(_with_json_retry_instruction(messages, schema_hint), schema_hint)
 
 
 async def extract_kickoff_idea(user_message: str) -> dict:
@@ -50,7 +157,6 @@ async def extract_kickoff_idea(user_message: str) -> dict:
     )
     raw = await _generate_json(
         [{"role": "user", "content": prompt}],
-        "gpt-4o",
         '{"ideaSummary": "string", "quality": "weak|solid"}',
     )
     return {
@@ -108,7 +214,6 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
     )
     raw = await _generate_json(
         [{"role": "user", "content": prompt}],
-        "gpt-4o",
         '{"question":"string","choices":[{"id":"string","label":"string","normalizedValue":"string"}],"customPlaceholder":"string"}',
     )
     return {
@@ -136,13 +241,11 @@ async def extract_custom_slot_answer(target_slot: str, custom_text: str, recent_
     if is_array_slot:
         raw = await _generate_json(
             [{"role": "user", "content": prompt}],
-            "gpt-4o",
             '{"values":["string"],"quality":"weak|solid"}',
         )
         return {"slotKey": target_slot, "value": raw.get("values") or [], "quality": raw.get("quality") or "weak"}
     raw = await _generate_json(
         [{"role": "user", "content": prompt}],
-        "gpt-4o",
         '{"value":"string","quality":"weak|solid"}',
     )
     return {"slotKey": target_slot, "value": raw.get("value") or "", "quality": raw.get("quality") or "weak"}
@@ -174,7 +277,6 @@ async def generate_foundation(messages: list[dict], state: dict) -> dict:
     )
     raw = await _generate_json(
         [{"role": "user", "content": prompt}],
-        "gpt-4o",
         '{"foundation":{"summary":"string","targetUser":"string","painPoint":"string","valueProp":"string","idealPeopleTypes":["string"],"differentiation":"string","disqualifiers":["string"]}}',
     )
     # Normalize: AI sometimes returns foundation fields at top level without the wrapper key
@@ -183,87 +285,171 @@ async def generate_foundation(messages: list[dict], state: dict) -> dict:
     return raw
 
 
-async def generate_brief(intake: dict) -> dict:
+async def generate_call_brief(person: dict, project_context: dict) -> dict:
+    analysis = person.get("analysis") or {}
+    key_insights = analysis.get("key_insights") or []
+    ideal_people = project_context.get("ideal_people_types") or []
+    disqualifiers = project_context.get("disqualifiers") or []
+    key_assumptions = project_context.get("key_assumptions") or []
+
     prompt = (
-        "You are an experienced startup advisor. Based on this founder's intake information, generate a structured project brief.\n\n"
-        f"What they're building: {intake.get('what_are_you_building') or 'Not specified'}\n"
-        f"For whom: {intake.get('for_whom') or 'Not specified'}\n"
-        f"Why now: {intake.get('why_now') or 'Not specified'}\n"
-        f"Pain: {intake.get('pain_description') or 'Not specified'}\n"
-        f"Current solutions: {intake.get('current_solutions') or 'Not specified'}\n"
-        f"Who feels the pain: {intake.get('who_feels_pain') or 'Not specified'}\n"
-        f"Who pays: {intake.get('who_pays') or 'Not specified'}\n"
-        f"Who has budget: {intake.get('who_has_budget') or 'Not specified'}\n"
-        f"Most promising angle: {intake.get('most_promising_angle') or 'Not specified'}\n"
-        f"Key assumptions: {', '.join(intake.get('key_assumptions') or []) or 'Not specified'}\n"
-        f"Biggest failure reasons: {', '.join(intake.get('biggest_failure_reasons') or []) or 'Not specified'}\n"
-        f"Personal connection: {intake.get('personal_connection') or 'Not specified'}\n\n"
-        "Generate a sharp, honest brief. Strengths should highlight genuine signals. Weaknesses should name real risks. "
-        "Assumptions must be the 3-5 things that must be true for this to work as a business. Recommended conversations should be specific persona types."
+        "You are helping a first-time founder prepare for a customer discovery call. "
+        "This is not sales enablement. The goal is founder learning: sharper hypotheses, "
+        "better market judgment, and clearer next steps.\n\n"
+        "FOUNDATION CONTEXT:\n"
+        f"{project_context.get('idea_summary') or 'Not specified'}\n\n"
+        f"Target customer: {project_context.get('target_customer') or 'Not specified'}\n"
+        f"Pain point: {project_context.get('pain_point') or 'Not specified'}\n"
+        f"Value proposition: {project_context.get('value_prop') or 'Not specified'}\n"
+        f"Ideal people to talk to: {', '.join(ideal_people) if ideal_people else 'Not specified'}\n"
+        f"People to avoid: {', '.join(disqualifiers) if disqualifiers else 'Not specified'}\n"
+        f"Assumptions to validate: {'; '.join(key_assumptions) if key_assumptions else 'Not specified'}\n\n"
+        "PERSON THEY ARE CALLING:\n"
+        f"Name: {person.get('name') or 'Unknown'}\n"
+        f"Title: {person.get('title') or 'Unknown'}\n"
+        f"Company: {person.get('company') or 'Unknown'}\n"
+        f"Persona type: {person.get('persona_type') or 'Unknown'}\n"
+        f"Background: {analysis.get('summary') or 'Not specified'}\n"
+        f"Why they matter: {analysis.get('why_they_matter') or 'Not specified'}\n"
+        f"Key insights: {'; '.join(key_insights) if key_insights else 'Not specified'}\n\n"
+        "Generate a focused call prep brief. Be specific to this person and this foundation.\n\n"
+        "Output rules:\n"
+        "- objective: exactly one sharp sentence naming what the founder should learn.\n"
+        "- goals: 3-5 founder-learning outcomes. Phrase each as what to validate, falsify, or learn. "
+        "Avoid vague sales tasks like 'ask about budget'.\n"
+        "- questions: 5-7 conversational discovery questions the founder could actually ask. "
+        "Make them specific to this person's background and the founder's assumptions. Keep them brief and direct.\n"
+        "- signals: 3-5 fit or weak-fit signals to use later during transcript/notes analysis. "
+        "These are not checklist questions.\n"
+        "- closing: one concise referral or follow-up ask.\n"
+        "- Do not include numbering, markdown, labels, or filler."
     )
     return await _generate_json(
         [{"role": "user", "content": prompt}],
-        "gpt-4o",
-        '{"idea_summary":"string","strengths":["string"],"weaknesses":["string"],"most_promising_avenues":["string"],"assumptions":[{"assumption":"string","status":"unvalidated","evidence":["string"]}],"recommended_conversations":[{"persona_type":"string","why":"string","what_to_learn":"string","urgency":"high|medium|low"}]}',
+        '{"objective":"string","goals":["string"],"questions":["string"],"signals":["string"],"closing":"string"}',
     )
 
 
-async def extract_intake_fields(conversation: list[dict]) -> dict:
-    transcript = "\n\n".join([f"{'Founder' if msg['role'] == 'user' else 'Advisor'}: {msg['content']}" for msg in conversation])
+async def generate_outreach_message(person: dict, project_context: dict) -> dict:
+    analysis = person.get("analysis") or {}
+    key_insights = analysis.get("key_insights") or []
+    ideal_people = project_context.get("ideal_people_types") or []
+    disqualifiers = project_context.get("disqualifiers") or []
+    key_assumptions = project_context.get("key_assumptions") or []
+
     prompt = (
-        "Extract structured intake information from this founder office hours conversation.\n\n"
-        f"CONVERSATION:\n{transcript}\n\n"
-        "Extract all fields you can infer from the conversation. Leave fields null if not discussed."
+        "Role definitions:\n"
+        "- sender: the founder/user sending the outreach.\n"
+        "- recipient: the person receiving the outreach.\n"
+        "- Product context is private. Use it only to choose the research topic. Never reveal the product, app, tool, features, company name, or startup idea in the message.\n\n"
+
+        "SENDER'S PROJECT CONTEXT:\n"
+        f"Idea: {project_context.get('idea_summary') or 'Not specified'}\n"
+        f"Target customer: {project_context.get('target_customer') or 'Not specified'}\n"
+        f"Pain point: {project_context.get('pain_point') or 'Not specified'}\n"
+        f"Ideal people to talk to: {', '.join(ideal_people) if ideal_people else 'Not specified'}\n"
+        f"Assumptions to validate: {'; '.join(key_assumptions) if key_assumptions else 'Not specified'}\n\n"
+
+        "RECIPIENT CONTEXT:\n"
+        f"Name: {person.get('name') or 'Unknown'}\n"
+        f"Title: {person.get('title') or 'Unknown'}\n"
+        f"Company: {person.get('company') or 'Unknown'}\n"
+        f"Persona type: {person.get('persona_type') or 'Unknown'}\n"
+        f"Background: {analysis.get('summary') or 'Not specified'}\n"
+        f"Why they matter: {analysis.get('why_they_matter') or 'Not specified'}\n"
+        f"Key insights: {'; '.join(key_insights) if key_insights else 'Not specified'}\n\n"
+
+        "Write a short, warm cold outreach message for customer discovery.\n"
+        "Use the sender's assumptions and the recipient's background to choose one focused conversation topic. "
+        "The topic should center on a real past experience the recipient likely had, especially one that could validate or falsify the sender's assumptions. "
+        "Do not list the assumptions or quote the project context.\n\n"
+
+        "Output rules:\n"
+        "- subject: an email subject line\n"
+        "- body: plain text message body, around 1 paragraph\n\n"
+
+        "Body rules:\n"
+        "- First paragraph: focus only on the recipient. Use 2-3 specific details from their role, company, market, customers, recent work, or background. Explain why their experience is relevant; do not just name-drop their title or company.\n"
+        "- Second paragraph: clearly state what the sender is trying to learn from the recipient's past experience. Focus on what happened, how they handled it, what was difficult, what they tried, what worked or failed, and what the outcome was.\n"
+        "- Third paragraph: make a soft 20-minute ask to learn from the recipient's experience.\n\n"
+
+        "Example style:\n"
+        "Use this as a pattern for specificity, structure, and tone. Do not copy the names, companies, or exact topic unless they match the recipient.\n"
+        "subject: Learning from Epsilla’s early customer discovery\n"
+        "body: Renchu, I noticed you’re Co-Founder & CEO of Epsilla after previously leading cloud work at TigerGraph. Your path is especially interesting because you’ve worked across deep technical infrastructure, engineering leadership, and the founder side of turning technical work into a company.\n\n"
+        "I’m researching how technical founders handled the early shift from building product to understanding customers. I’d love to learn how you identified your first useful customer signals, what surprised you during market validation, and what did or didn’t work when narrowing the initial customer segment.\n\n"
+        "Would you be open to a 20-minute call so I can learn from how you handled that experience?\n"
+        
+        "Avoid:\n"
+        "- Do not mention the sender's product, company name, startup idea, app, platform, tool, features, or solution.\n"
+        "- Do not say 'I'm building', 'we're building', 'we help', 'our product', or similar phrases.\n"
+        "- Do not ask for feedback, validation, advice, or a reaction to an idea.\n"
+        "- Do not use hypotheticals like 'would you use', 'would you pay', 'does this sound useful', or 'could you see yourself'.\n"
+        "- Avoid fluff, hype, flattery, urgency, markdown, signatures, numbering, and filler phrases like 'I hope this finds you well'."
     )
-    schema_hint = json.dumps(
-        {
-            "what_are_you_building": "string|null",
-            "for_whom": "string|null",
-            "why_now": "string|null",
-            "pain_description": "string|null",
-            "pain_frequency": "string|null",
-            "current_solutions": "string|null",
-            "why_not_solved": "string|null",
-            "consequence_if_unsolved": "string|null",
-            "who_feels_pain": "string|null",
-            "who_pays": "string|null",
-            "user_buyer_same_person": "boolean|null",
-            "who_influences": "string|null",
-            "who_benefits_most": "string|null",
-            "who_has_budget": "string|null",
-            "urgency_level": "string|null",
-            "most_promising_angle": "string|null",
-            "narrow_wedge": "string|null",
-            "key_assumptions": ["string"],
-            "biggest_failure_reasons": ["string"],
-            "personal_connection": "string|null",
-        }
+    return await _generate_json(
+        [{"role": "user", "content": prompt}],
+        '{"subject":"string","body":"string"}',
     )
-    return await _generate_json([{"role": "user", "content": prompt}], "gpt-4o", schema_hint)
 
 
 async def stream_intake_reply(system_prompt: str, messages: list[dict]) -> AsyncIterator[str]:
     settings = get_settings()
-    if settings.ai_provider == "anthropic":
+    provider = _read_provider()
+    timeout = settings.ai_request_timeout_seconds
+
+    if provider == "anthropic":
         if not settings.anthropic_api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is not configured")
-        client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        response = await client.messages.create(
-            model="claude-sonnet-4-6",
+            raise AIServiceError("ANTHROPIC_API_KEY is not configured", provider)
+        client = AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=timeout)
+        async with client.messages.stream(
+            model=settings.anthropic_model,
             max_tokens=1024,
             system=system_prompt,
             messages=messages,
+        ) as stream:
+            async for text in stream.text_stream:
+                yield text
+        return
+
+    if provider == "gemini":
+        if not settings.gemini_api_key:
+            raise AIServiceError("GEMINI_API_KEY is not configured", provider)
+        try:
+            import google.generativeai as genai
+        except ImportError as exc:
+            raise AIServiceError(
+                "google-generativeai is not installed. Run `pip install -r requirements.txt` "
+                "or set AI_PROVIDER to openai/anthropic.",
+                provider,
+            ) from exc
+        genai.configure(api_key=settings.gemini_api_key)
+        gemini_model = genai.GenerativeModel(
+            model_name=settings.gemini_model,
+            system_instruction=system_prompt,
         )
-        for block in response.content:
-            if getattr(block, "type", "") == "text":
-                yield block.text
+        history = [
+            {"role": "model" if m["role"] == "assistant" else "user", "parts": [m["content"]]}
+            for m in messages[:-1]
+        ]
+        last_message = messages[-1]["content"] if messages else "Hello"
+        chat = gemini_model.start_chat(history=history)
+        stream = await _await_provider(
+            chat.send_message_async(last_message, stream=True, request_options={"timeout": timeout}),
+            provider,
+            timeout + 5,
+            "Gemini stream request",
+        )
+        async for chunk in stream:
+            if chunk.text:
+                yield chunk.text
         return
 
     if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured")
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+        raise AIServiceError("OPENAI_API_KEY is not configured", provider)
+    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=timeout)
     stream = await client.chat.completions.create(
-        model="gpt-4o",
+        model=settings.openai_model,
         stream=True,
         messages=[{"role": "system", "content": system_prompt}, *messages],
     )

@@ -1,16 +1,64 @@
-import { SectionPlaceholder } from '@/components/dashboard/SectionPlaceholder';
+import { redirect } from 'next/navigation';
+import { and, eq, or, isNull, gt, inArray } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { call_prep, people, projects, users } from '@/lib/db/schema';
+import { getProjectBySlugOrId } from '@/lib/backend-server';
+import { auth } from '@clerk/nextjs/server';
+import { BoardPageClient } from './BoardPageClient';
 
-export default async function BoardPage() {
-  return (
-    <SectionPlaceholder
-      eyebrow="Board"
-      title="Pipeline management is coming next."
-      description="The board is meant to give you a quick visual pass over outreach, scheduling, and follow-up so conversations do not disappear into a spreadsheet."
-      bullets={[
-        'Drag people between stages like bookmarked, contacted, and scheduled',
-        'Spot stale follow-ups and gaps in persona coverage',
-        'Keep outreach and interview prep connected to execution',
-      ]}
-    />
-  );
+export default async function BoardPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) redirect('/login');
+
+  const lookup = await getProjectBySlugOrId(slug);
+  if (!lookup?.project) redirect('/dashboard');
+  const { project } = lookup;
+
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.clerk_user_id, clerkUserId));
+
+  if (!user) redirect('/dashboard');
+
+  const [proj] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.id, project.id), eq(projects.user_id, user.id)));
+
+  if (!proj) redirect('/dashboard');
+
+  // All people for this project — bookmarked ones have no TTL, others expire after 24h
+  const now = new Date();
+  const boardPeople = await db
+    .select()
+    .from(people)
+    .where(
+      and(
+        eq(people.project_id, project.id),
+        or(isNull(people.expires_at), gt(people.expires_at, now))
+      )
+    )
+    .orderBy(people.updated_at);
+
+  const peopleIds = boardPeople.map((person) => person.id);
+  const callBriefRows = peopleIds.length > 0
+    ? await db
+        .select({ personId: call_prep.person_id, content: call_prep.content })
+        .from(call_prep)
+        .where(and(inArray(call_prep.person_id, peopleIds), eq(call_prep.is_current, true)))
+    : [];
+
+  const callBriefPersonIds = callBriefRows
+    .filter((row) => !!row.content)
+    .map((row) => row.personId)
+    .filter((id): id is string => !!id);
+
+  return <BoardPageClient initialPeople={boardPeople} slug={slug} initialCallBriefPersonIds={callBriefPersonIds} />;
 }

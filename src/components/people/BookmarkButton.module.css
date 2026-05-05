@@ -25,10 +25,12 @@
 }
 
 .active {
+  background: #fef3e2;
   color: #c97b2a;
 }
 
 .active:hover:not(:disabled) {
+  background: #fde8c8;
   color: #8a4a10;
 }
 

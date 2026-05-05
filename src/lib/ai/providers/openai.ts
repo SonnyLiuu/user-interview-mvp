@@ -2,24 +2,20 @@ import OpenAI from 'openai';
 import { AIProviderError } from '@/lib/errors';
 import { env } from '@/lib/server-env';
 
-const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+let client: OpenAI | null = null;
 
-export const DEFAULT_MODEL = 'gpt-4o';
-
-export async function generateText(prompt: string, model = DEFAULT_MODEL): Promise<string> {
-  const res = await client.chat.completions.create({
-    model,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  const content = res.choices[0].message.content;
-  if (!content) {
-    throw new AIProviderError('Empty response from OpenAI API', 'openai');
+function getClient() {
+  const apiKey = env.OPENAI_API_KEY;
+  if (!apiKey?.trim()) {
+    throw new AIProviderError('OPENAI_API_KEY is not configured', 'openai');
   }
-  return content;
+
+  client ??= new OpenAI({ apiKey });
+  return client;
 }
 
-export async function generateObject<T>(prompt: string, schema: object, model = DEFAULT_MODEL): Promise<T> {
-  const res = await client.chat.completions.create({
+export async function generateObject<T>(prompt: string, schema: object, model = env.OPENAI_MODEL): Promise<T> {
+  const res = await getClient().chat.completions.create({
     model,
     messages: [{ role: 'user', content: prompt }],
     tools: [{

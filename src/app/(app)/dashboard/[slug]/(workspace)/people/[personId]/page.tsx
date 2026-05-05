@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users } from '@/lib/db/schema';
+import { call_prep, outreach, people, projects, transcripts, users } from '@/lib/db/schema';
 import { getProjectBySlugOrId } from '@/lib/backend-server';
 import { auth } from '@clerk/nextjs/server';
 import { PersonDetailClient } from './PersonDetailClient';
@@ -43,10 +43,33 @@ export default async function PersonDetailPage({
 
   if (!person) notFound();
 
+  const [initialOutreach] = await db
+    .select({ id: outreach.id, content: outreach.content })
+    .from(outreach)
+    .where(and(eq(outreach.person_id, personId), eq(outreach.is_current, true)))
+    .orderBy(desc(outreach.generated_at))
+    .limit(1);
+
+  const [initialCallPrep] = await db
+    .select({ id: call_prep.id, content: call_prep.content })
+    .from(call_prep)
+    .where(and(eq(call_prep.person_id, personId), eq(call_prep.is_current, true)))
+    .orderBy(desc(call_prep.generated_at))
+    .limit(1);
+
+  const initialTranscripts = await db
+    .select()
+    .from(transcripts)
+    .where(eq(transcripts.person_id, personId))
+    .orderBy(desc(transcripts.created_at));
+
   return (
     <PersonDetailClient
       person={person}
       slug={slug}
+      initialOutreach={initialOutreach ?? null}
+      initialCallPrep={initialCallPrep ?? null}
+      initialTranscripts={initialTranscripts}
     />
   );
 }

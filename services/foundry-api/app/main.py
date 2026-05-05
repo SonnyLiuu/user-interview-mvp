@@ -8,8 +8,8 @@ from fastapi.responses import JSONResponse
 
 from .config import Settings, get_settings
 from .db import close_pool, init_pool
-from .errors import BadRequestError, NotFoundError, UnauthorizedError
-from .routers import briefs, dashboard, intake, onboarding, projects, workspace
+from .errors import AIServiceError, BadRequestError, NotFoundError, UnauthorizedError
+from .routers import call_prep, dashboard, intake, onboarding, outreach, projects, workspace
 
 
 @asynccontextmanager
@@ -35,7 +35,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(projects.router)
     app.include_router(onboarding.router)
     app.include_router(intake.router)
-    app.include_router(briefs.router)
+    app.include_router(call_prep.router)
+    app.include_router(outreach.router)
     app.include_router(dashboard.router)
     app.include_router(workspace.router)
 
@@ -53,7 +54,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(BadRequestError)
     async def handle_bad_request(_request: Request, exc: BadRequestError):
-        return JSONResponse({"error": str(exc)}, status_code=400)
+        body: dict = {"error": str(exc)}
+        if exc.code:
+            body["code"] = exc.code
+        return JSONResponse(body, status_code=400)
+
+    @app.exception_handler(AIServiceError)
+    async def handle_ai_service_error(_request: Request, exc: AIServiceError):
+        body: dict = {"error": str(exc)}
+        if exc.provider:
+            body["provider"] = exc.provider
+        return JSONResponse(body, status_code=502)
 
     return app
 

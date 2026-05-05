@@ -13,6 +13,31 @@ function base64Url(input: Buffer | string) {
     .replace(/=+$/g, '');
 }
 
+type BackendTokenUser = {
+  clerkUserId: string;
+  email: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+};
+
+export function signBackendAccessToken(user: BackendTokenUser) {
+  const payload = {
+    sub: user.clerkUserId,
+    email: user.email,
+    name: user.name || user.email,
+    avatar_url: user.avatarUrl || '',
+    exp: Math.floor(Date.now() / 1000) + 60 * 5,
+  };
+
+  const encodedPayload = base64Url(JSON.stringify(payload));
+  const signature = crypto
+    .createHmac('sha256', env.FOUNDRY_BACKEND_SHARED_SECRET)
+    .update(encodedPayload)
+    .digest();
+
+  return `${encodedPayload}.${base64Url(signature)}`;
+}
+
 export async function getBackendAccessToken() {
   const { userId } = await auth();
   if (!userId) {
@@ -24,19 +49,10 @@ export async function getBackendAccessToken() {
     throw new AuthenticationError('User profile not available');
   }
 
-  const payload = {
-    sub: userId,
+  return signBackendAccessToken({
+    clerkUserId: userId,
     email: user.emailAddresses[0]?.emailAddress ?? '',
     name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.emailAddresses[0]?.emailAddress || '',
-    avatar_url: user.imageUrl ?? '',
-    exp: Math.floor(Date.now() / 1000) + 60 * 5,
-  };
-
-  const encodedPayload = base64Url(JSON.stringify(payload));
-  const signature = crypto
-    .createHmac('sha256', env.FOUNDRY_BACKEND_SHARED_SECRET)
-    .update(encodedPayload)
-    .digest();
-
-  return `${encodedPayload}.${base64Url(signature)}`;
+    avatarUrl: user.imageUrl ?? '',
+  });
 }

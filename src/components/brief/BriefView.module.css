@@ -157,6 +157,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 32px;
+  min-height: 45px;
   border-bottom: 1px solid #e8d9c4;
   background: #faf4ec;
   flex-shrink: 0;

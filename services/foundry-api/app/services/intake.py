@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import AsyncIterator
 
 from fastapi.encoders import jsonable_encoder
 
-from ..ai import extract_intake_fields, stream_intake_reply
+from ..ai import stream_intake_reply
 from ..db import get_pool
 from ..errors import NotFoundError
-from ..repositories import briefs as brief_repo
 from ..repositories import foundations as foundation_repo
 from ..repositories import intake as intake_repo
 from ..repositories import projects as project_repo
-from .briefs import generate_brief_for_project
 
 INTAKE_SYSTEM_PROMPT = """You are an experienced startup advisor running a structured founder office hours session. Your goal is to build a complete picture of the founder's startup idea.
 
@@ -103,23 +100,21 @@ async def stream_chat(user_id: str, project_id: str, message: str, recent_messag
         if not project:
             raise NotFoundError("Not found")
         foundation_row = await foundation_repo.get_latest_foundation(conn, project_id)
-        brief = await brief_repo.get_current_brief(conn, project_id)
         intake = await intake_repo.get_intake(conn, project_id)
 
     has_foundation = bool(foundation_row and foundation_row["foundation_json"])
-    has_brief = brief is not None
 
     if has_foundation:
         raw = foundation_row["foundation_json"]
         foundation = json.loads(raw) if isinstance(raw, str) else raw
         system_prompt = get_foundation_advisor_prompt(foundation)
     else:
-        system_prompt = get_system_prompt(has_brief)
+        system_prompt = get_system_prompt(False)
 
     if has_foundation:
         is_init = message == "__init__"
         history = recent_messages or []
-        api_messages = [] if is_init else [*history, {"role": "user", "content": message}]
+        api_messages = [{"role": "user", "content": "Hello, let's continue working on my project."}] if is_init else [*history, {"role": "user", "content": message}]
     else:
         raw_conversation = intake["conversation"] if intake and intake["conversation"] else []
         conversation = json.loads(raw_conversation) if isinstance(raw_conversation, str) else raw_conversation
@@ -137,14 +132,3 @@ async def stream_chat(user_id: str, project_id: str, message: str, recent_messag
         final_conversation = [*updated_conversation, {"role": "assistant", "content": full_response}]
         async with pool.acquire() as conn:
             await intake_repo.save_conversation(conn, project_id, final_conversation)
-
-    if not has_foundation and not has_brief and '"intake_complete": true' in full_response:
-        try:
-            fields = await extract_intake_fields(final_conversation)
-            async with pool.acquire() as conn:
-                async with conn.transaction():
-                    await intake_repo.update_intake_fields(conn, project_id, fields)
-                    await project_repo.update_project(conn, project_id, intake_status="generating")
-            asyncio.create_task(generate_brief_for_project(project_id))
-        except Exception:
-            pass

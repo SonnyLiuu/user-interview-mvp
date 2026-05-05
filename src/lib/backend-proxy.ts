@@ -20,12 +20,21 @@ export async function proxyToBackend(req: NextRequest, path: string) {
   if (contentType) headers.set('content-type', contentType);
 
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
-  const upstream = await fetch(buildBackendUrl(path), {
-    method: req.method,
-    headers,
-    body: hasBody ? await req.text() : undefined,
-    cache: 'no-store',
-  });
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(buildBackendUrl(path), {
+      method: req.method,
+      headers,
+      body: hasBody ? await req.text() : undefined,
+      cache: 'no-store',
+    });
+  } catch {
+    return new Response(JSON.stringify({ error: 'Backend unavailable' }), {
+      status: 502,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
 
   return new Response(upstream.body, {
     status: upstream.status,

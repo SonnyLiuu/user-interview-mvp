@@ -3,12 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from ..auth import AuthContext, get_auth_context
+from ..schemas.projects import ProjectNavItem
 from ..services import projects as project_service
 
 router = APIRouter(prefix="/v1/projects", tags=["projects"])
 
 
-@router.get("")
+@router.get("", response_model=list[ProjectNavItem])
 async def list_projects(auth: AuthContext = Depends(get_auth_context)):
     return await project_service.list_projects_for_user(auth.user_id)
 

@@ -1,4 +1,5 @@
-import { pgTable, text, boolean, integer, timestamp, uuid, jsonb } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { pgTable, text, boolean, integer, timestamp, uuid, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { customType } from 'drizzle-orm/pg-core';
 
 // Custom type for text arrays with proper typing
@@ -67,8 +68,6 @@ export type PersonAnalysis = {
 export type OutreachContent = {
   subject?: string;
   body?: string;
-  tone?: string;
-  cta?: string;
 };
 
 export type CallPrepContent = {
@@ -100,7 +99,14 @@ export const projects = pgTable('projects', {
   is_archived: boolean('is_archived').default(false),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  index('projects_active_user_created_at_idx')
+    .on(table.user_id, table.created_at)
+    .where(sql`${table.is_archived} = false`),
+  uniqueIndex('projects_active_user_slug_idx')
+    .on(table.user_id, table.slug)
+    .where(sql`${table.is_archived} = false and ${table.slug} is not null`),
+]);
 
 // ── project_intake ────────────────────────────────────────────────────────────
 export const project_intake = pgTable('project_intake', {
@@ -158,7 +164,11 @@ export const project_briefs = pgTable('project_briefs', {
   debrief_count_at_generation: integer('debrief_count_at_generation').default(0),
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
   is_current: boolean('is_current').default(true),
-});
+}, (table) => [
+  uniqueIndex('project_briefs_one_current_per_project')
+    .on(table.project_id)
+    .where(sql`${table.is_current} = true`),
+]);
 
 // ── people ────────────────────────────────────────────────────────────────────
 export const people = pgTable('people', {
@@ -187,21 +197,29 @@ export const people = pgTable('people', {
   expires_at: timestamp('expires_at', { withTimezone: true }),
 
   board_status: text('board_status'),
+  outcome: text('outcome'),
   call_scheduled_at: timestamp('call_scheduled_at', { withTimezone: true }),
+  last_contacted_at: timestamp('last_contacted_at', { withTimezone: true }),
 
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  index('people_project_created_at_idx').on(table.project_id, table.created_at),
+  index('people_project_updated_at_idx').on(table.project_id, table.updated_at),
+]);
 
 // ── outreach ──────────────────────────────────────────────────────────────────
 export const outreach = pgTable('outreach', {
   id: uuid('id').primaryKey().defaultRandom(),
   person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
-  channel: text('channel').notNull(),
   content: jsonb('content').$type<OutreachContent>(),
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
   is_current: boolean('is_current').default(true),
-});
+}, (table) => [
+  uniqueIndex('outreach_one_current_per_person')
+    .on(table.person_id)
+    .where(sql`${table.is_current} = true`),
+]);
 
 // ── call_prep ─────────────────────────────────────────────────────────────────
 export const call_prep = pgTable('call_prep', {
@@ -212,7 +230,11 @@ export const call_prep = pgTable('call_prep', {
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
   reviewed_at: timestamp('reviewed_at', { withTimezone: true }),
   is_current: boolean('is_current').default(true),
-});
+}, (table) => [
+  uniqueIndex('call_prep_one_current_per_person')
+    .on(table.person_id)
+    .where(sql`${table.is_current} = true`),
+]);
 
 // ── interactions ──────────────────────────────────────────────────────────────
 export const interactions = pgTable('interactions', {
@@ -282,7 +304,9 @@ export const onboarding_messages = pgTable('onboarding_messages', {
   content: text('content').notNull(),
   message_type: text('message_type'), // 'question' | 'choice_answer' | 'custom_answer' | 'system'
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  index('onboarding_messages_session_created_at_idx').on(table.session_id, table.created_at),
+]);
 
 // ── onboarding_state ──────────────────────────────────────────────────────────
 export const onboarding_state = pgTable('onboarding_state', {
@@ -299,7 +323,31 @@ export const project_foundations = pgTable('project_foundations', {
   foundation_json: jsonb('foundation_json'),
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  index('project_foundations_project_generated_at_idx').on(table.project_id, table.generated_at),
+]);
+
+// ── transcripts ───────────────────────────────────────────────────────────────
+export const transcripts = pgTable('transcripts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  type: text('type').notNull().default('call'), // 'call' | 'message'
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('transcripts_person_created_at_idx').on(table.person_id, table.created_at),
+]);
+
+// ── person_events ─────────────────────────────────────────────────────────────
+export const person_events = pgTable('person_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  metadata: jsonb('metadata'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('person_events_person_created_at_idx').on(table.person_id, table.created_at),
+]);
 
 // ── Inferred types ────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
@@ -316,3 +364,5 @@ export type OnboardingSession = typeof onboarding_sessions.$inferSelect;
 export type OnboardingMessage = typeof onboarding_messages.$inferSelect;
 export type OnboardingStateRow = typeof onboarding_state.$inferSelect;
 export type ProjectFoundation = typeof project_foundations.$inferSelect;
+export type Transcript = typeof transcripts.$inferSelect;
+export type PersonEvent = typeof person_events.$inferSelect;

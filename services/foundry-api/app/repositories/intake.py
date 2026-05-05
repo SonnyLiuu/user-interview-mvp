@@ -16,19 +16,17 @@ async def upsert_empty_intake(conn, project_id: str):
 
 
 async def save_conversation(conn, project_id: str, conversation: list[dict]):
-    existing = await get_intake(conn, project_id)
-    if existing:
-        await conn.execute(
-            "update project_intake set conversation = $2, updated_at = now() where project_id = $1",
-            project_id,
-            conversation,
-        )
-    else:
-        await conn.execute(
-            "insert into project_intake (project_id, conversation) values ($1, $2)",
-            project_id,
-            conversation,
-        )
+    await conn.execute(
+        """
+        insert into project_intake (project_id, conversation)
+        values ($1, $2)
+        on conflict (project_id) do update
+        set conversation = excluded.conversation,
+            updated_at = now()
+        """,
+        project_id,
+        conversation,
+    )
 
 
 async def update_intake_fields(conn, project_id: str, fields: dict):

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { and, isNull, or, gt, eq } from 'drizzle-orm';
+import { and, isNull, or, gt, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, projects, users } from '@/lib/db/schema';
 import { getProjectBySlugOrId } from '@/lib/backend-server';
@@ -37,7 +37,7 @@ export default async function PeoplePage({
 
   if (!proj) redirect('/dashboard');
 
-  // Load active people: not yet on the board, and not expired
+  // Load all people for this project: bookmarked people have no TTL, others expire after 24h
   const now = new Date();
   const activePeople = await db
     .select()
@@ -45,16 +45,47 @@ export default async function PeoplePage({
     .where(
       and(
         eq(people.project_id, project.id),
-        isNull(people.board_status),
         or(isNull(people.expires_at), gt(people.expires_at, now))
       )
     )
     .orderBy(people.created_at);
 
+  // Recover stale in-progress records — if after() was orphaned by a page refresh or
+  // server restart, the status stays 'crawling'/'analyzing' forever. Reset to error
+  // so the Retry button appears on next load.
+  const STALE_MS = 10 * 60 * 1000;
+  const staleThreshold = new Date(now.getTime() - STALE_MS);
+
+  const staleIds = activePeople
+    .filter(
+      (p) =>
+        (p.crawl_status === 'crawling' || p.analysis_status === 'analyzing') &&
+        p.updated_at != null &&
+        p.updated_at < staleThreshold
+    )
+    .map((p) => p.id);
+
+  let peopleForClient = activePeople;
+
+  if (staleIds.length > 0) {
+    await db
+      .update(people)
+      .set({ crawl_status: 'error', analysis_status: 'error', crawl_error: 'Research timed out', updated_at: new Date() })
+      .where(inArray(people.id, staleIds));
+
+    const correctedAt = new Date();
+    const staleSet = new Set(staleIds);
+    peopleForClient = activePeople.map((p) =>
+      staleSet.has(p.id)
+        ? { ...p, crawl_status: 'error', analysis_status: 'error', crawl_error: 'Research timed out', updated_at: correctedAt }
+        : p
+    );
+  }
+
   return (
     <div className={styles.page}>
       <PeoplePageClient
-        initialPeople={activePeople}
+        initialPeople={peopleForClient}
         projectId={project.id}
         slug={slug}
       />

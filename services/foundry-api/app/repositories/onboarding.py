@@ -20,19 +20,17 @@ async def get_state_row(conn, project_id: str):
 
 
 async def save_state(conn, project_id: str, state: dict):
-    existing = await get_state_row(conn, project_id)
-    if existing:
-        await conn.execute(
-            "update onboarding_state set state_json = $2, updated_at = now() where project_id = $1",
-            project_id,
-            state,
-        )
-    else:
-        await conn.execute(
-            "insert into onboarding_state (project_id, state_json) values ($1, $2)",
-            project_id,
-            state,
-        )
+    await conn.execute(
+        """
+        insert into onboarding_state (project_id, state_json)
+        values ($1, $2)
+        on conflict (project_id) do update
+        set state_json = excluded.state_json,
+            updated_at = now()
+        """,
+        project_id,
+        state,
+    )
 
 
 async def list_messages(conn, session_id: str):

@@ -3,11 +3,41 @@ import { after } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { eq, and, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users, project_briefs } from '@/lib/db/schema';
+import { people, projects, users, project_foundations } from '@/lib/db/schema';
 import { crawlUrls, CrawlDepth } from '@/lib/firecrawl';
 import { analyzePerson } from '@/lib/ai/analyze-person';
+import type { Foundation } from '@/lib/backend-types';
 
 type Params = { params: Promise<{ personId: string }> };
+
+function foundationToAnalysisContext(foundation: Foundation | null) {
+  return {
+    idea_summary: foundation
+      ? [
+          foundation.summary,
+          foundation.painPoint ? `Pain point: ${foundation.painPoint}` : null,
+          foundation.valueProp ? `Value proposition: ${foundation.valueProp}` : null,
+        ].filter(Boolean).join('\n')
+      : null,
+    target_customer: foundation?.targetUser ?? null,
+    key_assumptions: foundation
+      ? [foundation.painPoint, foundation.valueProp, foundation.targetUser].filter(Boolean)
+      : null,
+    most_promising_avenues: foundation?.idealPeopleTypes ?? null,
+  };
+}
+
+async function markResearchError(personId: string, message: string) {
+  await db
+    .update(people)
+    .set({
+      crawl_status: 'error',
+      analysis_status: 'error',
+      crawl_error: message,
+      updated_at: new Date(),
+    })
+    .where(eq(people.id, personId));
+}
 
 export async function POST(_req: NextRequest, { params }: Params) {
   const { userId: clerkUserId } = await auth();
@@ -28,7 +58,24 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (!person.source_urls?.length) {
+    await markResearchError(personId, 'No source URLs to crawl');
     return NextResponse.json({ error: 'No source URLs to crawl' }, { status: 400 });
+  }
+
+  const foundations = await db
+    .select()
+    .from(project_foundations)
+    .where(eq(project_foundations.project_id, person.project_id!))
+    .orderBy(desc(project_foundations.generated_at))
+    .limit(1);
+  const foundation = foundations[0]?.foundation_json as Foundation | null | undefined;
+
+  if (!foundation) {
+    await markResearchError(personId, 'Project foundation is required before analyzing people');
+    return NextResponse.json(
+      { error: 'Project foundation is required before analyzing people' },
+      { status: 400 },
+    );
   }
 
   // Mark as crawling immediately so the UI can show the loading state
@@ -39,12 +86,24 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   // Run crawl + analysis after the response is sent so the client gets 202 instantly
   after(async () => {
-    try {
+    const TIMEOUT_MS = 3 * 60 * 1000;
+    let cancelled = false;
+
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        cancelled = true;
+        reject(new Error('Research timed out after 3 minutes'));
+      }, TIMEOUT_MS)
+    );
+
+    const work = (async () => {
       // Crawl
       const rawContent = await crawlUrls(
         person.source_urls!,
         (person.research_depth as CrawlDepth) ?? 'deep'
       );
+
+      if (cancelled) return;
 
       await db
         .update(people)
@@ -56,24 +115,12 @@ export async function POST(_req: NextRequest, { params }: Params) {
         })
         .where(eq(people.id, personId));
 
-      // Fetch project brief for grounding the analysis
-      const briefs = await db
-        .select()
-        .from(project_briefs)
-        .where(and(eq(project_briefs.project_id, person.project_id!), eq(project_briefs.is_current, true)))
-        .orderBy(desc(project_briefs.generated_at))
-        .limit(1);
-
-      const brief = briefs[0];
-      const projectContext = {
-        idea_summary: brief?.idea_summary ?? null,
-        target_customer: null,
-        key_assumptions: brief?.assumptions?.map((a) => a.assumption) ?? null,
-        most_promising_avenues: brief?.most_promising_avenues ?? null,
-      };
+      const projectContext = foundationToAnalysisContext(foundation);
 
       // Analyze
       const analysis = await analyzePerson(rawContent, projectContext);
+
+      if (cancelled) return;
 
       await db
         .update(people)
@@ -89,6 +136,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
           updated_at: new Date(),
         })
         .where(eq(people.id, personId));
+    })();
+
+    try {
+      await Promise.race([work, timeout]);
     } catch (err) {
       console.error(`Crawl/analysis failed for person ${personId}:`, err);
       await db

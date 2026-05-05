@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, users } from '@/lib/db/schema';
+import { people, projects, users } from '@/lib/db/schema';
 import { validateInput, createPersonSchema } from '@/lib/validation';
 
 // Derive a human-readable placeholder name from the first URL while the crawl runs.
@@ -14,6 +14,32 @@ function placeholderName(url: string): string {
   } catch {
     return 'Discovering...';
   }
+}
+
+export async function GET(req: NextRequest) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const ids = (req.nextUrl.searchParams.get('ids') ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+
+  if (ids.length === 0) {
+    return NextResponse.json([]);
+  }
+
+  const rows = await db
+    .select({ person: people })
+    .from(people)
+    .innerJoin(projects, eq(people.project_id, projects.id))
+    .innerJoin(users, eq(projects.user_id, users.id))
+    .where(and(inArray(people.id, ids), eq(users.clerk_user_id, clerkUserId)));
+
+  return NextResponse.json(rows.map((row) => row.person));
 }
 
 export async function POST(req: NextRequest) {
@@ -30,6 +56,15 @@ export async function POST(req: NextRequest) {
     const [user] = await db.select({ id: users.id }).from(users).where(eq(users.clerk_user_id, clerkUserId));
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, data.project_id), eq(projects.user_id, user.id)))
+      .limit(1);
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);

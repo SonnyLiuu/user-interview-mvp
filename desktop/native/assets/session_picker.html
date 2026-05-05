@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Foundry - Start Session</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #171717;
+    color: #f4f4f5;
+    margin: 0;
+    padding: 22px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p { color: #a1a1aa; margin: 0 0 18px; font-size: 13px; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 14px; }
+  button {
+    background: #262626;
+    color: #f4f4f5;
+    border: 1px solid #3f3f46;
+    border-radius: 4px;
+    padding: 7px 11px;
+    cursor: pointer;
+    font: inherit;
+  }
+  button:hover { background: #303030; }
+  .list { display: grid; gap: 8px; }
+  .person {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid #2f2f35;
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: #1f1f22;
+  }
+  .name { font-size: 14px; font-weight: 650; }
+  .meta { color: #a1a1aa; font-size: 12px; margin-top: 3px; }
+  pre {
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    padding: 10px;
+    height: 96px;
+    overflow: auto;
+    font-size: 12px;
+    margin: 16px 0 0;
+  }
+</style>
+</head>
+<body>
+  <h1>Start Session</h1>
+  <p>Pick the person for this call.</p>
+  <div class="toolbar">
+    <button id="refresh">Refresh</button>
+  </div>
+  <div id="list" class="list">Loading people...</div>
+  <pre id="log">[awaiting messages]</pre>
+
+<script>
+  const list = document.getElementById('list');
+  const log = document.getElementById('log');
+
+  function append(prefix, payload) {
+    if (log.textContent === '[awaiting messages]') log.textContent = '';
+    log.textContent += `${prefix} ${JSON.stringify(payload)}\n`;
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function post(payload) {
+    window.chrome.webview.postMessage(payload);
+    append('->', payload);
+  }
+
+  function renderPeople(people) {
+    if (!Array.isArray(people) || people.length === 0) {
+      list.textContent = 'No people found yet.';
+      return;
+    }
+    list.textContent = '';
+    for (const person of people) {
+      const row = document.createElement('div');
+      row.className = 'person';
+      const body = document.createElement('div');
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = person.name || 'Unnamed person';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = [
+        person.title,
+        person.company,
+        person.projectName,
+      ].filter(Boolean).join(' - ') || 'No details yet';
+      body.append(name, meta);
+      const button = document.createElement('button');
+      button.textContent = 'Select';
+      button.onclick = () => post({
+        type: 'selectPerson',
+        personId: person.id,
+        personName: person.name || 'Unnamed person'
+      });
+      row.append(body, button);
+      list.append(row);
+    }
+  }
+
+  document.getElementById('refresh').onclick = () => post({ type: 'pickerReady' });
+
+  window.chrome.webview.addEventListener('message', e => {
+    append('<-', e.data);
+    if (e.data?.type === 'loadPeople') renderPeople(e.data.people);
+    if (e.data?.type === 'pickerError') list.textContent = e.data.message || 'Could not load people.';
+    if (e.data?.type === 'sessionSelected') list.textContent = 'Session loaded. You can close this window.';
+  });
+
+  post({ type: 'pickerReady' });
+</script>
+</body>
+</html>

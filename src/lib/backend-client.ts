@@ -2,7 +2,7 @@
 
 import { normalizePath } from '@/lib/backend-client-utils';
 
-export function getBackendProxyUrl(path: string) {
+function getBackendProxyUrl(path: string) {
   return `/api/backend${normalizePath(path)}`;
 }
 

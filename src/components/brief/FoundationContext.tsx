@@ -59,7 +59,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 type FoundationContextValue = {
   foundation: Foundation;

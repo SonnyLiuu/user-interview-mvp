@@ -4,7 +4,7 @@ from __future__ import annotations
 async def list_projects(conn, user_id: str):
     return await conn.fetch(
         """
-        select *
+        select id, name, slug
         from projects
         where user_id = $1 and is_archived = false
         order by created_at desc

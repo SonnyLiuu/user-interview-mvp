@@ -7,7 +7,7 @@ type DbType = ReturnType<typeof drizzle<typeof schema>>;
 
 let _db: DbType | null = null;
 
-export function getDb(): DbType {
+function getDb(): DbType {
   if (!_db) {
     const sql = neon(env.DATABASE_URL);
     _db = drizzle(sql, { schema });

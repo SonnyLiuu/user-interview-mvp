@@ -27,6 +27,7 @@ async def update_foundation(conn, project_id: str, foundation_json: dict):
             order by generated_at desc
             limit 1
         )
+        and foundation_json is distinct from $2::jsonb
         """,
         project_id,
         json.dumps(foundation_json),

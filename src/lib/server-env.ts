@@ -1,15 +1,19 @@
 import 'server-only';
 
-export interface EnvConfig {
+interface EnvConfig {
   DATABASE_URL: string;
   DATABASE_URL_UNPOOLED?: string;
   CLERK_SECRET_KEY: string;
   CLERK_WEBHOOK_SECRET: string;
   FOUNDRY_API_BASE_URL?: string;
   FOUNDRY_BACKEND_SHARED_SECRET: string;
-  AI_PROVIDER: 'openai' | 'anthropic';
+  AI_PROVIDER: 'openai' | 'anthropic' | 'gemini';
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
+  GEMINI_API_KEY?: string;
+  OPENAI_MODEL: string;
+  ANTHROPIC_MODEL: string;
+  GEMINI_MODEL: string;
 }
 
 type EnvState = {
@@ -26,7 +30,7 @@ const REQUIRED_BASE_VARS = [
 
 const ENV_STATE_KEY = Symbol.for('startup-foundry.server-env');
 
-export class EnvironmentError extends Error {
+class EnvironmentError extends Error {
   constructor(message: string, public readonly variables: string[]) {
     super(message);
     this.name = 'EnvironmentError';
@@ -50,7 +54,16 @@ function shouldSkipValidation() {
   return process.env.SKIP_ENV_VALIDATION === 'true' || process.env.NODE_ENV === 'test';
 }
 
+function readAIProvider(): EnvConfig['AI_PROVIDER'] {
+  const rawProvider = process.env.AI_PROVIDER?.trim().split(/\s+/)[0]?.toLowerCase();
+  if (rawProvider === 'anthropic') return 'anthropic';
+  if (rawProvider === 'gemini') return 'gemini';
+  return 'openai';
+}
+
 function buildFallbackConfig(): EnvConfig {
+  const aiProvider = readAIProvider();
+
   return {
     DATABASE_URL: process.env.DATABASE_URL || 'build-time-placeholder',
     DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
@@ -58,15 +71,19 @@ function buildFallbackConfig(): EnvConfig {
     CLERK_WEBHOOK_SECRET: process.env.CLERK_WEBHOOK_SECRET || 'build-time-placeholder',
     FOUNDRY_API_BASE_URL: process.env.FOUNDRY_API_BASE_URL,
     FOUNDRY_BACKEND_SHARED_SECRET: process.env.FOUNDRY_BACKEND_SHARED_SECRET || 'build-time-placeholder',
-    AI_PROVIDER: process.env.AI_PROVIDER === 'anthropic' ? 'anthropic' : 'openai',
+    AI_PROVIDER: aiProvider,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
   };
 }
 
 function readAndValidateEnvironment(): EnvConfig {
   const missingVars: string[] = REQUIRED_BASE_VARS.filter((name) => !isProvided(process.env[name]));
-  const aiProvider = process.env.AI_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
+  const aiProvider = readAIProvider();
 
   if (aiProvider === 'openai' && !isProvided(process.env.OPENAI_API_KEY)) {
     missingVars.push('OPENAI_API_KEY');
@@ -74,6 +91,10 @@ function readAndValidateEnvironment(): EnvConfig {
 
   if (aiProvider === 'anthropic' && !isProvided(process.env.ANTHROPIC_API_KEY)) {
     missingVars.push('ANTHROPIC_API_KEY');
+  }
+
+  if (aiProvider === 'gemini' && !isProvided(process.env.GEMINI_API_KEY)) {
+    missingVars.push('GEMINI_API_KEY');
   }
 
   if (missingVars.length > 0) {
@@ -93,10 +114,14 @@ function readAndValidateEnvironment(): EnvConfig {
     AI_PROVIDER: aiProvider,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
   };
 }
 
-export function getEnv(): EnvConfig {
+function getEnv(): EnvConfig {
   const state = getEnvState();
 
   if (state.config) {

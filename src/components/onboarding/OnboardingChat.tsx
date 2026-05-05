@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { backendClientFetch } from '@/lib/backend-client';
 import styles from './OnboardingChat.module.css';
-import type { SlotKey } from '@/lib/onboarding/slot-definitions';
+
+type SlotKey =
+  | 'ideaSummary'
+  | 'targetUser'
+  | 'painPoint'
+  | 'valueProp'
+  | 'idealPeopleTypes'
+  | 'differentiation'
+  | 'disqualifiers';
 
 type ChatMessage = {
   role: 'assistant' | 'user';
@@ -29,7 +37,7 @@ type ChatResponse = {
   messages: ChatMessage[];
   currentTurn: CurrentTurn | null;
   isFinishable: boolean;
-  sessionStatus: string;
+  sessionStatus: 'active' | 'ready' | 'completed';
 };
 
 type OnboardingChatProps = {

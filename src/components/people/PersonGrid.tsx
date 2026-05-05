@@ -1,5 +1,3 @@
-'use client';
-
 import type { Person } from '@/lib/db/schema';
 import { PersonCard } from './PersonCard';
 import styles from './PersonGrid.module.css';
@@ -47,7 +45,7 @@ function coverageGap(people: Person[]): string | null {
 
 export function PersonGrid({ people, projectId, slug, onPersonCreated, onPersonUpdated, onPersonDeleted }: Props) {
   // Always have at least 6 slots; add a new row of 3 whenever all slots are filled
-  const minSlots = Math.max(6, people.length + 1);
+  const minSlots = Math.max(9, people.length + 1);
   const totalSlots = Math.ceil(minSlots / 3) * 3;
 
   const slots = Array.from({ length: totalSlots }, (_, i) => people[i] ?? undefined);
