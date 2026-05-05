@@ -2,12 +2,22 @@ import Anthropic from '@anthropic-ai/sdk';
 import { AIProviderError } from '@/lib/errors';
 import { env } from '@/lib/server-env';
 
-const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+let client: Anthropic | null = null;
+
+function getClient() {
+  const apiKey = env.ANTHROPIC_API_KEY;
+  if (!apiKey?.trim()) {
+    throw new AIProviderError('ANTHROPIC_API_KEY is not configured', 'anthropic');
+  }
+
+  client ??= new Anthropic({ apiKey });
+  return client;
+}
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 export async function generateText(prompt: string, model = DEFAULT_MODEL): Promise<string> {
-  const msg = await client.messages.create({
+  const msg = await getClient().messages.create({
     model,
     max_tokens: 4096,
     messages: [{ role: 'user', content: prompt }],
@@ -20,7 +30,7 @@ export async function generateText(prompt: string, model = DEFAULT_MODEL): Promi
 }
 
 export async function generateObject<T>(prompt: string, schema: object, model = DEFAULT_MODEL): Promise<T> {
-  const msg = await client.messages.create({
+  const msg = await getClient().messages.create({
     model,
     max_tokens: 4096,
     tools: [{ name: 'output', description: 'Return structured output', input_schema: schema as Anthropic.Tool['input_schema'] }],

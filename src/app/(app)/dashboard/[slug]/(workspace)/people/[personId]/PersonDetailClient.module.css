@@ -275,21 +275,389 @@
 .addContextBtn:hover:not(:disabled) { background: #f5ede3; border-color: #c5a882; }
 .addContextBtn:disabled { opacity: 0.5; cursor: default; }
 
-/* ── Outreach stub ───────────────────────────────────────────────────────── */
+/* ── CRM Stage Breadcrumb ────────────────────────────────────────────────── */
 
-.outreachStub {
-  background: #f5ede3;
-  border: 1px dashed #d8c5ae;
-  border-radius: 12px;
-  padding: 20px;
+.stageBreadcrumb {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
-.stubText {
+.stageStep {
+  display: flex;
+  align-items: center;
+}
+
+.stepDivider {
+  width: 24px;
+  height: 1px;
+  background: #e0d4c3;
+  margin: 0 4px;
+}
+
+.stepDividerActive {
+  background: #a4532b;
+}
+
+.stepLabel {
+  font-size: 12px;
+  font-weight: 480;
+  color: #b0a090;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: transparent;
+}
+
+.stepPast {
+  color: #a4532b;
+  background: #f5ede3;
+}
+
+.stepCurrent {
+  color: #fff;
+  background: #a4532b;
+  font-weight: 560;
+}
+
+.stageActionsWrap {
+  margin-top: 4px;
+}
+
+/* ── Stage Actions ───────────────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.actionBtn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: #a4532b;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 100ms;
+}
+
+.actionBtn:hover:not(:disabled) { background: #8a3f20; }
+.actionBtn:disabled { opacity: 0.5; cursor: default; }
+
+.actionBtnSecondary {
+  color: #a4532b;
+  background: transparent;
+  border: 1px solid #d8c5ae;
+}
+
+.actionBtnSecondary:hover:not(:disabled) { background: #f5ede3; border-color: #c5a882; }
+
+.actionNote {
+  font-size: 13.5px;
+  color: #5f4a39;
+  line-height: 1.5;
+}
+
+.outcomePill {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 20px;
+  background: #f5ede3;
+  color: #7a5a38;
+  text-transform: capitalize;
+}
+
+.cancelBtn {
+  font: inherit;
+  font-size: 13px;
+  color: #8a705a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.cancelBtn:hover { color: #2a1f14; }
+
+.inlineForm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.dateInput {
+  font: inherit;
+  font-size: 13px;
+  color: #3a2a1e;
+  background: #fff;
+  border: 1px solid #d8c5ae;
+  border-radius: 8px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.dateInput:focus { border-color: #a4532b; }
+
+.outcomeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.outcomeLabel {
+  font-size: 13px;
+  color: #7a6a58;
+  margin-right: 4px;
+}
+
+.outcomeBtn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 480;
+  color: #7a5a38;
+  background: #f5ede3;
+  border: 1px solid #d8c5ae;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 100ms;
+}
+
+.outcomeBtn:hover:not(:disabled) { background: #ede0cf; }
+.outcomeBtn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Outreach ────────────────────────────────────────────────────────────── */
+
+.outreachBox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.outreachHint {
+  margin: 0;
+  font-size: 13px;
+  color: #7c6854;
+  line-height: 1.5;
+}
+
+.outreachComposer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.outreachGenRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.outreachSubject {
+  margin: 0;
+  font-size: 13px;
+  color: #5a4030;
+}
+
+.outreachSubjectLabel {
+  font-weight: 600;
+  color: #3a2a1e;
+}
+
+.outreachTextarea {
+  font: inherit;
+  font-size: 13.5px;
+  color: #3a2a1e;
+  background: #fff;
+  border: 1px solid #d8c5ae;
+  border-radius: 8px;
+  padding: 10px 12px;
+  resize: vertical;
+  outline: none;
+  line-height: 1.6;
+}
+
+.outreachTextarea:focus { border-color: #a4532b; }
+
+/* ── Call Brief ──────────────────────────────────────────────────────────── */
+
+.callBriefHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.callBriefHeader .sectionTitle {
+  margin-bottom: 0;
+}
+
+.regenerateBtn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 460;
+  color: #8a705a;
+  background: none;
+  border: 1px solid #ddd0bd;
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: color 100ms, border-color 100ms;
+  flex-shrink: 0;
+}
+
+.regenerateBtn:hover:not(:disabled) { color: #a4532b; border-color: #c5a882; }
+.regenerateBtn:disabled { opacity: 0.45; cursor: default; }
+
+.callBriefLoading {
   margin: 0;
   font-size: 13px;
   color: #8a705a;
-  text-align: center;
+  font-style: italic;
+}
+
+.callBrief {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.callBriefObjective {
+  margin: 0;
+  font-size: 15px;
+  color: #2e2115;
+  line-height: 1.55;
+  font-weight: 480;
+  padding: 10px 14px;
+  background: #f5ede3;
+  border-radius: 8px;
+  border-left: 3px solid #a4532b;
+}
+
+.callBriefBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.callBriefBlockTitle {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 520;
+  color: #8a705a;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.callBriefList {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #3a2a1e;
+  line-height: 1.55;
+}
+
+/* ── Transcripts ─────────────────────────────────────────────────────────── */
+
+.transcriptForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.typeRow {
+  display: flex;
+  gap: 16px;
+}
+
+.typeOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #5f4a39;
+  cursor: pointer;
+}
+
+.radioInput {
+  accent-color: #a4532b;
+}
+
+.transcriptInput {
+  font: inherit;
+  font-size: 13.5px;
+  color: #3a2a1e;
+  background: #fff;
+  border: 1px solid #d8c5ae;
+  border-radius: 8px;
+  padding: 10px 12px;
+  resize: vertical;
+  outline: none;
+  line-height: 1.6;
+}
+
+.transcriptInput:focus { border-color: #a4532b; }
+
+.transcriptList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transcriptEntry {
+  border: 1px solid #e8d9c4;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.transcriptMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #faf4ec;
+  border-bottom: 1px solid #e8d9c4;
+}
+
+.transcriptType {
+  font-size: 11.5px;
+  font-weight: 560;
+  color: #7a5a38;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.transcriptDate {
+  font-size: 11.5px;
+  color: #9a8a78;
+}
+
+.transcriptContent {
+  margin: 0;
+  padding: 12px;
+  font-size: 13.5px;
+  color: #3a2a1e;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

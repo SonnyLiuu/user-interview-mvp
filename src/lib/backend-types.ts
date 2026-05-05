@@ -21,33 +21,6 @@ export type ProjectRecord = {
   updated_at?: string | null;
 };
 
-export type BriefAssumption = {
-  assumption: string;
-  status: 'unvalidated' | 'strengthened' | 'weakened';
-  evidence: string[];
-};
-
-export type RecommendedConversation = {
-  persona_type: string;
-  why: string;
-  what_to_learn: string;
-  urgency: 'high' | 'medium' | 'low';
-};
-
-export type ProjectBrief = {
-  id: string;
-  project_id: string;
-  idea_summary: string | null;
-  strengths: string[] | null;
-  weaknesses: string[] | null;
-  most_promising_avenues: string[] | null;
-  recommended_conversations: RecommendedConversation[] | null;
-  assumptions: BriefAssumption[] | null;
-  debrief_count_at_generation?: number | null;
-  generated_at?: string | null;
-  is_current?: boolean | null;
-};
-
 export type Foundation = {
   summary: string;
   targetUser: string;
@@ -75,12 +48,6 @@ export type WorkspaceSummaryPayload = {
 export type FoundationViewPayload = {
   project: ProjectRecord;
   foundation: Foundation | null;
-  brief: ProjectBrief | null;
   intakeStatus: string;
   conversation: ChatMessage[];
-};
-
-export type BriefPayload = {
-  brief: ProjectBrief | null;
-  status: string;
 };

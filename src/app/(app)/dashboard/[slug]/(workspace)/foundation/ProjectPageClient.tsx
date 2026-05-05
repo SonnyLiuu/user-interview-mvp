@@ -1,7 +1,6 @@
 'use client';
 
 import ProjectChat from '@/components/project/ProjectChat';
-import { dispatchIntakeComplete } from '@/components/brief/BriefPanel';
 
 type Message = { role: 'assistant' | 'user'; content: string };
 
@@ -17,7 +16,6 @@ export default function ProjectPageClient({ projectId, initialConversation, hasB
       projectId={projectId}
       initialConversation={initialConversation}
       hasBrief={hasBrief}
-      onIntakeComplete={() => dispatchIntakeComplete(projectId)}
     />
   );
 }

@@ -1,16 +1,19 @@
 import * as openai from './providers/openai';
 import * as anthropic from './providers/anthropic';
+import * as gemini from './providers/gemini';
+import { env } from '@/lib/server-env';
 
-type Provider = 'openai' | 'anthropic';
+type Provider = 'openai' | 'anthropic' | 'gemini';
 
 function getProvider(): Provider {
-  const p = process.env.AI_PROVIDER;
-  if (p === 'anthropic') return 'anthropic';
-  return 'openai'; // default
+  return env.AI_PROVIDER;
 }
 
 function impl() {
-  return getProvider() === 'anthropic' ? anthropic : openai;
+  const p = getProvider();
+  if (p === 'anthropic') return anthropic;
+  if (p === 'gemini') return gemini;
+  return openai;
 }
 
 export async function generateText(prompt: string, model?: string): Promise<string> {

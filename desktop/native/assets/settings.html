@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Foundry — Settings</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #1a1a1a;
+    color: #eee;
+    margin: 0;
+    padding: 24px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.sub { color: #888; margin: 0 0 24px; font-size: 13px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    color: #ddd;
+    font-size: 14px;
+  }
+  input[type="url"] {
+    flex: 1;
+    min-width: 0;
+    background: #111;
+    color: #eee;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 7px 9px;
+    font: inherit;
+  }
+  button {
+    background: #2a2a2a;
+    color: #eee;
+    border: 1px solid #444;
+    padding: 8px 14px;
+    cursor: pointer;
+    font: inherit;
+    border-radius: 4px;
+  }
+  button:hover { background: #353535; }
+  .status {
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+    padding: 12px;
+    font-size: 12px;
+    border-radius: 4px;
+    margin: 0;
+    min-height: 38px;
+    color: #aaa;
+  }
+</style>
+</head>
+<body>
+  <h1>Settings (Phase 2 placeholder)</h1>
+  <p class="sub">Desktop app preferences and auth controls.</p>
+
+  <label class="field">
+    API base URL
+    <input id="apiBaseUrl" type="url" value="http://localhost:3000">
+  </label>
+
+  <div class="row">
+    <button id="save">Save settings</button>
+    <button id="authSelfTest">Auth self-test</button>
+    <button id="clearAuth">Clear auth</button>
+    <button id="resetOverlay">Reset overlay position</button>
+  </div>
+
+  <div id="status" class="status">Ready.</div>
+
+<script>
+  const status = document.getElementById('status');
+  const apiBaseUrl = document.getElementById('apiBaseUrl');
+
+  function setStatus(message) {
+    status.textContent = message;
+  }
+
+  function currentSettings() {
+    return {
+      apiBaseUrl: apiBaseUrl.value.trim() || 'http://localhost:3000'
+    };
+  }
+
+  // JS → native
+  document.getElementById('save').onclick = () => {
+    const payload = { type: 'saveSettings', settings: currentSettings() };
+    window.chrome.webview.postMessage(payload);
+    setStatus('Saving settings...');
+  };
+  document.getElementById('authSelfTest').onclick = () => {
+    const payload = { type: 'authSelfTest' };
+    window.chrome.webview.postMessage(payload);
+    setStatus('Checking auth...');
+  };
+  document.getElementById('clearAuth').onclick = () => {
+    const payload = { type: 'clearAuth' };
+    window.chrome.webview.postMessage(payload);
+    setStatus('Clearing auth...');
+  };
+  document.getElementById('resetOverlay').onclick = () => {
+    const payload = { type: 'resetOverlayPosition' };
+    window.chrome.webview.postMessage(payload);
+    setStatus('Resetting overlay position...');
+  };
+
+  // native → JS
+  window.chrome.webview.addEventListener('message', e => {
+    if (e.data?.type === 'loadSettings' && e.data.settings?.settings) {
+      apiBaseUrl.value = e.data.settings.settings.apiBaseUrl || 'http://localhost:3000';
+      setStatus('Settings loaded.');
+    }
+    if (e.data?.type === 'settingsSaved') setStatus('Settings saved.');
+    if (e.data?.type === 'authSelfTestResult') {
+      setStatus(e.data.ok ? `Auth OK (${e.data.status})` : `Auth failed (${e.data.status}): ${e.data.message || ''}`);
+    }
+    if (e.data?.type === 'authCleared') setStatus('Auth cleared.');
+    if (e.data?.type === 'overlayPositionReset') setStatus('Overlay position reset.');
+  });
+
+  window.chrome.webview.postMessage({ type: 'settingsReady' });
+</script>
+</body>
+</html>

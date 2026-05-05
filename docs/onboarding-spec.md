@@ -1,193 +1,83 @@
-# AI Onboarding Chat - Implementation Spec
+# Onboarding Spec
 
 ## Purpose
 
-The onboarding flow is a guided AI chat that collects enough structured information about a project so the app can generate a polished Foundation afterward.
+The onboarding flow is a guided chat that collects enough structured information about a founder's idea to generate a Foundation document. It runs once per project, before the founder reaches the main workspace.
 
-The onboarding page itself does not show a live Foundation.
-It only shows a scrollable chat conversation with AI-guided questions.
-
-After onboarding is complete:
-- generate the Foundation
-- save it
-- redirect user to `/dashboard/[slug]/foundation`
+The onboarding page shows only a scrollable chat. No Foundation preview. No sidebar. After completion, the Foundation is generated and the user is redirected to `/dashboard/[slug]/foundation`.
 
 ---
 
-# Product Behavior
+## User Experience
 
-## User experience
+- Scrollable chat transcript, newest message at bottom
+- Auto-scrolls to bottom on new message unless the user has scrolled up
+- Starts with one open-ended kickoff question
+- Follows up with AI-generated multiple-choice questions per slot
+- Always includes a `Something else` option — never in model output, always appended by UI
+- Text input only appears when `Something else` is selected
+- Inputs are disabled while a response is loading
 
-The onboarding page should:
+---
 
-- show a scrollable chat transcript
-- allow scrolling upward to review previous messages
-- keep the latest turn at the bottom
-- begin with one open-ended kickoff question
-- continue with AI-generated multiple-choice follow-up questions
-- always include a final `Something else` option
-- show a text input only when `Something else` is selected
-- save each assistant question and each user answer as chat messages
-- decide completion behind the scenes using hidden structured onboarding state
+## Chat Flow
 
-## Chat flow
+### Turn 1 — Kickoff
+Assistant asks: *"What are you building?"*
 
-### First turn
-Assistant asks:
-- "What are you building?"
+User responds in open text. AI extracts `ideaSummary` from the answer.
 
-User responds with open text.
-
-### Following turns
-System:
-- chooses the next slot to ask about
-- generates a question for that slot
-- generates 3 to 5 answer choices
+### Turns 2–7 — Slot questions
+For each remaining slot:
+- System chooses the next slot (deterministic, not AI-driven)
+- AI generates a question + 3–5 answer choices for that slot
 - UI appends `Something else`
-
-User either:
-- clicks a generated choice
-- or chooses `Something else` and types a custom answer
+- User picks a choice or types a custom answer
 
 ### Completion
-When required slots are strong enough:
-- show a finish action
-- generate Foundation from onboarding
-- redirect to Foundation page
+When required slots are filled:
+- Show a finish action
+- Generate Foundation from onboarding state
+- Redirect to `/dashboard/[slug]/foundation`
 
 ---
 
-# Full Feature Plan
+## Slot Definitions
 
-## Full vision
+### Required
+| Slot | What it captures |
+|---|---|
+| `ideaSummary` | One-line description of what is being built and for whom |
+| `targetUser` | Specific person type who has the problem |
+| `painPoint` | The problem — concrete, not abstract |
+| `valueProp` | What the product does for them |
+| `idealPeopleTypes` | Who the founder should be talking to first |
 
-The full system should support:
+### Optional
+| Slot | What it captures |
+|---|---|
+| `differentiation` | What makes this different from current solutions |
+| `disqualifiers` | Who is not a good interview target even if they seem like one |
 
-- chat-only onboarding experience
-- scrollable transcript with full history
-- hidden slot-based state collection
-- AI-generated contextual choices each turn
-- deterministic slot progression logic
-- custom-answer extraction
-- final Foundation generation after onboarding
-- downstream people-search criteria generation
-- model-portable architecture with provider adapters
-- validation and fallback for generated choices
-- background jobs for post-onboarding generation and retries
-- analytics / observability for AI turn quality
-- optional later support for re-running onboarding or refining Foundation
+### Slot order
+Ask missing required slots first, then weak required slots, then optional slots.
 
-## Architecture layers
-
-### 1. App layer
-Owns:
-- routes
-- auth
-- server actions / API routes
-- DB reads/writes
-- UI state
-
-### 2. Onboarding engine
-Owns:
-- slot definitions
-- hidden onboarding state shape
-- choose-next-slot logic
-- merge/update logic
-- completion rules
-
-### 3. AI task layer
-Owns:
-- kickoff extraction
-- next question generation
-- custom answer extraction
-- final Foundation generation
-
-### 4. Provider layer
-Owns:
-- OpenAI adapter
-- Anthropic adapter
-- future adapters
-
-### 5. Model router
-Owns:
-- mapping task name -> provider/model
-
-The app should never directly depend on one provider SDK inside product logic.
+1. ideaSummary
+2. targetUser
+3. painPoint
+4. valueProp
+5. idealPeopleTypes
+6. differentiation
+7. disqualifiers
 
 ---
 
-# Core Onboarding Data Model
+## Hidden Onboarding State
 
-## Projects
-Stores the project itself.
-
-Suggested fields:
-- id
-- user_id
-- name
-- slug
-- status
-- created_at
-- updated_at
-
-## Onboarding Sessions
-Tracks one onboarding run.
-
-Suggested fields:
-- id
-- project_id
-- status (`active`, `ready`, `completed`)
-- current_slot
-- started_at
-- completed_at
-- progress_json
-
-## Onboarding Messages
-Stores chat transcript.
-
-Suggested fields:
-- id
-- session_id
-- project_id
-- role (`assistant`, `user`)
-- content
-- message_type (`question`, `choice_answer`, `custom_answer`, `system`)
-- created_at
-
-## Onboarding State
-Stores the hidden structured state collected during chat.
-
-Suggested fields:
-- project_id
-- state_json
-- updated_at
-
-## Project Foundations
-Created after onboarding finishes.
-
-Suggested fields:
-- project_id
-- foundation_json
-- generated_at
-- updated_at
-
----
-
-# Hidden Onboarding State
-
-## Purpose
-
-This is not shown on the onboarding page.
-It is internal state used to:
-- decide what to ask next
-- know what is missing
-- know when onboarding is complete
-- generate the final Foundation later
-
-## Suggested MVP shape
+Not shown in the UI. Used to track slot quality, choose next slot, and generate Foundation.
 
 ```ts
-type SlotQuality = "missing" | "weak" | "solid";
+type SlotQuality = 'missing' | 'weak' | 'solid';
 
 type OnboardingState = {
   ideaSummary: string | null;
@@ -212,141 +102,106 @@ type OnboardingState = {
 
 ---
 
-# Slot Plan
+## Completion Rule
 
-## Required MVP slots
+Onboarding is finishable when all 5 required slots are not missing.
 
-* ideaSummary
-* targetUser
-* painPoint
-* valueProp
-* idealPeopleTypes
-
-## Optional later / v1 slots
-
-* differentiation
-* disqualifiers
-
-## Slot order for MVP
-
-Use deterministic app logic, not AI, to choose the next slot.
-
-Recommended order:
-
-1. ideaSummary
-2. targetUser
-3. painPoint
-4. valueProp
-5. idealPeopleTypes
-6. differentiation
-7. disqualifiers
-
-Rule:
-
-* ask missing required slots first
-* then weak required slots
-* then optional slots
-* then finish
+Stronger threshold (recommended): at least 3 of the 5 required slots are `solid`.
 
 ---
 
-# AI Task Design
+## Data Model
 
-## 1. extractKickoffIdea
+### `onboarding_sessions`
+| Field | Type | Notes |
+|---|---|---|
+| id | uuid | |
+| project_id | uuid | |
+| status | text | `active`, `ready`, `completed` |
+| current_slot | text | |
+| started_at | timestamp | |
+| completed_at | timestamp | |
+| progress_json | jsonb | |
 
-Purpose:
+### `onboarding_messages`
+| Field | Type | Notes |
+|---|---|---|
+| id | uuid | |
+| session_id | uuid | |
+| project_id | uuid | |
+| role | text | `assistant`, `user` |
+| content | text | |
+| message_type | text | `question`, `choice_answer`, `custom_answer`, `system` |
+| created_at | timestamp | |
 
-* interpret the first open-ended answer
-* populate `ideaSummary`
+### `onboarding_state`
+| Field | Type | Notes |
+|---|---|---|
+| project_id | uuid | |
+| state_json | jsonb | |
+| updated_at | timestamp | |
 
-Input:
+### `project_foundations`
+| Field | Type | Notes |
+|---|---|---|
+| project_id | uuid | |
+| foundation_json | jsonb | |
+| generated_at | timestamp | |
+| updated_at | timestamp | |
 
-* kickoff user message
+---
 
-Output:
+## AI Tasks
+
+### `extractKickoffIdea`
+Interprets the first open-ended answer. Populates `ideaSummary`.
 
 ```ts
-type ExtractKickoffIdeaResult = {
-  ideaSummary: string;
-  quality: "weak" | "solid";
-};
+// Input
+{ kickoffMessage: string }
+
+// Output
+{ ideaSummary: string; quality: 'weak' | 'solid' }
 ```
 
-## 2. generateNextQuestionWithChoices
-
-Purpose:
-
-* generate the next question for a chosen slot
-* generate 3 to 5 contextual choices
-* return custom placeholder text
-
-Input:
-
-* target slot
-* recent messages
-* onboarding state
-
-Output:
+### `generateNextQuestionWithChoices`
+Generates the next question and 3–5 choices for a given slot.
 
 ```ts
-type GeneratedChoice = {
-  id: string;
-  label: string;
-  normalizedValue: string;
-  slotKey: string;
-};
+// Input
+{ targetSlot: string; recentMessages: Message[]; onboardingState: OnboardingState }
 
-type GenerateNextQuestionWithChoicesResult = {
+// Output
+{
   targetSlot: string;
   question: string;
-  choices: GeneratedChoice[];
+  choices: { id: string; label: string; normalizedValue: string; slotKey: string }[];
   customPlaceholder: string;
-};
+}
 ```
 
-Important:
+Model does not generate `Something else`. UI always appends it.
 
-* UI appends `Something else`
-* model should not generate `Something else`
-
-## 3. extractCustomSlotAnswer
-
-Purpose:
-
-* interpret a typed custom answer after user selects `Something else`
-
-Input:
-
-* target slot
-* custom text
-* recent messages
-* onboarding state
-
-Output:
+### `extractCustomSlotAnswer`
+Interprets a typed custom answer after the user selects `Something else`.
 
 ```ts
-type ExtractCustomSlotAnswerResult = {
-  slotKey: string;
-  value: string | string[];
-  quality: "weak" | "solid";
-};
+// Input
+{ targetSlot: string; customText: string; recentMessages: Message[]; onboardingState: OnboardingState }
+
+// Output
+{ slotKey: string; value: string | string[]; quality: 'weak' | 'solid' }
 ```
 
-## 4. generateFoundationFromOnboarding
-
-Purpose:
-
-* generate the final Foundation after onboarding completes
-
-Input:
-
-* onboarding messages
-* onboarding state
-
-Output:
+### `generateFoundationFromOnboarding`
+Generates the Foundation after onboarding completes.
 
 ```ts
-type GenerateFoundationFromOnboardingResult = {
+// Input
+{ messages: Message[]; state: OnboardingState }
+
+// Output
+{
   foundation: {
     summary: string;
     targetUser: string;
@@ -355,220 +210,90 @@ type GenerateFoundationFromOnboardingResult = {
     idealPeopleTypes: string[];
     differentiation?: string | null;
     disqualifiers?: string[];
-  };
-};
-```
-
----
-
-# Choice Generation Rules
-
-AI-generated choices each turn should be constrained.
-
-## Requirements
-
-* target exactly one slot
-* generate 3 to 5 distinct choices
-* choices must be concrete
-* choices must not overlap heavily
-* choices must reflect project context
-* labels should be concise
-* each choice must include a normalized value
-* no `Something else` in model output
-
-## Validation before showing to user
-
-Validate:
-
-* number of choices is 3 to 5
-* all choices map to the target slot
-* labels are not duplicates
-* labels are not too long
-* normalized values exist
-
-If validation fails:
-
-* regenerate once
-* if still bad, use static fallback choices for that slot
-
----
-
-# Onboarding Turn Flow
-
-## Start onboarding
-
-1. create onboarding session
-2. create empty onboarding state
-3. save first assistant question
-4. render onboarding page
-
-## Kickoff turn
-
-1. user answers open-ended kickoff
-2. save user message
-3. run `extractKickoffIdea`
-4. update hidden onboarding state
-5. choose next slot
-6. run `generateNextQuestionWithChoices`
-7. save assistant message
-8. return updated transcript + current turn
-
-## Structured turn - generated choice selected
-
-1. save user message using clicked choice label
-2. map selected choice into hidden onboarding state
-3. update slot quality
-4. choose next slot
-5. run `generateNextQuestionWithChoices`
-6. save assistant message
-7. return updated transcript + current turn
-
-## Structured turn - Something else selected
-
-1. save user custom message
-2. run `extractCustomSlotAnswer`
-3. update hidden onboarding state
-4. update slot quality
-5. choose next slot
-6. run `generateNextQuestionWithChoices`
-7. save assistant message
-8. return updated transcript + current turn
-
-## Finish onboarding
-
-1. mark onboarding session complete
-2. run `generateFoundationFromOnboarding`
-3. save Foundation in `project_foundations`
-4. optionally trigger people-search criteria generation
-5. redirect to `/dashboard/[slug]/foundation`
-
----
-
-# Completion Rules
-
-## MVP completion rule
-
-Onboarding is finishable when:
-
-Required slots:
-
-* ideaSummary is not missing
-* targetUser is not missing
-* painPoint is not missing
-* valueProp is not missing
-* idealPeopleTypes is not missing
-
-Suggested stronger threshold:
-
-* at least 3 of the 5 required slots are `solid`
-
----
-
-# UI Implementation Plan
-
-## Onboarding page
-
-### Layout
-
-* full-height page
-* one central scrollable chat column
-
-### Chat transcript
-
-* assistant messages
-* user messages
-* previous turns preserved
-* scroll upward allowed at all times
-* newest message at bottom
-* auto-scroll to bottom on new message unless user intentionally scrolled away
-
-### Current turn UI
-
-At the bottom of the thread:
-
-* assistant question
-* generated choice buttons/cards
-* `Something else`
-* text input appears only if `Something else` selected
-
-### Message behavior
-
-* selected choices should render as normal user messages
-* custom text answers render as normal user messages
-
-### Loading states
-
-* disable inputs during submit
-* show assistant pending/loading state before next message appears
-
----
-
-# Model-Portability Plan
-
-## Requirements
-
-* no provider SDK calls directly in onboarding route handlers
-* all provider-specific logic hidden behind adapters
-* model choice resolved through router
-* task outputs validated into app-owned schemas
-
-## Base provider shape
-
-```ts
-type AIMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
-
-type AIJsonRequest = {
-  taskName: string;
-  model?: string;
-  messages: AIMessage[];
-  schemaName: string;
-};
-
-interface AIProvider {
-  generateJson<T>(input: AIJsonRequest): Promise<T>;
+  }
 }
 ```
 
-## Router shape
+---
+
+## Choice Validation
+
+Before showing choices to the user:
+- Count must be 3–5
+- All choices must map to the target slot
+- No duplicate labels
+- No label over ~60 characters
+- All normalized values must be non-empty
+
+On failure: regenerate once. If still invalid, use static fallback choices for that slot.
+
+---
+
+## Turn Flow
+
+### Kickoff turn
+1. Save user message
+2. Run `extractKickoffIdea`
+3. Update onboarding state
+4. Choose next slot
+5. Run `generateNextQuestionWithChoices`
+6. Save assistant message
+7. Return transcript + current turn
+
+### Choice selected
+1. Save user message (choice label)
+2. Map choice into onboarding state
+3. Update slot quality
+4. Choose next slot
+5. Run `generateNextQuestionWithChoices`
+6. Save assistant message
+7. Return transcript + current turn
+
+### Something else selected
+1. Save user custom message
+2. Run `extractCustomSlotAnswer`
+3. Update onboarding state + slot quality
+4. Choose next slot
+5. Run `generateNextQuestionWithChoices`
+6. Save assistant message
+7. Return transcript + current turn
+
+### Finish
+1. Mark session complete
+2. Run `generateFoundationFromOnboarding`
+3. Save Foundation
+4. Redirect to `/dashboard/[slug]/foundation`
+
+---
+
+## Architecture
+
+App logic never calls provider SDKs directly. All AI calls go through task functions → provider adapter → model router.
 
 ```ts
 type AITaskName =
-  | "onboarding.extractKickoffIdea"
-  | "onboarding.generateNextQuestionWithChoices"
-  | "onboarding.extractCustomSlotAnswer"
-  | "foundation.generateFoundationFromOnboarding";
+  | 'onboarding.extractKickoffIdea'
+  | 'onboarding.generateNextQuestionWithChoices'
+  | 'onboarding.extractCustomSlotAnswer'
+  | 'foundation.generateFoundationFromOnboarding';
 
-type ModelRoute = {
-  provider: "openai" | "anthropic";
-  model: string;
-};
+interface AIProvider {
+  generateJson<T>(input: { taskName: string; model?: string; messages: AIMessage[]; schemaName: string }): Promise<T>;
+}
 
 interface ModelRouter {
-  resolve(taskName: AITaskName): ModelRoute;
+  resolve(taskName: AITaskName): { provider: 'openai' | 'anthropic'; model: string };
 }
 ```
 
-Even if MVP uses only one provider/model, still implement this structure now.
+Even if only one provider is used in MVP, implement this structure from the start.
 
 ---
 
-# Suggested Folder Structure
+## Folder Structure
 
-```text
+```
 src/
-  app/
-    (app)/
-      dashboard/
-        [slug]/
-          onboarding/
-            page.tsx
-          (workspace)/
-            foundation/
-              page.tsx
-
   ai/
     providers/
       base.ts
@@ -576,16 +301,6 @@ src/
       anthropic.ts
     router/
       model-router.ts
-    schemas/
-      onboarding.ts
-      foundation.ts
-    prompts/
-      onboarding/
-        extract-kickoff-idea.ts
-        generate-next-question.ts
-        extract-custom-slot-answer.ts
-      foundation/
-        generate-foundation-from-onboarding.ts
     tasks/
       onboarding/
         extract-kickoff-idea.ts
@@ -605,133 +320,23 @@ src/
 
 ---
 
-# Full Feature Plan vs MVP Cut
+## What's Built (MVP)
 
-## Full feature plan
+- [x] Onboarding chat page with scrollable transcript
+- [x] Kickoff open-ended question
+- [x] AI-generated multiple-choice turns
+- [x] `Something else` custom input path
+- [x] Deterministic slot progression
+- [x] Hidden onboarding state
+- [x] Foundation generation after completion
+- [x] Redirect to Foundation page
 
-The full version should include:
+## Not Built Yet
 
-* open-ended kickoff
-* AI-generated choices each turn
-* `Something else`
-* hidden slot state
-* Foundation generation after onboarding
-* people-search criteria generation after Foundation
-* validation + fallback choice generation
-* provider adapters and model router
-* background job support for Foundation regeneration
-* observability for latency, model selection, and failures
-* optional re-run / refine onboarding later
-* optional optional-slot refinement before finish
-* better analytics and quality scoring later
-
-## Current MVP implementation
-
-The MVP should include only:
-
-### Included
-
-* onboarding chat page
-* scrollable transcript with previous messages visible
-* kickoff open-ended question
-* 5 required hidden slots:
-
-  * ideaSummary
-  * targetUser
-  * painPoint
-  * valueProp
-  * idealPeopleTypes
-* AI-generated multiple-choice turns after kickoff
-* `Something else` custom input path
-* deterministic choose-next-slot logic
-* onboarding session table
-* onboarding messages table
-* onboarding state table
-* final Foundation generation after completion
-* Foundation saved and user redirected to Foundation page
-* one provider adapter
-* one model router
-* choice validation + one fallback regeneration attempt
-
-### Not in MVP
-
-* live Foundation preview during onboarding
-* user-editable Foundation during onboarding
-* multi-provider A/B tests
-* slot confidence UI
-* advanced analytics dashboard
-* version history
-* complicated background retries per turn
-* optional slot refinement flow unless easy to add
-* people-search criteria generation unless time remains after Foundation generation works
-
----
-
-# MVP Build Order
-
-## Phase 1
-
-* define slot keys
-* define onboarding state schema
-* create DB tables:
-
-  * onboarding_sessions
-  * onboarding_messages
-  * onboarding_state
-  * project_foundations
-
-## Phase 2
-
-* implement deterministic `chooseNextSlot()`
-* implement onboarding state merge/update helpers
-* create kickoff question flow
-
-## Phase 3
-
-* implement provider interface
-* implement one provider adapter
-* implement model router
-
-## Phase 4
-
-* implement `extractKickoffIdea`
-* implement `generateNextQuestionWithChoices`
-* implement `extractCustomSlotAnswer`
-
-## Phase 5
-
-* build onboarding chat UI
-* render transcript
-* render choices
-* render `Something else`
-* support upward scroll review
-* wire submission flow
-
-## Phase 6
-
-* implement generated-choice validation
-* add fallback behavior
-
-## Phase 7
-
-* implement `generateFoundationFromOnboarding`
-* save Foundation
-* redirect to Foundation page
-
----
-
-# Recommended MVP Definition
-
-A project onboarding is considered MVP-complete when a user can:
-
-1. create a project
-2. enter a chat-only onboarding flow
-3. answer the first question in open text
-4. answer follow-up questions mostly through AI-generated choices
-5. use `Something else` when needed
-6. scroll upward and review prior messages
-7. complete onboarding once enough information is gathered
-8. have a Foundation generated afterward
-9. land on the Foundation page successfully
-
-That is the current MVP target.
+- [ ] Live Foundation preview during onboarding
+- [ ] Re-run or refine onboarding after completion
+- [ ] Multi-provider A/B testing
+- [ ] Slot confidence UI
+- [ ] Advanced analytics / observability
+- [ ] People-search criteria generation after Foundation
+- [ ] **Live call brief overlay** — real-time Zoom integration where transcription crosses off questions as they're covered during the call (planned for Phase 2, see `call-brief-spec.md`)

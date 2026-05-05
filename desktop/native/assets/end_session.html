@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Foundry - End Session</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #171717;
+    color: #f4f4f5;
+    margin: 0;
+    padding: 22px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p { color: #a1a1aa; margin: 0 0 16px; font-size: 13px; }
+  .summary {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .group {
+    border: 1px solid #2f2f35;
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: #1f1f22;
+  }
+  .group h2 {
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #a1a1aa;
+    margin: 0 0 8px;
+  }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 4px 0; font-size: 13px; }
+  textarea {
+    width: 100%;
+    min-height: 130px;
+    box-sizing: border-box;
+    background: #0f0f10;
+    color: #f4f4f5;
+    border: 1px solid #3f3f46;
+    border-radius: 6px;
+    padding: 10px;
+    font: inherit;
+    resize: vertical;
+  }
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .status {
+    min-height: 18px;
+    margin-top: 10px;
+    color: #a1e3b0;
+    font-size: 13px;
+  }
+  .status.error { color: #ffad99; }
+  button {
+    background: #262626;
+    color: #f4f4f5;
+    border: 1px solid #3f3f46;
+    border-radius: 4px;
+    padding: 7px 12px;
+    cursor: pointer;
+    font: inherit;
+  }
+  button.primary {
+    background: #8f3f33;
+    border-color: #b85a4d;
+  }
+  button:hover { filter: brightness(1.1); }
+</style>
+</head>
+<body>
+  <h1>End Session</h1>
+  <p id="person">Loading session...</p>
+
+  <div class="summary">
+    <div class="group">
+      <h2 id="checkedTitle">Checked</h2>
+      <ul id="checked"></ul>
+    </div>
+    <div class="group">
+      <h2 id="uncheckedTitle">Unchecked</h2>
+      <ul id="unchecked"></ul>
+    </div>
+  </div>
+
+  <textarea id="transcript" placeholder="Paste transcript or post-call notes here..."></textarea>
+
+  <div class="actions">
+    <button id="cancel">Cancel</button>
+    <button id="save" class="primary">Save</button>
+  </div>
+  <div id="status" class="status"></div>
+
+<script>
+  const person = document.getElementById('person');
+  const checked = document.getElementById('checked');
+  const unchecked = document.getElementById('unchecked');
+  const checkedTitle = document.getElementById('checkedTitle');
+  const uncheckedTitle = document.getElementById('uncheckedTitle');
+  const transcript = document.getElementById('transcript');
+  const status = document.getElementById('status');
+  const save = document.getElementById('save');
+  let currentSession = null;
+
+  function post(payload) {
+    window.chrome.webview.postMessage(payload);
+  }
+
+  function renderList(target, items) {
+    target.textContent = '';
+    if (!items.length) {
+      const li = document.createElement('li');
+      li.textContent = 'None';
+      target.append(li);
+      return;
+    }
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.textContent = item.label;
+      target.append(li);
+    }
+  }
+
+  function renderSession(session) {
+    currentSession = session;
+    person.textContent = session.personName
+      ? `Call with ${session.personName}`
+      : `Person ${session.personId || ''}`;
+    const checkedItems = session.topics.filter(topic => topic.checked);
+    const uncheckedItems = session.topics.filter(topic => !topic.checked);
+    checkedTitle.textContent = `Checked (${checkedItems.length})`;
+    uncheckedTitle.textContent = `Unchecked (${uncheckedItems.length})`;
+    renderList(checked, checkedItems);
+    renderList(unchecked, uncheckedItems);
+  }
+
+  document.getElementById('cancel').onclick = () => post({ type: 'cancelEndSession' });
+  save.onclick = () => {
+    status.className = 'status';
+    status.textContent = 'Saving...';
+    save.disabled = true;
+    post({
+      type: 'saveSession',
+      transcriptRaw: transcript.value,
+      personId: currentSession?.personId || '',
+    });
+  };
+
+  window.chrome.webview.addEventListener('message', e => {
+    if (e.data?.type === 'loadEndSession') renderSession(e.data.session);
+    if (e.data?.type === 'saveSucceeded') {
+      status.className = 'status';
+      status.textContent = 'Saved. You can close this window.';
+    }
+    if (e.data?.type === 'saveFailed') {
+      save.disabled = false;
+      status.className = 'status error';
+      status.textContent = e.data.message || 'Save failed.';
+    }
+  });
+
+  post({ type: 'endSessionReady' });
+</script>
+</body>
+</html>

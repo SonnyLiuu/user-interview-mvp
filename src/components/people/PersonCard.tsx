@@ -31,10 +31,12 @@ function CardActive({
   projectId,
   onCreated,
   onCancel,
+  initialUrls,
 }: {
   projectId: string;
   onCreated: (person: Person) => void;
   onCancel?: () => void;
+  initialUrls?: string[];
 }) {
   async function handleSubmit(urls: string[], depth: 'quick' | 'deep') {
     const res = await fetch('/api/people', {
@@ -49,16 +51,25 @@ function CardActive({
     }
 
     const person = await res.json() as Person;
+    const crawlRes = await fetch(`/api/people/${person.id}/crawl`, { method: 'POST' });
 
-    // Fire-and-forget crawl trigger — response is 202, we poll for status
-    fetch(`/api/people/${person.id}/crawl`, { method: 'POST' }).catch(() => {});
+    if (!crawlRes.ok) {
+      const data = await crawlRes.json().catch(() => ({})) as { error?: string };
+      onCreated({
+        ...person,
+        crawl_status: 'error',
+        analysis_status: 'error',
+        crawl_error: data.error ?? 'Failed to start research.',
+      });
+      return;
+    }
 
-    onCreated(person);
+    onCreated({ ...person, crawl_status: 'crawling', crawl_error: null });
   }
 
   return (
     <div className={styles.active}>
-      <UrlInputForm onSubmit={handleSubmit} onCancel={onCancel} />
+      <UrlInputForm onSubmit={handleSubmit} onCancel={onCancel} initialUrls={initialUrls} />
     </div>
   );
 }
@@ -85,7 +96,15 @@ function CardLoading() {
 
 // ── Error ─────────────────────────────────────────────────────────────────────
 
-function CardError({ onRetry }: { onRetry: () => void }) {
+function formatResearchError(message?: string | null) {
+  if (!message) return 'Research unsuccessful';
+  if (/foundation/i.test(message)) return 'Complete the foundation first, then retry.';
+  if (/timed out/i.test(message)) return 'Research timed out. Please retry.';
+  if (/firecrawl|scrape failed|unsupported/i.test(message)) return 'Could not read this URL. Try another source.';
+  return message.length > 120 ? 'Research unsuccessful. Please retry.' : message;
+}
+
+function CardError({ onRetry, message }: { onRetry: () => void; message?: string | null }) {
   return (
     <div className={styles.error}>
       <span className={styles.errorIcon} aria-hidden="true">
@@ -95,7 +114,7 @@ function CardError({ onRetry }: { onRetry: () => void }) {
           <circle cx="10" cy="14" r=".9" fill="currentColor" />
         </svg>
       </span>
-      <p className={styles.errorText}>Research unsuccessful</p>
+      <p className={styles.errorText}>{formatResearchError(message)}</p>
       <button type="button" className={styles.retryBtn} onClick={onRetry}>
         Retry
       </button>
@@ -149,7 +168,7 @@ function CardFilled({
       {/* Bookmark — top-right */}
       <div className={styles.bookmarkWrap}>
         <BookmarkButton
-          bookmarked={person.board_status === 'bookmarked'}
+          bookmarked={person.board_status !== null}
           onToggle={onBookmarkToggle}
           loading={bookmarkLoading}
         />
@@ -209,6 +228,7 @@ type Props = {
 export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, onUpdated, onDeleted }: Props) {
   const [active, setActive] = useState(!!isFirstEmpty);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
+  const [showRetryForm, setShowRetryForm] = useState(false);
 
   // No person → empty or active state
   if (!person) {
@@ -238,9 +258,8 @@ export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, o
   const isError =
     person.crawl_status === 'error' || person.analysis_status === 'error';
 
-  async function handleRetry() {
-    await fetch(`/api/people/${person!.id}/crawl`, { method: 'POST' }).catch(() => {});
-    // Parent polling will pick up the status change
+  function handleRetry() {
+    setShowRetryForm(true);
   }
 
   async function handleBookmarkToggle() {
@@ -261,10 +280,26 @@ export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, o
     onDeleted(person!.id);
   }
 
+  if (isError && showRetryForm) {
+    return (
+      <div className={styles.card}>
+        <CardActive
+          projectId={projectId}
+          onCreated={async (newPerson) => {
+            await fetch(`/api/people/${person.id}`, { method: 'DELETE' }).catch(() => {});
+            onDeleted(person.id);
+            onCreated(newPerson);
+          }}
+          initialUrls={(person.source_urls as string[]) ?? []}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.card}>
       {isLoading && <CardLoading />}
-      {isError && <CardError onRetry={handleRetry} />}
+      {isError && <CardError onRetry={handleRetry} message={person.crawl_error} />}
       {!isLoading && !isError && (
         <CardFilled
           person={person}

@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     ai_provider: str = Field(default="openai", alias="AI_PROVIDER")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
+    openai_model: str = Field(default="gpt-4o", alias="OPENAI_MODEL")
+    anthropic_model: str = Field(default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL")
+    gemini_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_MODEL")
+    ai_request_timeout_seconds: float = Field(default=45.0, alias="AI_REQUEST_TIMEOUT_SECONDS")
 
     cors_origins: list[str] = [
         "http://localhost:3000",

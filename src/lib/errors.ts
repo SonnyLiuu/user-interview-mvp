@@ -51,7 +51,7 @@ export class DatabaseError extends Error {
 export class AIProviderError extends Error {
   constructor(
     message: string,
-    public readonly provider: 'anthropic' | 'openai',
+    public readonly provider: 'anthropic' | 'openai' | 'gemini',
     public readonly statusCode?: number
   ) {
     super(message);

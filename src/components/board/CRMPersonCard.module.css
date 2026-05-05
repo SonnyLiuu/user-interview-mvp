@@ -1,0 +1,204 @@
+.card {
+  background: var(--card-bg, #fff);
+  border: 1px solid #e8e0d4;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+  transition: box-shadow 0.15s ease;
+}
+
+.card:active {
+  cursor: grabbing;
+}
+
+.card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.cardBookmarked {
+  border-left: 3px solid #a4532b;
+}
+
+.cardOverlay {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+  cursor: grabbing;
+}
+
+.cardLink {
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.cardBody {
+  padding: 10px 12px;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.bookmarkPip {
+  width: 9px;
+  height: 10px;
+  flex-shrink: 0;
+  color: #a4532b;
+}
+
+.name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2a1f14;
+  line-height: 1.3;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rankDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rank_low    { background: #c54a2e; }
+.rank_medium { background: #c97b2a; }
+.rank_high   { background: #4a8c5c; }
+
+.role {
+  font-size: 11.5px;
+  color: #7a6a58;
+  margin: 0 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  font-size: 11px;
+  color: #9a8a78;
+  margin: 0;
+}
+
+.outcomeBadge {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 20px;
+  background: #f5ede3;
+  color: #7a5a38;
+  text-transform: capitalize;
+}
+
+/* ── Action footer ─────────────────────────────────────────────────────────── */
+
+.cardActions {
+  border-top: 1px solid #ede5d8;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cardActionsRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cardErrorText {
+  margin: 0;
+  font-size: 11px;
+  color: #a44d2b;
+  line-height: 1.35;
+}
+
+.cardActionBtn {
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #a4532b;
+  background: none;
+  border: 1px solid #d8c5ae;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: background 100ms, border-color 100ms;
+  line-height: 1.4;
+}
+
+.cardActionBtn:hover:not(:disabled) {
+  background: #f5ede3;
+  border-color: #c5a882;
+}
+
+.cardActionBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cardActionBtnSecondary {
+  color: #8a705a;
+  border-color: #e8e0d4;
+}
+
+.cardActionBtnSecondary:hover:not(:disabled) {
+  background: #f5ede3;
+  border-color: #d0c0ac;
+}
+
+.cardInlineForm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cardDateInput {
+  font: inherit;
+  font-size: 11.5px;
+  color: #3a2a1e;
+  background: #fff;
+  border: 1px solid #d8c5ae;
+  border-radius: 6px;
+  padding: 4px 8px;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.cardDateInput:focus {
+  border-color: #a4532b;
+}
+
+.cardCancelBtn {
+  font: inherit;
+  font-size: 11.5px;
+  color: #8a705a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.cardCancelBtn:hover {
+  color: #2a1f14;
+}
+
+.cardOutcomeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}

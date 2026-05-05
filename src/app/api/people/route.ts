@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, users } from '@/lib/db/schema';
+import { people, projects, users } from '@/lib/db/schema';
 import { validateInput, createPersonSchema } from '@/lib/validation';
 
 // Derive a human-readable placeholder name from the first URL while the crawl runs.
@@ -30,6 +30,15 @@ export async function POST(req: NextRequest) {
     const [user] = await db.select({ id: users.id }).from(users).where(eq(users.clerk_user_id, clerkUserId));
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, data.project_id), eq(projects.user_id, user.id)))
+      .limit(1);
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);

@@ -27,6 +27,7 @@ export function BookmarkButton({ bookmarked, onToggle, loading }: Props) {
         ) : (
           <path
             d="M3 2h12a1 1 0 0 1 1 1v16.27a.5.5 0 0 1-.82.39L9 15.5l-6.18 4.16A.5.5 0 0 1 2 19.27V3a1 1 0 0 1 1-1z"
+            fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
             strokeLinejoin="round"

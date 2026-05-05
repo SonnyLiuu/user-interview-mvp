@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import BriefPanel from '@/components/brief/BriefPanel';
 import FoundationView from '@/components/brief/FoundationView';
 import { FoundationProvider } from '@/components/brief/FoundationContext';
 import ProjectPageClient from './ProjectPageClient';
@@ -28,29 +27,25 @@ export default async function ProjectPage({
   }
 
   const hasFoundation = foundationView.foundation !== null;
+  if (!hasFoundation) {
+    redirect(`/onboarding/${getProjectPathSegment(project)}`);
+  }
+  const foundation = foundationView.foundation!;
 
   return (
     <FoundationProvider
       projectId={project.id}
-      initialFoundation={foundationView.foundation ?? { summary: '', targetUser: '', painPoint: '', valueProp: '', idealPeopleTypes: [] }}
+      initialFoundation={foundation}
     >
       <div className={styles.layout}>
         <div className={styles.briefPane}>
-          {hasFoundation ? (
-            <FoundationView projectId={project.id} initialFoundation={foundationView.foundation!} />
-          ) : (
-            <BriefPanel
-              projectId={project.id}
-              initialBrief={foundationView.brief}
-              intakeStatus={foundationView.intakeStatus}
-            />
-          )}
+          <FoundationView projectId={project.id} initialFoundation={foundation} />
         </div>
         <div className={styles.chatPane}>
           <ProjectPageClient
             projectId={project.id}
             initialConversation={foundationView.conversation}
-            hasBrief={hasFoundation || !!foundationView.brief}
+            hasBrief={true}
           />
         </div>
       </div>

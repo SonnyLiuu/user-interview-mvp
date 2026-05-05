@@ -29,10 +29,12 @@ For recommended_questions: write questions the founder could ask this specific p
 
 For contact_info: extract any email, Twitter/X handle, LinkedIn URL, or personal website found in the crawled content. Only include what is actually present.
 
-For relevance_rank: score against the founder's specific hypothesis and customer type.
-- high: directly experiences the pain or controls budget for this type of solution
-- medium: adjacent knowledge or partial fit
-- low: minimal overlap with the founder's current focus`;
+For relevance_rank: score against the founder's specific hypothesis, customer type, and learning value.
+- high: directly matches the target customer or buyer; currently experiences the pain; controls budget for this type of solution; or is actively doing the exact workflow the founder wants to understand.
+- medium: useful learning fit; does not perfectly match the target customer, but has meaningful founder, startup, product, customer discovery, go-to-market, or technical-building experience that could inform the hypothesis. This includes founders, former founders, startup operators, accelerator participants, technical builders, or people who work closely with early-stage founders.
+- low: weak fit; minimal overlap with the target customer, startup context, customer discovery, founder workflows, or the problem space.
+
+Important: Do not assign low relevance solely because the person is not the exact target customer. If the person is a founder, former founder, startup operator, technical builder, accelerator participant, or works closely with early-stage founders, they should usually be medium unless their background has almost no connection to startup formation, customer discovery, or founder workflows.`;
 
   return generateObject<PersonAnalysis>(prompt, {
     type: 'object',

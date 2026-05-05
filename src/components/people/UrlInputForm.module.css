@@ -36,6 +36,7 @@
   background: #fff;
   transition: border-color 100ms, box-shadow 100ms;
   min-width: 0;
+  text-overflow: ellipsis;
 }
 
 .input::placeholder { color: #b89c84; }

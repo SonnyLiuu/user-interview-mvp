@@ -1,4 +1,5 @@
-import { pgTable, text, boolean, integer, timestamp, uuid, jsonb } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { pgTable, text, boolean, integer, timestamp, uuid, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
 import { customType } from 'drizzle-orm/pg-core';
 
 // Custom type for text arrays with proper typing
@@ -67,8 +68,6 @@ export type PersonAnalysis = {
 export type OutreachContent = {
   subject?: string;
   body?: string;
-  tone?: string;
-  cta?: string;
 };
 
 export type CallPrepContent = {
@@ -158,7 +157,11 @@ export const project_briefs = pgTable('project_briefs', {
   debrief_count_at_generation: integer('debrief_count_at_generation').default(0),
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
   is_current: boolean('is_current').default(true),
-});
+}, (table) => [
+  uniqueIndex('project_briefs_one_current_per_project')
+    .on(table.project_id)
+    .where(sql`${table.is_current} = true`),
+]);
 
 // ── people ────────────────────────────────────────────────────────────────────
 export const people = pgTable('people', {
@@ -187,7 +190,9 @@ export const people = pgTable('people', {
   expires_at: timestamp('expires_at', { withTimezone: true }),
 
   board_status: text('board_status'),
+  outcome: text('outcome'),
   call_scheduled_at: timestamp('call_scheduled_at', { withTimezone: true }),
+  last_contacted_at: timestamp('last_contacted_at', { withTimezone: true }),
 
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -197,7 +202,6 @@ export const people = pgTable('people', {
 export const outreach = pgTable('outreach', {
   id: uuid('id').primaryKey().defaultRandom(),
   person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
-  channel: text('channel').notNull(),
   content: jsonb('content').$type<OutreachContent>(),
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
   is_current: boolean('is_current').default(true),
@@ -212,7 +216,11 @@ export const call_prep = pgTable('call_prep', {
   generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
   reviewed_at: timestamp('reviewed_at', { withTimezone: true }),
   is_current: boolean('is_current').default(true),
-});
+}, (table) => [
+  uniqueIndex('call_prep_one_current_per_person')
+    .on(table.person_id)
+    .where(sql`${table.is_current} = true`),
+]);
 
 // ── interactions ──────────────────────────────────────────────────────────────
 export const interactions = pgTable('interactions', {
@@ -301,6 +309,24 @@ export const project_foundations = pgTable('project_foundations', {
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
+// ── transcripts ───────────────────────────────────────────────────────────────
+export const transcripts = pgTable('transcripts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  type: text('type').notNull().default('call'), // 'call' | 'message'
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// ── person_events ─────────────────────────────────────────────────────────────
+export const person_events = pgTable('person_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  metadata: jsonb('metadata'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 // ── Inferred types ────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type Project = typeof projects.$inferSelect;
@@ -316,3 +342,5 @@ export type OnboardingSession = typeof onboarding_sessions.$inferSelect;
 export type OnboardingMessage = typeof onboarding_messages.$inferSelect;
 export type OnboardingStateRow = typeof onboarding_state.$inferSelect;
 export type ProjectFoundation = typeof project_foundations.$inferSelect;
+export type Transcript = typeof transcripts.$inferSelect;
+export type PersonEvent = typeof person_events.$inferSelect;

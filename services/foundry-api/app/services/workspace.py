@@ -6,7 +6,6 @@ from fastapi.encoders import jsonable_encoder
 
 from ..db import get_pool
 from ..errors import NotFoundError
-from ..repositories import briefs as brief_repo
 from ..repositories import foundations as foundation_repo
 from ..repositories import intake as intake_repo
 from ..repositories import projects as project_repo
@@ -57,7 +56,6 @@ async def get_foundation_view(user_id: str, project_id: str):
         if not project:
             raise NotFoundError("Not found")
         foundation = await foundation_repo.get_latest_foundation(conn, project_id)
-        brief = await brief_repo.get_current_brief(conn, project_id)
         intake = await intake_repo.get_intake(conn, project_id)
 
     raw_conversation = intake["conversation"] if intake and intake["conversation"] else []
@@ -70,7 +68,6 @@ async def get_foundation_view(user_id: str, project_id: str):
     return {
         "project": jsonable_encoder(dict(project)),
         "foundation": jsonable_encoder(raw_foundation) if raw_foundation else None,
-        "brief": jsonable_encoder(dict(brief)) if brief else None,
         "intakeStatus": project["intake_status"] or "not_started",
         "conversation": jsonable_encoder(conversation),
     }
