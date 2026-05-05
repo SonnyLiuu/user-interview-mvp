@@ -5,6 +5,7 @@ SYSTEM_DESIGN.md
 node_modules
 .next
 out
+desktop/native/build/
 
 # env
 .env.local
