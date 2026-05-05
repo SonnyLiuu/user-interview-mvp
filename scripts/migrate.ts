@@ -6,11 +6,13 @@ import { ConfigurationError } from '../src/lib/errors';
 
 config({ path: '.env.local' });
 
-// Import env validation to ensure all required vars are present
-import '../src/lib/env';
-
 async function main() {
-  const sql = neon(process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL!);
+  const databaseUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new ConfigurationError('DATABASE_URL is required to run migrations', 'DATABASE_URL');
+  }
+
+  const sql = neon(databaseUrl);
   const db = drizzle(sql);
 
   await migrate(db, { migrationsFolder: './drizzle' });
