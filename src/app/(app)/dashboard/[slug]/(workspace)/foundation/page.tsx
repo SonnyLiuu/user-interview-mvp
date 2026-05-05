@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import FoundationView from '@/components/brief/FoundationView';
 import { FoundationProvider } from '@/components/brief/FoundationContext';
-import ProjectPageClient from './ProjectPageClient';
+import ProjectChat from '@/components/project/ProjectChat';
 import styles from './project-page.module.css';
 import { getFoundationView, getProjectBySlugOrId } from '@/lib/backend-server';
 import { getProjectPathSegment } from '@/lib/projects';
@@ -42,7 +42,7 @@ export default async function ProjectPage({
           <FoundationView projectId={project.id} initialFoundation={foundation} />
         </div>
         <div className={styles.chatPane}>
-          <ProjectPageClient
+          <ProjectChat
             projectId={project.id}
             initialConversation={foundationView.conversation}
             hasBrief={true}

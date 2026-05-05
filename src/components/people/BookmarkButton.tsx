@@ -1,5 +1,3 @@
-'use client';
-
 import styles from './BookmarkButton.module.css';
 
 type Props = {

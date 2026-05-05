@@ -1,5 +1,3 @@
-'use client';
-
 import type { Person } from '@/lib/db/schema';
 import { PersonCard } from './PersonCard';
 import styles from './PersonGrid.module.css';

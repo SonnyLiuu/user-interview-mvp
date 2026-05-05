@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Shared backend utilities for client-side operations
  */
