@@ -10,6 +10,7 @@ import { RelevanceIndicator } from '@/components/people/RelevanceIndicator';
 import { BookmarkButton } from '@/components/people/BookmarkButton';
 import { UrlInputForm } from '@/components/people/UrlInputForm';
 import { boardStatusToStage, CRM_STAGES, type CRMStage, type CRMOutcome } from '@/lib/crm';
+import { BACKEND_ERROR_CODES } from '@/lib/error-codes';
 import styles from './PersonDetailClient.module.css';
 
 type Props = {
@@ -573,7 +574,7 @@ function CallBriefSection({ personId, slug, stage, initialPrep }: {
         return;
       }
       const body = await res.json().catch(() => ({}));
-      if (body?.code === 'foundation_required') {
+      if (body?.code === BACKEND_ERROR_CODES.foundationRequired) {
         setError({
           code: 'foundation_required',
           message: 'Project foundation is required before generating a call brief.',
@@ -733,9 +734,9 @@ function OutreachComposer({ personId, slug, initialOutreach, onCopy, copying }: 
         return;
       }
       const body = await res.json().catch(() => ({}));
-      if (body?.code === 'foundation_required') {
+      if (body?.code === BACKEND_ERROR_CODES.foundationRequired) {
         setError({ code: 'foundation_required', message: 'Project foundation is required before generating an outreach message.' });
-      } else if (body?.code === 'generation_failed') {
+      } else if (body?.code === BACKEND_ERROR_CODES.generationFailed) {
         setError({ code: 'generation_failed', message: 'The model returned an empty message. Try again.' });
       } else {
         setError({ code: 'generic', message: 'Failed to generate message. Try again.' });

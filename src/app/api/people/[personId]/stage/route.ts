@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { eq, and } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import { people, projects, users, person_events } from '@/lib/db/schema';
-import { stageToBoardStatus, type CRMStage } from '@/lib/crm';
+import { CRM_STAGE_IDS, stageToBoardStatus } from '@/lib/crm';
 
 type Params = { params: Promise<{ personId: string }> };
+const stageBodySchema = z.object({ stage: z.enum(CRM_STAGE_IDS) });
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { userId: clerkUserId } = await auth();
   if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { personId } = await params;
-  const body = await req.json() as { stage: CRMStage };
-  if (!body.stage) return NextResponse.json({ error: 'stage required' }, { status: 400 });
+  const parsed = stageBodySchema.safeParse(await req.json());
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid stage' }, { status: 400 });
+  const { stage } = parsed.data;
 
   const rows = await db
     .select({ person: people })
@@ -27,14 +30,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const [updated] = await db
     .update(people)
-    .set({ board_status: stageToBoardStatus(body.stage), updated_at: new Date() })
+    .set({ board_status: stageToBoardStatus(stage), updated_at: new Date() })
     .where(eq(people.id, personId))
     .returning();
 
   await db.insert(person_events).values({
     person_id: personId,
     type: 'stage_changed',
-    metadata: { from: rows[0].person.board_status, to: body.stage },
+    metadata: { from: rows[0].person.board_status, to: stage },
   });
 
   return NextResponse.json(updated);

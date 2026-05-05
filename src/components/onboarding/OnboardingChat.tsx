@@ -5,11 +5,11 @@ import { backendClientFetch } from '@/lib/backend-client';
 import styles from './OnboardingChat.module.css';
 
 type SlotKey =
-  | 'problem'
-  | 'target_customer'
-  | 'current_alternatives'
-  | 'value_proposition'
-  | 'channels'
+  | 'ideaSummary'
+  | 'targetUser'
+  | 'painPoint'
+  | 'valueProp'
+  | 'idealPeopleTypes'
   | 'differentiation'
   | 'disqualifiers';
 
@@ -37,7 +37,7 @@ type ChatResponse = {
   messages: ChatMessage[];
   currentTurn: CurrentTurn | null;
   isFinishable: boolean;
-  sessionStatus: string;
+  sessionStatus: 'active' | 'ready' | 'completed';
 };
 
 type OnboardingChatProps = {

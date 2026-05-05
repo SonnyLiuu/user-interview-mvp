@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { BOARD_STATUS_VALUES } from '@/lib/crm';
 
 // Common validation patterns
 const uuidSchema = z.string().uuid();
@@ -37,7 +38,7 @@ export const updatePersonSchema = z.object({
   source_urls: z.array(urlSchema).optional(),
   raw_pasted_text: z.string().optional(),
   additional_context: z.array(z.string()).optional(),
-  board_status: z.enum(['bookmarked', 'contacted', 'scheduled', 'completed']).optional(),
+  board_status: z.enum(BOARD_STATUS_VALUES).optional(),
   call_scheduled_at: z.string().datetime().optional(),
 });
 

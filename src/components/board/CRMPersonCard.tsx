@@ -5,6 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Person } from '@/lib/db/schema';
 import { boardStatusToStage, isBookmarked, type CRMStage, type CRMOutcome } from '@/lib/crm';
+import { BACKEND_ERROR_CODES } from '@/lib/error-codes';
 import styles from './CRMPersonCard.module.css';
 
 type Props = {
@@ -101,7 +102,7 @@ function CardActions({ person, stage, slug, initialHasBrief, onPersonUpdate }: {
       const res = await fetch(`/api/people/${person.id}/call-brief`, { method: 'POST' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        if (body?.code === 'foundation_required') {
+        if (body?.code === BACKEND_ERROR_CODES.foundationRequired) {
           setBriefError('Complete project foundation first.');
         } else {
           setBriefError('Could not generate brief. Try again on the person page.');

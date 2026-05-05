@@ -6,6 +6,7 @@ from fastapi.encoders import jsonable_encoder
 
 from ..ai import generate_call_brief
 from ..db import get_pool
+from ..error_codes import FOUNDATION_REQUIRED
 from ..errors import BadRequestError, NotFoundError
 from ..repositories import call_prep as call_prep_repo
 from ..repositories import foundations as foundation_repo
@@ -81,7 +82,7 @@ async def refresh_call_brief(user_id: str, person_id: str):
     if not isinstance(foundation, dict):
         raise BadRequestError(
             "Project foundation is required before generating a call brief",
-            code="foundation_required",
+            code=FOUNDATION_REQUIRED,
         )
 
     project_context = foundation_to_project_context(foundation)

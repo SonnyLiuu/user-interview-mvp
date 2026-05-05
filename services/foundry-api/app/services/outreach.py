@@ -4,6 +4,7 @@ from fastapi.encoders import jsonable_encoder
 
 from ..ai import generate_outreach_message
 from ..db import get_pool
+from ..error_codes import FOUNDATION_REQUIRED, GENERATION_FAILED
 from ..errors import BadRequestError, NotFoundError
 from ..repositories import foundations as foundation_repo
 from ..repositories import outreach as outreach_repo
@@ -54,7 +55,7 @@ async def refresh_outreach(user_id: str, person_id: str):
     if not isinstance(foundation, dict):
         raise BadRequestError(
             "Project foundation is required before generating an outreach message",
-            code="foundation_required",
+            code=FOUNDATION_REQUIRED,
         )
 
     project_context = foundation_to_project_context(foundation)
@@ -65,7 +66,7 @@ async def refresh_outreach(user_id: str, person_id: str):
     if not content.get("body"):
         raise BadRequestError(
             "AI did not return a usable outreach message. Try again.",
-            code="generation_failed",
+            code=GENERATION_FAILED,
         )
 
     async with pool.acquire() as conn:

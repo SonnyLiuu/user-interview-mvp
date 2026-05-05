@@ -6,13 +6,10 @@ export type ProjectNavItem = {
 
 type ProjectRecord = {
   id: string;
-  user_id?: string | null;
   name: string;
   slug: string | null;
   intake_status: string | null;
   is_archived?: boolean | null;
-  created_at?: string | null;
-  updated_at?: string | null;
 };
 
 export type Foundation = {
