@@ -14,20 +14,7 @@ function getClient() {
   return client;
 }
 
-export const DEFAULT_MODEL = 'claude-sonnet-4-6';
-
-export async function generateText(prompt: string, model = DEFAULT_MODEL): Promise<string> {
-  const msg = await getClient().messages.create({
-    model,
-    max_tokens: 4096,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  const block = msg.content[0];
-  if (block.type !== 'text') {
-    throw new AIProviderError('Unexpected response type from Anthropic API', 'anthropic');
-  }
-  return block.text;
-}
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 export async function generateObject<T>(prompt: string, schema: object, model = DEFAULT_MODEL): Promise<T> {
   const msg = await getClient().messages.create({

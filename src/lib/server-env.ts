@@ -1,6 +1,6 @@
 import 'server-only';
 
-export interface EnvConfig {
+interface EnvConfig {
   DATABASE_URL: string;
   DATABASE_URL_UNPOOLED?: string;
   CLERK_SECRET_KEY: string;
@@ -27,7 +27,7 @@ const REQUIRED_BASE_VARS = [
 
 const ENV_STATE_KEY = Symbol.for('startup-foundry.server-env');
 
-export class EnvironmentError extends Error {
+class EnvironmentError extends Error {
   constructor(message: string, public readonly variables: string[]) {
     super(message);
     this.name = 'EnvironmentError';
@@ -112,7 +112,7 @@ function readAndValidateEnvironment(): EnvConfig {
   };
 }
 
-export function getEnv(): EnvConfig {
+function getEnv(): EnvConfig {
   const state = getEnvState();
 
   if (state.config) {

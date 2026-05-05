@@ -14,17 +14,7 @@ function getClient() {
   return client;
 }
 
-export const DEFAULT_MODEL = 'gemini-2.0-flash';
-
-export async function generateText(prompt: string, model = DEFAULT_MODEL): Promise<string> {
-  const genModel = getClient().getGenerativeModel({ model });
-  const result = await genModel.generateContent(prompt);
-  const text = result.response.text();
-  if (!text) {
-    throw new AIProviderError('Empty response from Gemini API', 'gemini');
-  }
-  return text;
-}
+const DEFAULT_MODEL = 'gemini-2.0-flash';
 
 export async function generateObject<T>(prompt: string, schema: object, model = DEFAULT_MODEL): Promise<T> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

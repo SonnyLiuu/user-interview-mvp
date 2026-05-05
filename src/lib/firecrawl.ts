@@ -1,4 +1,4 @@
-export type CrawlResult = {
+type CrawlResult = {
   url: string;
   title?: string;
   content: string;
@@ -7,7 +7,7 @@ export type CrawlResult = {
 
 export type CrawlDepth = 'quick' | 'deep';
 
-export class FirecrawlError extends Error {
+class FirecrawlError extends Error {
   constructor(message: string, public readonly url: string) {
     super(message);
     this.name = 'FirecrawlError';

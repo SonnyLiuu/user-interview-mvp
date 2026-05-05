@@ -1,16 +1,10 @@
-export type ChatMessage = {
-  role: 'assistant' | 'user';
-  content: string;
-  messageType?: string | null;
-};
-
 export type ProjectNavItem = {
   id: string;
   name: string;
   slug: string | null;
 };
 
-export type ProjectRecord = {
+type ProjectRecord = {
   id: string;
   user_id?: string | null;
   name: string;
@@ -49,5 +43,9 @@ export type FoundationViewPayload = {
   project: ProjectRecord;
   foundation: Foundation | null;
   intakeStatus: string;
-  conversation: ChatMessage[];
+  conversation: {
+    role: 'assistant' | 'user';
+    content: string;
+    messageType?: string | null;
+  }[];
 };

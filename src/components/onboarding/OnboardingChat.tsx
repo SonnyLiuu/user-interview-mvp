@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { backendClientFetch } from '@/lib/backend-client';
 import styles from './OnboardingChat.module.css';
-import type { SlotKey } from '@/lib/onboarding/slot-definitions';
+
+type SlotKey =
+  | 'problem'
+  | 'target_customer'
+  | 'current_alternatives'
+  | 'value_proposition'
+  | 'channels'
+  | 'differentiation'
+  | 'disqualifiers';
 
 type ChatMessage = {
   role: 'assistant' | 'user';

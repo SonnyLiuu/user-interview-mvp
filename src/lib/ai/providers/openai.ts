@@ -14,19 +14,7 @@ function getClient() {
   return client;
 }
 
-export const DEFAULT_MODEL = 'gpt-4o';
-
-export async function generateText(prompt: string, model = DEFAULT_MODEL): Promise<string> {
-  const res = await getClient().chat.completions.create({
-    model,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  const content = res.choices[0].message.content;
-  if (!content) {
-    throw new AIProviderError('Empty response from OpenAI API', 'openai');
-  }
-  return content;
-}
+const DEFAULT_MODEL = 'gpt-4o';
 
 export async function generateObject<T>(prompt: string, schema: object, model = DEFAULT_MODEL): Promise<T> {
   const res = await getClient().chat.completions.create({

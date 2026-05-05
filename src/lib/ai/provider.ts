@@ -1,6 +1,6 @@
-import * as openai from './providers/openai';
-import * as anthropic from './providers/anthropic';
-import * as gemini from './providers/gemini';
+import { generateObject as generateOpenAIObject } from './providers/openai';
+import { generateObject as generateAnthropicObject } from './providers/anthropic';
+import { generateObject as generateGeminiObject } from './providers/gemini';
 import { env } from '@/lib/server-env';
 
 type Provider = 'openai' | 'anthropic' | 'gemini';
@@ -11,15 +11,11 @@ function getProvider(): Provider {
 
 function impl() {
   const p = getProvider();
-  if (p === 'anthropic') return anthropic;
-  if (p === 'gemini') return gemini;
-  return openai;
-}
-
-export async function generateText(prompt: string, model?: string): Promise<string> {
-  return impl().generateText(prompt, model);
+  if (p === 'anthropic') return generateAnthropicObject;
+  if (p === 'gemini') return generateGeminiObject;
+  return generateOpenAIObject;
 }
 
 export async function generateObject<T>(prompt: string, schema: object, model?: string): Promise<T> {
-  return impl().generateObject<T>(prompt, schema, model);
+  return impl()<T>(prompt, schema, model);
 }
