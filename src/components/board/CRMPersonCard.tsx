@@ -12,6 +12,7 @@ import styles from './CRMPersonCard.module.css';
 type Props = {
   person: Person;
   slug: string;
+  initialHasBrief: boolean;
   onPersonUpdate: (updated: Person) => void;
 };
 
@@ -58,10 +59,11 @@ function CardContent({ person, bookmarked, stage }: { person: Person; bookmarked
 
 // ── Stage-specific action footer ──────────────────────────────────────────────
 
-function CardActions({ person, stage, slug, onPersonUpdate }: {
+function CardActions({ person, stage, slug, initialHasBrief, onPersonUpdate }: {
   person: Person;
   stage: CRMStage;
   slug: string;
+  initialHasBrief: boolean;
   onPersonUpdate: (updated: Person) => void;
 }) {
   const router = useRouter();
@@ -69,31 +71,11 @@ function CardActions({ person, stage, slug, onPersonUpdate }: {
   const [scheduledAt, setScheduledAt] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
   const [briefError, setBriefError] = useState<string | null>(null);
-  const [hasBrief, setHasBrief] = useState(false);
+  const [hasBrief, setHasBrief] = useState(initialHasBrief);
 
   useEffect(() => {
-    if (stage !== 'scheduled') {
-      setHasBrief(false);
-      return;
-    }
-
-    let cancelled = false;
-    fetch(`/api/people/${person.id}/call-brief`)
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return await res.json();
-      })
-      .then((data) => {
-        if (!cancelled) setHasBrief(!!data?.content);
-      })
-      .catch(() => {
-        if (!cancelled) setHasBrief(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [person.id, stage]);
+    setHasBrief(stage === 'scheduled' && initialHasBrief);
+  }, [stage, initialHasBrief]);
 
   if (stage === 'completed') return null;
 
@@ -272,7 +254,7 @@ function CardActions({ person, stage, slug, onPersonUpdate }: {
 
 // ── Draggable card — used inside SortableContext columns ──────────────────────
 
-export function CRMPersonCard({ person, slug, onPersonUpdate }: Props) {
+export function CRMPersonCard({ person, slug, initialHasBrief, onPersonUpdate }: Props) {
   const stage = boardStatusToStage(person.board_status);
   const bookmarked = isBookmarked(person.board_status);
 
@@ -297,7 +279,13 @@ export function CRMPersonCard({ person, slug, onPersonUpdate }: Props) {
       <Link href={`/dashboard/${slug}/people/${person.id}`} className={styles.cardLink} {...listeners}>
         <CardContent person={person} bookmarked={bookmarked} stage={stage} />
       </Link>
-      <CardActions person={person} stage={stage} slug={slug} onPersonUpdate={onPersonUpdate} />
+      <CardActions
+        person={person}
+        stage={stage}
+        slug={slug}
+        initialHasBrief={initialHasBrief}
+        onPersonUpdate={onPersonUpdate}
+      />
     </div>
   );
 }

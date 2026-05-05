@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, projects, users } from '@/lib/db/schema';
 import { validateInput, createPersonSchema } from '@/lib/validation';
@@ -14,6 +14,32 @@ function placeholderName(url: string): string {
   } catch {
     return 'Discovering...';
   }
+}
+
+export async function GET(req: NextRequest) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const ids = (req.nextUrl.searchParams.get('ids') ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+
+  if (ids.length === 0) {
+    return NextResponse.json([]);
+  }
+
+  const rows = await db
+    .select({ person: people })
+    .from(people)
+    .innerJoin(projects, eq(people.project_id, projects.id))
+    .innerJoin(users, eq(projects.user_id, users.id))
+    .where(and(inArray(people.id, ids), eq(users.clerk_user_id, clerkUserId)));
+
+  return NextResponse.json(rows.map((row) => row.person));
 }
 
 export async function POST(req: NextRequest) {

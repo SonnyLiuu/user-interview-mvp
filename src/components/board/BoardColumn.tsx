@@ -12,10 +12,11 @@ type Props = {
   label: string;
   people: Person[];
   slug: string;
+  callBriefPersonIds: Set<string>;
   onPersonUpdate: (updated: Person) => void;
 };
 
-export function BoardColumn({ stage, label, people, slug, onPersonUpdate }: Props) {
+export function BoardColumn({ stage, label, people, slug, callBriefPersonIds, onPersonUpdate }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: stage, data: { stage } });
 
   return (
@@ -31,7 +32,13 @@ export function BoardColumn({ stage, label, people, slug, onPersonUpdate }: Prop
           strategy={verticalListSortingStrategy}
         >
           {people.map((person) => (
-            <CRMPersonCard key={person.id} person={person} slug={slug} onPersonUpdate={onPersonUpdate} />
+            <CRMPersonCard
+              key={person.id}
+              person={person}
+              slug={slug}
+              initialHasBrief={callBriefPersonIds.has(person.id)}
+              onPersonUpdate={onPersonUpdate}
+            />
           ))}
         </SortableContext>
 

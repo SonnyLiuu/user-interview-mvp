@@ -178,7 +178,7 @@ Early refactor candidates for later phases:
 
 ### AI Providers
 
-- Next AI provider layer: `src/lib/ai/provider.ts`, `src/lib/ai/providers/openai.ts`, `src/lib/ai/providers/anthropic.ts`, `src/lib/ai/providers/gemini.ts`, plus `src/ai/router/model-router.ts` and `src/ai/providers/*`.
+- Next AI provider layer: `src/lib/ai/provider.ts`, `src/lib/ai/providers/openai.ts`, `src/lib/ai/providers/anthropic.ts`, `src/lib/ai/providers/gemini.ts`.
 - FastAPI AI provider layer: `services/foundry-api/app/ai.py`.
 - Providers/dependencies: OpenAI, Anthropic, Google Gemini.
 - Env keys: `AI_PROVIDER`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_MODEL`, `ANTHROPIC_MODEL`, `GEMINI_MODEL`.
@@ -208,6 +208,6 @@ These are the main places Phase 3 should inspect for excessive or duplicate API 
 ## Open Questions For Later Phases
 
 - Should desktop native source be part of the MVP audit, or should Phase 2-4 focus on web + FastAPI only?
-- Should the duplicated AI provider stacks under `src/lib/ai`, `src/ai`, and `services/foundry-api/app/ai.py` remain separate by design?
+- Should the remaining Next and FastAPI AI provider stacks stay separate by design?
 - Should bespoke Next API proxy routes be kept next to the generic `/api/backend/[...path]`, or should later cleanup consolidate one direction?
 - Should `project_briefs`/brief UI leftovers remain after the FastAPI brief removal work?

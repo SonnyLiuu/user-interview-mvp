@@ -83,14 +83,13 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
         }
       }
 
-      await Promise.allSettled(
-        toUpdate.map(async (person) => {
-          const res = await fetch(`/api/people/${person.id}`);
-          if (!res.ok) return;
-          const updated = await res.json() as Person;
-          setPeople((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-        })
-      );
+      const ids = toUpdate.map((person) => person.id).join(',');
+      const res = await fetch(`/api/people?ids=${encodeURIComponent(ids)}`);
+      if (!res.ok) return;
+      const updatedPeople = await res.json() as Person[];
+      if (updatedPeople.length === 0) return;
+      const updatedById = new Map(updatedPeople.map((person) => [person.id, person]));
+      setPeople((prev) => prev.map((person) => updatedById.get(person.id) ?? person));
     }, 3000);
 
     return () => clearInterval(id);

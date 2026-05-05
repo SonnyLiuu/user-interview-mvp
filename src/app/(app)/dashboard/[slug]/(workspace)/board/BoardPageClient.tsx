@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -30,6 +30,7 @@ import styles from './BoardPageClient.module.css';
 type Props = {
   initialPeople: Person[];
   slug: string;
+  initialCallBriefPersonIds: string[];
 };
 
 function groupByStage(people: Person[]): Record<CRMStage, Person[]> {
@@ -53,12 +54,13 @@ function groupByStage(people: Person[]): Record<CRMStage, Person[]> {
   return groups;
 }
 
-export function BoardPageClient({ initialPeople, slug }: Props) {
+export function BoardPageClient({ initialPeople, slug, initialCallBriefPersonIds }: Props) {
   const [people, setPeople] = useState<Person[]>(initialPeople);
   const [activePerson, setActivePerson] = useState<Person | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const groups = groupByStage(people);
+  const callBriefPersonIds = useMemo(() => new Set(initialCallBriefPersonIds), [initialCallBriefPersonIds]);
 
   function handlePersonUpdate(updated: Person) {
     setPeople((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
@@ -133,6 +135,7 @@ export function BoardPageClient({ initialPeople, slug }: Props) {
               label={label}
               people={groups[id]}
               slug={slug}
+              callBriefPersonIds={callBriefPersonIds}
               onPersonUpdate={handlePersonUpdate}
             />
           ))}

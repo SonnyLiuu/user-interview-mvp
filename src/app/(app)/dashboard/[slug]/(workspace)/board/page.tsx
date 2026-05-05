@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
-import { and, eq, or, isNull, gt } from 'drizzle-orm';
+import { and, eq, or, isNull, gt, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users } from '@/lib/db/schema';
+import { call_prep, people, projects, users } from '@/lib/db/schema';
 import { getProjectBySlugOrId } from '@/lib/backend-server';
 import { auth } from '@clerk/nextjs/server';
 import { BoardPageClient } from './BoardPageClient';
@@ -47,5 +47,18 @@ export default async function BoardPage({
     )
     .orderBy(people.updated_at);
 
-  return <BoardPageClient initialPeople={boardPeople} slug={slug} />;
+  const peopleIds = boardPeople.map((person) => person.id);
+  const callBriefRows = peopleIds.length > 0
+    ? await db
+        .select({ personId: call_prep.person_id, content: call_prep.content })
+        .from(call_prep)
+        .where(and(inArray(call_prep.person_id, peopleIds), eq(call_prep.is_current, true)))
+    : [];
+
+  const callBriefPersonIds = callBriefRows
+    .filter((row) => !!row.content)
+    .map((row) => row.personId)
+    .filter((id): id is string => !!id);
+
+  return <BoardPageClient initialPeople={boardPeople} slug={slug} initialCallBriefPersonIds={callBriefPersonIds} />;
 }

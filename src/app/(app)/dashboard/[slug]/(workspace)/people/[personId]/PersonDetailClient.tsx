@@ -16,6 +16,8 @@ type Props = {
   person: Person;
   slug: string;
   initialOutreach: { id: string; content: OutreachContent | null } | null;
+  initialCallPrep: { id: string; content: CallPrepContent | null } | null;
+  initialTranscripts: Transcript[];
 };
 
 // ── CRM Stage Breadcrumb ──────────────────────────────────────────────────────
@@ -182,21 +184,14 @@ function StageActions({ person, stage, onUpdate }: ActionsProps) {
 type TranscriptSectionProps = {
   personId: string;
   stage: CRMStage;
+  initialTranscripts: Transcript[];
 };
 
-function TranscriptSection({ personId, stage }: TranscriptSectionProps) {
-  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
-  const [loaded, setLoaded] = useState(false);
+function TranscriptSection({ personId, stage, initialTranscripts }: TranscriptSectionProps) {
+  const [transcripts, setTranscripts] = useState<Transcript[]>(initialTranscripts);
   const [content, setContent] = useState('');
   const [type, setType] = useState<'call' | 'message'>('call');
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    fetch(`/api/people/${personId}/transcripts`)
-      .then((r) => r.json())
-      .then((data) => { setTranscripts(data as Transcript[]); setLoaded(true); })
-      .catch(() => setLoaded(true));
-  }, [personId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -259,7 +254,7 @@ function TranscriptSection({ personId, stage }: TranscriptSectionProps) {
         </section>
       )}
 
-      {loaded && transcripts.length > 0 && (
+      {transcripts.length > 0 && (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Transcript history ({transcripts.length})</h2>
           <div className={styles.transcriptList}>
@@ -283,7 +278,7 @@ function TranscriptSection({ personId, stage }: TranscriptSectionProps) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function PersonDetailClient({ person: initialPerson, slug, initialOutreach }: Props) {
+export function PersonDetailClient({ person: initialPerson, slug, initialOutreach, initialCallPrep, initialTranscripts }: Props) {
   const router = useRouter();
   const [person, setPerson] = useState<Person>(initialPerson);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
@@ -321,18 +316,12 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
     setRecrawling(true);
     setShowContextForm(false);
     try {
-      await fetch(`/api/people/${person.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ additional_context: urls }),
-      });
-
       const currentUrls = person.source_urls ?? [];
       const mergedUrls = [...new Set([...currentUrls, ...urls])];
       await fetch(`/api/people/${person.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source_urls: mergedUrls }),
+        body: JSON.stringify({ additional_context: urls, source_urls: mergedUrls }),
       });
 
       const crawlRes = await fetch(`/api/people/${person.id}/crawl`, { method: 'POST' });
@@ -432,7 +421,7 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
 
         <div className={styles.body}>
           {/* ── Call Brief ───────────────────────────────────────────────── */}
-          <CallBriefSection personId={person.id} slug={slug} stage={stage} />
+          <CallBriefSection personId={person.id} slug={slug} stage={stage} initialPrep={initialCallPrep} />
 
           {/* ── Summary ─────────────────────────────────────────────────── */}
           {analysis?.summary && (
@@ -511,7 +500,7 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
           </section>
 
           {/* ── Transcripts ─────────────────────────────────────────────── */}
-          <TranscriptSection personId={person.id} stage={stage} />
+          <TranscriptSection personId={person.id} stage={stage} initialTranscripts={initialTranscripts} />
 
           {/* ── Source URLs ─────────────────────────────────────────────── */}
           {person.source_urls?.length ? (
@@ -563,26 +552,16 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
 type CallPrepRow = { id: string; content: CallPrepContent | null };
 type BriefError = { code: 'foundation_required' | 'generic'; message: string };
 
-function CallBriefSection({ personId, slug, stage }: {
+function CallBriefSection({ personId, slug, stage, initialPrep }: {
   personId: string;
   slug: string;
   stage: CRMStage;
+  initialPrep: CallPrepRow | null;
 }) {
-  const [prep, setPrep] = useState<CallPrepRow | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [prep, setPrep] = useState<CallPrepRow | null>(initialPrep);
+  const [loading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<BriefError | null>(null);
-
-  useEffect(() => {
-    fetch(`/api/people/${personId}/call-brief`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error('Failed to load');
-        const data = await r.json();
-        setPrep(data as CallPrepRow | null);
-      })
-      .catch(() => { setError({ code: 'generic', message: 'Could not load call brief.' }); })
-      .finally(() => { setLoading(false); });
-  }, [personId]);
 
   async function handleGenerate() {
     setGenerating(true);
