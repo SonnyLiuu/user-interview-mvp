@@ -1,141 +1,265 @@
-# User Interview
+# User Interview MVP
 
-A tool that helps founders do user interviews properly. Tell it your idea, it builds your hypothesis. Then it finds the right people to talk to on LinkedIn and Twitter, generates a personalized call brief for each one, and tracks everyone in a pipeline so you know who you've reached out to, who's scheduled, and who you've talked to. Most founders go into interviews with no structure and come out with vibes instead of signal. This fixes that.
+A discovery workspace for early-stage founders. The app turns a rough startup idea into a structured project foundation, helps evaluate people to talk to, generates call prep and outreach drafts, and tracks conversations through a lightweight CRM board.
+
+The product is built around one loop:
+
+1. Define the foundation for a startup idea.
+2. Add people from LinkedIn, personal sites, or other URLs.
+3. Let AI analyze whether each person is worth talking to.
+4. Generate outreach and call prep.
+5. Move people through the outreach pipeline and capture learnings.
 
 ## Features
 
-- **Foundation** — Chat-based onboarding that turns your rough idea into a structured hypothesis: assumptions to validate, strengths, weak spots, and who to talk to first.
-- **People** — Paste a LinkedIn, Twitter, or personal website URL. AI analyzes each person's relevance to your hypothesis and tells you exactly why they're worth your time.
-- **Call Brief** — Auto-generated prep brief per person: a sharp objective, tailored questions based on their background, and signals to listen for (green flags and red flags). Designed to be used live during the call.
-- **Board** — Kanban pipeline across outreach stages: To Contact → Sent → Scheduled → Completed. Bookmark people from the People page to add them here.
-- **Insights** — Aggregated learnings across calls, showing how your assumptions are holding up.
+- **Foundation**: guided onboarding and editable foundation doc for hypothesis, target user, pain point, value prop, ideal people, differentiation, and disqualifiers.
+- **People research**: paste URLs, crawl pages with Firecrawl, and analyze relevance against the current foundation.
+- **Call prep**: generate a focused brief for a specific person with objective, goals, questions, signals, and closing ask.
+- **Outreach**: generate a short outreach draft tailored to the recipient without exposing the product idea.
+- **Board**: CRM pipeline for `To Contact`, `Sent`, `Scheduled`, and `Completed`.
+- **Transcripts and events**: add call/message transcripts and record person events.
+- **Desktop hooks**: desktop auth and desktop people/call-brief API routes exist for native app integration.
 
-## Tech stack
+## Tech Stack
 
-**Frontend**
-- [Next.js 15](https://nextjs.org) (App Router) + React 19
-- [Clerk](https://clerk.com) — auth (OAuth/SSO + webhook user sync)
-- [Drizzle ORM](https://orm.drizzle.team) + [Neon](https://neon.tech) — serverless Postgres
+### Web App
 
-**Backend**
-- [FastAPI](https://fastapi.tiangolo.com) (Python) — streaming AI responses and background jobs
-- [asyncpg](https://magicstack.github.io/asyncpg/) — async Postgres driver
+- Next.js 15 App Router
+- React 19
+- TypeScript
+- Clerk auth
+- Drizzle ORM
+- Neon Postgres
+- Zod for local API validation
 
-**External services**
-- OpenAI or Anthropic (configurable via `AI_PROVIDER`)
-- [Firecrawl](https://firecrawl.dev) — web scraping for person analysis (optional)
+### Backend Service
 
-## Getting started
+- FastAPI
+- asyncpg
+- Pydantic settings/models
+- OpenAI, Anthropic, or Gemini provider support
 
-### 1. Install dependencies
+### External Services
 
-```bash
-# Frontend
-npm install
+- Clerk for auth and webhooks
+- Firecrawl for person research crawling
+- OpenAI / Anthropic / Gemini for AI generation
 
-# Backend
-cd services/foundry-api
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+## Repo Layout
 
-### 2. Configure environment
-
-```bash
-cp .env.example .env.local
-```
-
-Fill in all required values — see [Environment variables](#environment-variables) below.
-
-### 3. Run migrations
-
-```bash
-npm run db:generate   # generate migration files from schema
-npm run db:migrate    # apply migrations to the database
-```
-
-### 4. Start the dev servers
-
-```bash
-# Terminal 1 — Next.js frontend (http://localhost:3000)
-npm run dev
-
-# Terminal 2 — FastAPI backend (http://localhost:8001)
-cd services/foundry-api
-python app/main.py
-```
-
-## Environment variables
-
-### Frontend (`.env.local`)
-
-| Variable | Required | Description |
-|---|---|---|
-| `NEXT_PUBLIC_SITE_URL` | Yes | Public URL of the app |
-| `DATABASE_URL` | Yes | Neon pooled connection string |
-| `DATABASE_URL_UNPOOLED` | Yes | Neon direct connection (used for migrations) |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key |
-| `CLERK_SECRET_KEY` | Yes | Clerk secret key |
-| `CLERK_WEBHOOK_SECRET` | Yes | Clerk webhook signing secret |
-| `AI_PROVIDER` | Yes | `openai` or `anthropic` |
-| `OPENAI_API_KEY` | If `AI_PROVIDER=openai` | OpenAI API key |
-| `ANTHROPIC_API_KEY` | If `AI_PROVIDER=anthropic` | Anthropic API key |
-| `FOUNDRY_API_BASE_URL` | Yes | FastAPI base URL (e.g. `http://127.0.0.1:8001`) |
-| `FOUNDRY_BACKEND_SHARED_SECRET` | Yes | HMAC key shared with backend for request signing |
-| `FIRECRAWL_API_KEY` | No | Enables web scraping for person analysis |
-
-### Backend (`services/foundry-api/.env`)
-
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `FOUNDRY_BACKEND_SHARED_SECRET` | Yes | Must match the frontend secret |
-| `AI_PROVIDER` | Yes | `openai` or `anthropic` |
-| `OPENAI_API_KEY` | If `AI_PROVIDER=openai` | OpenAI API key |
-| `ANTHROPIC_API_KEY` | If `AI_PROVIDER=anthropic` | Anthropic API key |
-
-## Project structure
-
-```
+```text
 src/
   app/
-    (app)/dashboard/[slug]/         # Per-project workspaces
-      onboarding/                   # Guided intake chat
+    (app)/dashboard/[slug]/
       (workspace)/
-        foundation/                 # Project hypothesis view
-        people/                     # CRM — person list & detail
-        insights/                   # Aggregated learnings
-        board/                      # Kanban by outreach stage
+        board/
+        foundation/
+        insights/
+        people/
     api/
-      backend/[...path]/            # Proxy to FastAPI
-      projects/                     # Project CRUD
-      people/[personId]/
-        crawl/                      # Trigger web scraping + AI analysis
-        bookmark/                   # Toggle favorite
-      webhooks/clerk/               # Clerk → database user sync
+      backend/[...path]/              # generic proxy to FastAPI
+      people/                         # local people/crawl/CRM routes
+      projects/                       # project creation proxy
+      desktop/                        # desktop integration routes
+      webhooks/clerk/
+  components/
+    app-nav/
+    board/
+    brief/
+    landing/
+    onboarding/
+    people/
+    project/
   lib/
-    ai/                             # AI provider adapters + task implementations
-    db/                             # Drizzle schema & connection
-    onboarding/                     # Slot progression engine
+    ai/                               # Next-side person analysis provider stack
+    db/                               # Drizzle schema and connection
+    backend-*.ts                      # FastAPI auth/proxy helpers
 
-services/foundry-api/               # FastAPI backend
+services/foundry-api/
   app/
-    routers/                        # projects, onboarding, intake, briefs, workspace, dashboard
-    services/                       # Business logic
-    repositories/                   # DB query layer
+    routers/
+    services/
+    repositories/
+    schemas/
+    ai.py                             # FastAPI AI provider/task layer
 
-scripts/                            # DB migration runner
-drizzle/                            # Generated migration files
-docs/                               # Architecture specs
+drizzle/                              # SQL migrations
+docs/                                 # audit and architecture notes
+desktop/native/                       # native desktop source/build area
+scripts/migrate.ts                    # migration runner
 ```
 
-## Deployment checklist
+## Getting Started
 
-- [ ] Clerk app created with webhook pointing to `/api/webhooks/clerk`
-- [ ] Neon Postgres database provisioned
-- [ ] Migrations applied: `npm run db:migrate`
-- [ ] All environment variables set on both frontend and backend hosts
-- [ ] FastAPI backend deployed and reachable at `FOUNDRY_API_BASE_URL`
-- [ ] `FOUNDRY_BACKEND_SHARED_SECRET` is identical on both services
-- [ ] CORS origins in `services/foundry-api/app/main.py` updated to production URL
+### 1. Install Web Dependencies
+
+```powershell
+npm install
+```
+
+### 2. Install Backend Dependencies
+
+```powershell
+cd services/foundry-api
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+cd ..\..
+```
+
+### 3. Configure Environment
+
+Copy the examples:
+
+```powershell
+Copy-Item .env.example .env.local
+Copy-Item services\foundry-api\.env.example services\foundry-api\.env.local
+```
+
+Use the same `DATABASE_URL` and `FOUNDRY_BACKEND_SHARED_SECRET` in both env files.
+
+### 4. Apply Migrations
+
+```powershell
+npm run db:migrate
+```
+
+Do not run `npm run db:generate` during normal setup. This repo currently uses hand-written SQL migrations after `0002`; use `db:generate` only when intentionally changing the migration workflow.
+
+### 5. Run Locally
+
+Terminal 1:
+
+```powershell
+npm run dev
+```
+
+Terminal 2:
+
+```powershell
+cd services/foundry-api
+.\.venv\Scripts\python.exe app/main.py
+```
+
+Default URLs:
+
+- Web app: `http://localhost:3000`
+- FastAPI: `http://127.0.0.1:8001`
+- FastAPI health check: `http://127.0.0.1:8001/healthz`
+
+## Environment Variables
+
+### Root `.env.local`
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SITE_URL` | Yes | Public app URL. |
+| `DATABASE_URL` | Yes | Neon pooled connection string. |
+| `DATABASE_URL_UNPOOLED` | Recommended | Direct Neon connection for migrations. |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk frontend key. |
+| `CLERK_SECRET_KEY` | Yes | Clerk server key. |
+| `CLERK_WEBHOOK_SECRET` | Yes | Clerk webhook signing secret. |
+| `AI_PROVIDER` | Yes | `openai`, `anthropic`, or `gemini`; defaults to OpenAI behavior. |
+| `OPENAI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=openai`. |
+| `ANTHROPIC_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=anthropic`. |
+| `GEMINI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=gemini`. |
+| `OPENAI_MODEL` | No | Defaults to `gpt-4o`. |
+| `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
+| `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
+| `GEMINI_MODEL` | No | Defaults to `gemini-2.0-flash`. |
+| `FIRECRAWL_API_KEY` | Yes for person research | Used by `/api/people/[personId]/crawl`. |
+| `FOUNDRY_API_BASE_URL` | Yes | Usually `http://127.0.0.1:8001` locally. |
+| `FOUNDRY_BACKEND_SHARED_SECRET` | Yes | Shared HMAC secret for Next -> FastAPI calls. |
+
+### `services/foundry-api/.env.local`
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes | Postgres connection string. |
+| `FOUNDRY_BACKEND_SHARED_SECRET` | Yes | Must match root env. |
+| `AI_PROVIDER` | Yes | `openai`, `anthropic`, or `gemini`. |
+| `OPENAI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=openai`. |
+| `ANTHROPIC_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=anthropic`. |
+| `GEMINI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=gemini`. |
+| `OPENAI_MODEL` | No | Defaults to `gpt-4o`. |
+| `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
+| `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
+| `GEMINI_MODEL` | No | Defaults to `gemini-2.0-flash`. |
+
+## Common Commands
+
+```powershell
+npm run dev          # Next dev server
+npm run typecheck    # TypeScript check
+npm run build        # Production Next build
+npm run start        # Start built Next app
+npm run db:migrate   # Apply Drizzle migrations
+npm run db:push      # Push schema directly; avoid unless intentional
+```
+
+Backend:
+
+```powershell
+cd services/foundry-api
+.\.venv\Scripts\python.exe app/main.py
+.\.venv\Scripts\python.exe -c "import sys; sys.path.insert(0, '.'); from app.main import app; print(len(app.routes))"
+```
+
+## Data And API Shape
+
+The app uses both local Next API routes and the FastAPI service:
+
+- Next local API routes own people creation, crawling, transcripts, and CRM actions.
+- FastAPI owns project lookup/listing, onboarding chat, foundation view/patch, call prep, and outreach generation.
+- `/api/backend/[...path]` is a generic authenticated proxy from Next to FastAPI.
+- Bespoke proxy routes also exist for call brief, outreach, projects, and desktop call brief flows.
+
+See `docs/INVENTORY.md` for the route map.
+
+## Migrations
+
+Migrations live in `drizzle/`.
+
+Important current convention:
+
+- `0000` through `0002` have generated Drizzle snapshots.
+- `0003` onward are hand-written SQL migrations with journal entries.
+- `0008_query_indexes.sql` adds the current query/index baseline.
+
+Run:
+
+```powershell
+npm run db:migrate
+```
+
+Avoid destructive resets unless you know the database is disposable.
+
+## Audit Docs
+
+The repo includes a full housekeeping and performance audit trail:
+
+- `docs/INVENTORY.md`
+- `docs/API_FLOW_AUDIT.md`
+- `docs/CLIENT_BOUNDARY_AUDIT.md`
+- `docs/BACKEND_ENDPOINT_AUDIT.md`
+- `docs/AI_COST_AUDIT.md`
+- `docs/DB_SCHEMA_AUDIT.md`
+- `docs/CONTRACT_AUDIT.md`
+- `docs/PERF_AUDIT.md`
+
+The highest-value next refactor target is `PersonDetailClient`, followed by `AppNav`.
+
+## Deployment Checklist
+
+- Clerk app configured with auth URLs and webhook to `/api/webhooks/clerk`.
+- Neon database provisioned.
+- Root and backend env vars configured.
+- `FOUNDRY_BACKEND_SHARED_SECRET` matches in both services.
+- `npm run db:migrate` applied.
+- FastAPI deployed and reachable at `FOUNDRY_API_BASE_URL`.
+- FastAPI CORS origins updated for production in `services/foundry-api/app/config.py` or environment/config layer.
+- Local verification passes:
+
+```powershell
+npm run typecheck
+npm run build
+```
