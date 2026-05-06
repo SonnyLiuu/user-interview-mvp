@@ -5,7 +5,7 @@ from typing import AsyncIterator
 
 from fastapi.encoders import jsonable_encoder
 
-from ..ai import stream_intake_reply
+from ..ai import get_advisor_web_context, stream_intake_reply
 from ..db import get_pool
 from ..errors import NotFoundError
 from ..repositories import foundations as foundation_repo
@@ -70,6 +70,8 @@ def get_foundation_advisor_prompt(foundation: dict) -> str:
         "- Ask probing questions to expose vague assumptions or weak spots in the document.",
         "- Suggest specific improvements when you spot them — be concrete, not generic.",
         "- Challenge sections that are too broad, too optimistic, or internally inconsistent.",
+        "- When web context is provided, use it to answer current market, competitor, pricing, regulation, or trend questions. Cite source names and URLs from the context.",
+        "- If a current factual answer would require web context and none was provided, say what you can infer and ask the founder to be more specific.",
         "- If the founder wants to update or add a section, help them get to a sharper version.",
         "- Keep responses focused. One thread at a time.",
         "",
@@ -81,6 +83,38 @@ def get_foundation_advisor_prompt(foundation: dict) -> str:
         'Do not output {"intake_complete": true}. Do not restart the intake flow.',
     ]
     return "\n".join(lines)
+
+
+WEB_SEARCH_TRIGGERS = (
+    "search",
+    "look up",
+    "google",
+    "internet",
+    "web",
+    "latest",
+    "current",
+    "recent",
+    "today",
+    "market",
+    "competitor",
+    "competitors",
+    "alternative",
+    "alternatives",
+    "pricing",
+    "trend",
+    "trends",
+    "news",
+    "regulation",
+    "regulations",
+    "examples",
+    "companies",
+    "products",
+)
+
+
+def should_fetch_web_context(message: str) -> bool:
+    text = message.lower()
+    return any(trigger in text for trigger in WEB_SEARCH_TRIGGERS)
 
 
 async def get_intake_payload(user_id: str, project_id: str):
@@ -115,6 +149,14 @@ async def stream_chat(user_id: str, project_id: str, message: str, recent_messag
         is_init = message == "__init__"
         history = recent_messages or []
         api_messages = [{"role": "user", "content": "Hello, let's continue working on my project."}] if is_init else [*history, {"role": "user", "content": message}]
+        if not is_init and should_fetch_web_context(message):
+            web_context = await get_advisor_web_context(message, foundation, history)
+            if web_context:
+                system_prompt += (
+                    "\n\nWeb search context for this turn:\n"
+                    f"{web_context}\n\n"
+                    "Use this context only where it directly helps. Preserve source names and URLs when citing current facts."
+                )
     else:
         raw_conversation = intake["conversation"] if intake and intake["conversation"] else []
         conversation = json.loads(raw_conversation) if isinstance(raw_conversation, str) else raw_conversation

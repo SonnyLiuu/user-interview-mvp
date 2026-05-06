@@ -338,59 +338,88 @@ async def generate_outreach_message(person: dict, project_context: dict) -> dict
     key_assumptions = project_context.get("key_assumptions") or []
 
     prompt = (
-        "Role definitions:\n"
-        "- sender: the founder/user sending the outreach.\n"
-        "- recipient: the person receiving the outreach.\n"
-        "- Product context is private. Use it only to choose the research topic. Never reveal the product, app, tool, features, company name, or startup idea in the message.\n\n"
+        f"""I want you to generate a short outreach message. I will provide my project/startup idea and detailed background, and the background of the person I want to setup a call with. The recipient's background will provide context on what I wish to learn from conversation with that person. Choose one topic that I would want to learn about and introduce their familiarity with that topic, followed by my wish to learn about how they handled it in a 20 minute call. The topic should center on a real past experience the recipient likely had, especially one that could validate or falsify my project assumptions. Make this a natural 4-6 sentence paragraph. Avoid adding any information about my project/startup, my goal is not to pitch, rather to validate all aspects of my project/startup idea one person at a time.
 
-        "SENDER'S PROJECT CONTEXT:\n"
-        f"Idea: {project_context.get('idea_summary') or 'Not specified'}\n"
-        f"Target customer: {project_context.get('target_customer') or 'Not specified'}\n"
-        f"Pain point: {project_context.get('pain_point') or 'Not specified'}\n"
-        f"Ideal people to talk to: {', '.join(ideal_people) if ideal_people else 'Not specified'}\n"
-        f"Assumptions to validate: {'; '.join(key_assumptions) if key_assumptions else 'Not specified'}\n\n"
+        MY PROJECT CONTEXT:\n
+        Idea: {project_context.get('idea_summary') or 'Not specified'}\n
+        Target customer: {project_context.get('target_customer') or 'Not specified'}\n
+        Pain point: {project_context.get('pain_point') or 'Not specified'}\n
+        Ideal people to talk to: {', '.join(ideal_people) if ideal_people else 'Not specified'}\n
+        Assumptions to validate: {'; '.join(key_assumptions) if key_assumptions else 'Not specified'}\n\n
 
-        "RECIPIENT CONTEXT:\n"
-        f"Name: {person.get('name') or 'Unknown'}\n"
-        f"Title: {person.get('title') or 'Unknown'}\n"
-        f"Company: {person.get('company') or 'Unknown'}\n"
-        f"Persona type: {person.get('persona_type') or 'Unknown'}\n"
-        f"Background: {analysis.get('summary') or 'Not specified'}\n"
-        f"Why they matter: {analysis.get('why_they_matter') or 'Not specified'}\n"
-        f"Key insights: {'; '.join(key_insights) if key_insights else 'Not specified'}\n\n"
+        RECIPIENT CONTEXT:\n
+        Name: {person.get('name') or 'Unknown'}\n
+        Title: {person.get('title') or 'Unknown'}\n
+        Company: {person.get('company') or 'Unknown'}\n
+        Persona type: {person.get('persona_type') or 'Unknown'}\n
+        Background: {analysis.get('summary') or 'Not specified'}\n
+        Why they matter: {analysis.get('why_they_matter') or 'Not specified'}\n
+        Key insights: {'; '.join(key_insights) if key_insights else 'Not specified'}\n\n
 
-        "Write a short, warm cold outreach message for customer discovery.\n"
-        "Use the sender's assumptions and the recipient's background to choose one focused conversation topic. "
-        "The topic should center on a real past experience the recipient likely had, especially one that could validate or falsify the sender's assumptions. "
-        "Do not list the assumptions or quote the project context.\n\n"
-
-        "Output rules:\n"
-        "- subject: an email subject line\n"
-        "- body: plain text message body, around 1 paragraph\n\n"
-
-        "Body rules:\n"
-        "- First paragraph: focus only on the recipient. Use 2-3 specific details from their role, company, market, customers, recent work, or background. Explain why their experience is relevant; do not just name-drop their title or company.\n"
-        "- Second paragraph: clearly state what the sender is trying to learn from the recipient's past experience. Focus on what happened, how they handled it, what was difficult, what they tried, what worked or failed, and what the outcome was.\n"
-        "- Third paragraph: make a soft 20-minute ask to learn from the recipient's experience.\n\n"
-
-        "Example style:\n"
-        "Use this as a pattern for specificity, structure, and tone. Do not copy the names, companies, or exact topic unless they match the recipient.\n"
-        "subject: Learning from Epsilla’s early customer discovery\n"
-        "body: Renchu, I noticed you’re Co-Founder & CEO of Epsilla after previously leading cloud work at TigerGraph. Your path is especially interesting because you’ve worked across deep technical infrastructure, engineering leadership, and the founder side of turning technical work into a company.\n\n"
-        "I’m researching how technical founders handled the early shift from building product to understanding customers. I’d love to learn how you identified your first useful customer signals, what surprised you during market validation, and what did or didn’t work when narrowing the initial customer segment.\n\n"
-        "Would you be open to a 20-minute call so I can learn from how you handled that experience?\n"
-        
-        "Avoid:\n"
-        "- Do not mention the sender's product, company name, startup idea, app, platform, tool, features, or solution.\n"
-        "- Do not say 'I'm building', 'we're building', 'we help', 'our product', or similar phrases.\n"
-        "- Do not ask for feedback, validation, advice, or a reaction to an idea.\n"
-        "- Do not use hypotheticals like 'would you use', 'would you pay', 'does this sound useful', or 'could you see yourself'.\n"
-        "- Avoid fluff, hype, flattery, urgency, markdown, signatures, numbering, and filler phrases like 'I hope this finds you well'."
+        Return only valid JSON with this schema:
+        {{"subject":"string","body":"string"}}
+        """
     )
     return await _generate_json(
         [{"role": "user", "content": prompt}],
         '{"subject":"string","body":"string"}',
     )
+
+
+def _foundation_search_summary(foundation: dict) -> str:
+    parts = [
+        f"Summary: {foundation.get('summary')}" if foundation.get("summary") else None,
+        f"Target user: {foundation.get('targetUser')}" if foundation.get("targetUser") else None,
+        f"Pain point: {foundation.get('painPoint')}" if foundation.get("painPoint") else None,
+        f"Value prop: {foundation.get('valueProp')}" if foundation.get("valueProp") else None,
+        (
+            f"Ideal people: {', '.join(foundation.get('idealPeopleTypes') or [])}"
+            if foundation.get("idealPeopleTypes")
+            else None
+        ),
+        f"Differentiation: {foundation.get('differentiation')}" if foundation.get("differentiation") else None,
+    ]
+    return "\n".join(part for part in parts if part)
+
+
+async def get_advisor_web_context(user_message: str, foundation: dict, recent_messages: list[dict] | None = None) -> str:
+    settings = get_settings()
+    provider = _read_provider()
+    if provider != "openai" or not settings.openai_api_key:
+        return ""
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=settings.ai_request_timeout_seconds)
+    recent = "\n".join(
+        f"{'Advisor' if msg.get('role') == 'assistant' else 'Founder'}: {msg.get('content', '')}"
+        for msg in (recent_messages or [])[-4:]
+    )
+    prompt = (
+        "Search the web for current, factual context that would help a startup advisor answer the founder. "
+        "Focus on market examples, competitors, current trends, pricing, regulations, recent company/product changes, "
+        "or customer behavior relevant to the request. If the web is not needed, say so briefly.\n\n"
+        "Project foundation:\n"
+        f"{_foundation_search_summary(foundation) or 'Not specified'}\n\n"
+        f"Recent conversation:\n{recent or '(none)'}\n\n"
+        f"Founder request:\n{user_message}\n\n"
+        "Return a concise research note with 3-6 bullets. Include source names and URLs inline for any factual claims."
+    )
+
+    try:
+        response = await _await_provider(
+            client.responses.create(
+                model=settings.openai_web_search_model or settings.openai_model,
+                tools=[{"type": "web_search_preview"}],
+                tool_choice="auto",
+                input=prompt,
+            ),
+            provider,
+            settings.ai_request_timeout_seconds + 15,
+            "OpenAI web search request",
+        )
+    except AIServiceError:
+        return ""
+
+    return (getattr(response, "output_text", "") or "").strip()
 
 
 async def stream_intake_reply(system_prompt: str, messages: list[dict]) -> AsyncIterator[str]:
