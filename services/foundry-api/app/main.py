@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from .config import Settings, get_settings
 from .db import close_pool, init_pool
 from .errors import AIServiceError, BadRequestError, NotFoundError, UnauthorizedError
-from .routers import call_prep, dashboard, intake, onboarding, outreach, projects, workspace
+from .routers import call_prep, dashboard, intake, live_sessions, onboarding, outreach, projects, workspace
 
 
 @asynccontextmanager
@@ -36,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(onboarding.router)
     app.include_router(intake.router)
     app.include_router(call_prep.router)
+    app.include_router(live_sessions.router)
     app.include_router(outreach.router)
     app.include_router(dashboard.router)
     app.include_router(workspace.router)

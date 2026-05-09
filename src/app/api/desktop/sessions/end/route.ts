@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { interactions, people, person_events, projects } from '@/lib/db/schema';
+import { interactions, people, person_events, projects, transcripts } from '@/lib/db/schema';
 import { getDesktopUser } from '@/lib/desktop-auth';
 
 type TopicInput = {
   id?: string;
   label?: string;
   checked?: boolean;
+  checkedBy?: string;
+  checkedAt?: string;
+  evidence?: string;
+  manualOverride?: boolean;
 };
 
 type EndSessionInput = {
   personId?: string;
   startedAt?: string;
   endedAt?: string;
+  liveSessionId?: string;
   topics?: TopicInput[];
   notesRaw?: string;
   transcriptRaw?: string;
@@ -80,17 +85,46 @@ export async function POST(request: Request) {
     })
     .returning();
 
+  await db
+    .update(people)
+    .set({
+      board_status: 'completed',
+      outcome: 'successful_call',
+      expires_at: null,
+      updated_at: completedAt,
+    })
+    .where(eq(people.id, body.personId));
+
+  const transcriptContent = transcriptRaw || userNotes;
+  if (transcriptContent) {
+    await db.insert(transcripts).values({
+      person_id: body.personId,
+      content: transcriptContent,
+      type: 'call',
+    });
+  }
+
   const checkedTopics = topics.filter((topic) => topic.checked);
+  const autoCheckedTopics = checkedTopics.filter((topic) => topic.checkedBy === 'gpt_realtime');
   await db.insert(person_events).values({
     person_id: body.personId,
     type: 'desktop_call_session_saved',
     metadata: {
       interaction_id: created.id,
+      live_session_id: body.liveSessionId ?? null,
       started_at: body.startedAt ?? null,
       ended_at: completedAt.toISOString(),
       topic_count: topics.length,
       checked_count: checkedTopics.length,
       checked_labels: checkedTopics.map((topic) => topic.label ?? ''),
+      auto_checked_count: autoCheckedTopics.length,
+      auto_checked_topics: autoCheckedTopics.map((topic) => ({
+        id: topic.id ?? null,
+        label: topic.label ?? '',
+        checked_at: topic.checkedAt ?? null,
+        evidence: topic.evidence ?? null,
+      })),
+      manual_override_count: topics.filter((topic) => topic.manualOverride).length,
     },
   });
 

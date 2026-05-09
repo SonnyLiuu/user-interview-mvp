@@ -62,6 +62,15 @@ float personRowHeight() { return 54.0f; }
 float personGap() { return 8.0f; }
 unsigned int maxPickerRows() { return 4; }
 
+unsigned int visiblePickerRows(int overlayHeightDip) {
+    float available = static_cast<float>(overlayHeightDip)
+                      - personTop() - 54.0f;
+    if (available <= 0.0f) return 0;
+    float stride = personRowHeight() + personGap();
+    return static_cast<unsigned int>(
+        std::max(1, static_cast<int>((available + personGap()) / stride)));
+}
+
 struct ChecklistEntry {
     enum class Kind {
         GoalHeader,
@@ -527,11 +536,16 @@ void drawPickerPage(const OverlayRenderState& state, D2D1_SIZE_F sz) {
     }
 
     unsigned int visible = 0;
-    unsigned int limit = std::min<unsigned int>(
-        static_cast<unsigned int>(state.people.size()), maxPickerRows());
+    unsigned int maxRows = maxVisiblePersonRows(static_cast<int>(sz.height));
+    unsigned int start = std::min<unsigned int>(
+        state.personScrollOffset,
+        static_cast<unsigned int>(state.people.size()));
+    unsigned int remaining =
+        static_cast<unsigned int>(state.people.size()) - start;
+    unsigned int limit = std::min<unsigned int>(remaining, maxRows);
     for (unsigned int i = 0; i < limit; ++i) {
         float top = personTop() + visible * (personRowHeight() + personGap());
-        drawPersonRow(state.people[i],
+        drawPersonRow(state.people[start + i],
                       D2D1::RectF(personLeft(), top, personRight(sz.width),
                                   top + personRowHeight()),
                       state.hoverTarget == OverlayHoverTarget::PersonRow &&
@@ -539,9 +553,12 @@ void drawPickerPage(const OverlayRenderState& state, D2D1_SIZE_F sz) {
         ++visible;
     }
 
-    if (state.people.size() > maxPickerRows()) {
-        std::wstring more = L"Showing first " +
-                            std::to_wstring(maxPickerRows()) + L" people.";
+    if (state.people.size() > maxRows) {
+        std::wstring more = L"Showing " + std::to_wstring(start + 1) +
+                            L"-" + std::to_wstring(start + limit) +
+                            L" of " +
+                            std::to_wstring(state.people.size()) +
+                            L" people. Scroll for more.";
         g_cachedRenderTarget->DrawTextW(more.c_str(),
                                         static_cast<UINT32>(more.size()),
                                         g_bodyFormat.Get(),
@@ -986,6 +1003,16 @@ int personIndexAtPoint(int x, int y, unsigned int visiblePersonCount) {
     float rowBottom = rowTop + personRowHeight();
     if (fy >= rowTop && fy <= rowBottom) return index;
     return -1;
+}
+
+unsigned int maxVisiblePersonRows(int overlayHeightDip) {
+    return visiblePickerRows(overlayHeightDip);
+}
+
+unsigned int maxPersonScrollOffset(unsigned int personCount,
+                                   int overlayHeightDip) {
+    unsigned int visible = maxVisiblePersonRows(overlayHeightDip);
+    return personCount > visible ? personCount - visible : 0;
 }
 
 void releaseRendererResources() {

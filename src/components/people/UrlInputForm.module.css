@@ -52,6 +52,41 @@
   color: #8a705a;
 }
 
+.textarea {
+  width: 100%;
+  min-height: 104px;
+  border: 1px solid #d8c5ae;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #2e2115;
+  background: #fff;
+  resize: vertical;
+  transition: border-color 100ms, box-shadow 100ms;
+}
+
+.textarea::placeholder { color: #b89c84; }
+
+.textarea:focus {
+  outline: none;
+  border-color: #b57649;
+  box-shadow: 0 0 0 3px rgba(181, 118, 73, 0.12);
+}
+
+.textarea:disabled {
+  background: #f5ede3;
+  color: #8a705a;
+}
+
+.count {
+  margin: -6px 0 0;
+  font-size: 11px;
+  color: #9b826b;
+  text-align: right;
+}
+
 .removeBtn {
   width: 28px;
   height: 28px;

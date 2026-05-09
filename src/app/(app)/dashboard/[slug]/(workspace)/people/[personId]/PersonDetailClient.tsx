@@ -313,16 +313,25 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
     }
   }
 
-  async function handleAddContext(urls: string[]) {
+  async function handleAddContext(urls: string[], _depth: 'quick' | 'deep', pastedText: string) {
     setRecrawling(true);
     setShowContextForm(false);
     try {
       const currentUrls = person.source_urls ?? [];
       const mergedUrls = [...new Set([...currentUrls, ...urls])];
+      const patchBody: {
+        source_urls: string[];
+        additional_context?: string[];
+      } = { source_urls: mergedUrls };
+
+      if (pastedText.trim()) {
+        patchBody.additional_context = [pastedText.trim()];
+      }
+
       await fetch(`/api/people/${person.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ additional_context: urls, source_urls: mergedUrls }),
+        body: JSON.stringify(patchBody),
       });
 
       const crawlRes = await fetch(`/api/people/${person.id}/crawl`, { method: 'POST' });
@@ -519,11 +528,20 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
             </section>
           ) : null}
 
+          {person.raw_pasted_text ? (
+            <section className={styles.section}>
+              <h2 className={styles.sectionTitle}>Pasted source text</h2>
+              <p className={styles.notFound}>
+                {person.raw_pasted_text.length.toLocaleString()} characters supplied manually.
+              </p>
+            </section>
+          ) : null}
+
           {/* ── Add more context ────────────────────────────────────────── */}
           <section className={styles.section}>
             <h2 className={styles.sectionTitle}>Add more context</h2>
             <p className={styles.contextHint}>
-              Paste additional URLs to deepen the analysis. The profile will be re-researched with the new sources.
+              Paste additional URLs or profile text to deepen the analysis. The profile will be re-analyzed with the new sources.
             </p>
             {showContextForm ? (
               <UrlInputForm
@@ -538,7 +556,7 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
                 onClick={() => setShowContextForm(true)}
                 disabled={isAnalyzing}
               >
-                + Add URLs
+                + Add context
               </button>
             )}
           </section>

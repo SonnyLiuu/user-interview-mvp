@@ -517,13 +517,10 @@ LRESULT CALLBACK overlayWndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
             bool settingsOpen = state->actions.settingsOpen
                 ? state->actions.settingsOpen()
                 : false;
-            bool pickerOpen = state->actions.pickerOpen
-                ? state->actions.pickerOpen()
-                : false;
             bool endSessionOpen = state->actions.endSessionOpen
                 ? state->actions.endSessionOpen()
                 : false;
-            if (settingsOpen || pickerOpen || endSessionOpen) return 0;
+            if (settingsOpen || endSessionOpen) return 0;
             int delta = GET_WHEEL_DELTA_WPARAM(w);
             if (delta == 0) return 0;
             // Wheel forward (positive) → show earlier rows → negative rowDelta.

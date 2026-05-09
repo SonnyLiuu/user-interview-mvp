@@ -4,6 +4,7 @@ import asyncio
 import json
 from typing import AsyncIterator
 
+import httpx
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
@@ -28,6 +29,15 @@ def _parse_json_response(raw: str, provider: str) -> dict:
     except json.JSONDecodeError as exc:
         raise AIServiceError("AI response was not valid JSON", provider) from exc
 
+    if isinstance(parsed, str):
+        try:
+            parsed = json.loads(parsed)
+        except json.JSONDecodeError as exc:
+            raise AIServiceError("AI response JSON string did not contain a valid object", provider) from exc
+
+    if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
+        parsed = parsed[0]
+
     if not isinstance(parsed, dict):
         raise AIServiceError("AI response JSON was not an object", provider)
 
@@ -36,7 +46,7 @@ def _parse_json_response(raw: str, provider: str) -> dict:
 
 def _is_json_response_error(exc: AIServiceError) -> bool:
     message = str(exc)
-    return "valid JSON" in message or "JSON was not an object" in message
+    return "valid JSON" in message or "valid object" in message or "JSON was not an object" in message
 
 
 def _with_json_retry_instruction(messages: list[dict], schema_hint: str) -> list[dict]:
@@ -54,6 +64,33 @@ def _with_json_retry_instruction(messages: list[dict], schema_hint: str) -> list
         ),
     }
     return retry_messages
+
+
+def _clean_prompt_text(value) -> str:
+    if isinstance(value, str):
+        return " ".join(value.strip().split())
+    if value is None:
+        return ""
+    try:
+        return " ".join(json.dumps(value, ensure_ascii=False).strip().split())
+    except TypeError:
+        return " ".join(str(value).strip().split())
+
+
+def _clean_prompt_list(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    cleaned: list[str] = []
+    for item in value:
+        text = _clean_prompt_text(item)
+        if text:
+            cleaned.append(text)
+    return cleaned
+
+
+def _join_prompt_list(value, fallback: str = "Not specified") -> str:
+    cleaned = _clean_prompt_list(value)
+    return "; ".join(cleaned) if cleaned else fallback
 
 
 async def _await_provider(coro, provider: str, timeout: float, operation: str):
@@ -201,7 +238,7 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
         "Write the question as you would actually say it to a founder — direct, brief, no fluff. "
         "1-2 sentences max. No bullet points, no numbered lists, no markdown. "
         "Reference what you already know about their idea so it feels like a real conversation, not a form.\n\n"
-        "Then generate 3-5 concrete answer choices tailored to this specific founder's context.\n\n"
+        "Then generate a concrete answer tailored to this specific founder's context.\n\n"
         "Requirements:\n"
         f'- question: 1-2 natural sentences, conversational tone, no formatting\n'
         f'- Generate exactly 3-5 distinct, concrete choices relevant to this specific founder\'s context\n'
@@ -301,9 +338,9 @@ async def generate_call_brief(person: dict, project_context: dict) -> dict:
         f"Target customer: {project_context.get('target_customer') or 'Not specified'}\n"
         f"Pain point: {project_context.get('pain_point') or 'Not specified'}\n"
         f"Value proposition: {project_context.get('value_prop') or 'Not specified'}\n"
-        f"Ideal people to talk to: {', '.join(ideal_people) if ideal_people else 'Not specified'}\n"
-        f"People to avoid: {', '.join(disqualifiers) if disqualifiers else 'Not specified'}\n"
-        f"Assumptions to validate: {'; '.join(key_assumptions) if key_assumptions else 'Not specified'}\n\n"
+        f"Ideal people to talk to: {_join_prompt_list(ideal_people)}\n"
+        f"People to avoid: {_join_prompt_list(disqualifiers)}\n"
+        f"Assumptions to validate: {_join_prompt_list(key_assumptions)}\n\n"
         "PERSON THEY ARE CALLING:\n"
         f"Name: {person.get('name') or 'Unknown'}\n"
         f"Title: {person.get('title') or 'Unknown'}\n"
@@ -311,7 +348,7 @@ async def generate_call_brief(person: dict, project_context: dict) -> dict:
         f"Persona type: {person.get('persona_type') or 'Unknown'}\n"
         f"Background: {analysis.get('summary') or 'Not specified'}\n"
         f"Why they matter: {analysis.get('why_they_matter') or 'Not specified'}\n"
-        f"Key insights: {'; '.join(key_insights) if key_insights else 'Not specified'}\n\n"
+        f"Key insights: {_join_prompt_list(key_insights)}\n\n"
         "Generate a focused call prep brief. Be specific to this person and this foundation.\n\n"
         "Output rules:\n"
         "- objective: exactly one sharp sentence naming what the founder should learn.\n"
@@ -338,14 +375,14 @@ async def generate_outreach_message(person: dict, project_context: dict) -> dict
     key_assumptions = project_context.get("key_assumptions") or []
 
     prompt = (
-        f"""I want you to generate a short outreach message. I will provide my project/startup idea and detailed background, and the background of the person I want to setup a call with. The recipient's background will provide context on what I wish to learn from conversation with that person. Choose one topic that I would want to learn about and introduce their familiarity with that topic, followed by my wish to learn about how they handled it in a 20 minute call. The topic should center on a real past experience the recipient likely had, especially one that could validate or falsify my project assumptions. Make this a natural 4-6 sentence paragraph. Avoid adding any information about my project/startup, my goal is not to pitch, rather to validate all aspects of my project/startup idea one person at a time.
+        f"""I want you to generate a short outreach message, less than 300 letters. I will provide my project/startup idea and detailed background, and the background of the person I want to setup a call with. The recipient's background will provide context on what I wish to learn from conversation with that person. Choose one topic that I would want to learn about and introduce their familiarity with that topic, followed by my wish to learn about how they handled it in a 20 minute call. The topic should center on a real past experience the recipient likely had, especially one that could validate or falsify my project assumptions. Avoid adding any information about my project/startup, my goal is not to pitch, rather to validate all aspects of my project/startup idea one person at a time.
 
         MY PROJECT CONTEXT:\n
         Idea: {project_context.get('idea_summary') or 'Not specified'}\n
         Target customer: {project_context.get('target_customer') or 'Not specified'}\n
         Pain point: {project_context.get('pain_point') or 'Not specified'}\n
-        Ideal people to talk to: {', '.join(ideal_people) if ideal_people else 'Not specified'}\n
-        Assumptions to validate: {'; '.join(key_assumptions) if key_assumptions else 'Not specified'}\n\n
+        Ideal people to talk to: {_join_prompt_list(ideal_people)}\n
+        Assumptions to validate: {_join_prompt_list(key_assumptions)}\n\n
 
         RECIPIENT CONTEXT:\n
         Name: {person.get('name') or 'Unknown'}\n
@@ -354,7 +391,7 @@ async def generate_outreach_message(person: dict, project_context: dict) -> dict
         Persona type: {person.get('persona_type') or 'Unknown'}\n
         Background: {analysis.get('summary') or 'Not specified'}\n
         Why they matter: {analysis.get('why_they_matter') or 'Not specified'}\n
-        Key insights: {'; '.join(key_insights) if key_insights else 'Not specified'}\n\n
+        Key insights: {_join_prompt_list(key_insights)}\n\n
 
         Return only valid JSON with this schema:
         {{"subject":"string","body":"string"}}
@@ -382,13 +419,40 @@ def _foundation_search_summary(foundation: dict) -> str:
     return "\n".join(part for part in parts if part)
 
 
+def _gemini_model_path(model: str) -> str:
+    return model if model.startswith("models/") else f"models/{model}"
+
+
+def _gemini_response_text(payload: dict) -> str:
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        return ""
+    parts = ((candidates[0].get("content") or {}).get("parts")) or []
+    return "\n".join(part.get("text", "") for part in parts if part.get("text")).strip()
+
+
+def _gemini_grounding_sources(payload: dict) -> list[str]:
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        return []
+
+    chunks = (candidates[0].get("groundingMetadata") or {}).get("groundingChunks") or []
+    sources: list[str] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        web = chunk.get("web") or {}
+        uri = web.get("uri")
+        if not uri or uri in seen:
+            continue
+        seen.add(uri)
+        title = web.get("title") or "Source"
+        sources.append(f"- {title}: {uri}")
+    return sources
+
+
 async def get_advisor_web_context(user_message: str, foundation: dict, recent_messages: list[dict] | None = None) -> str:
     settings = get_settings()
     provider = _read_provider()
-    if provider != "openai" or not settings.openai_api_key:
-        return ""
-
-    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=settings.ai_request_timeout_seconds)
     recent = "\n".join(
         f"{'Advisor' if msg.get('role') == 'assistant' else 'Founder'}: {msg.get('content', '')}"
         for msg in (recent_messages or [])[-4:]
@@ -404,22 +468,56 @@ async def get_advisor_web_context(user_message: str, foundation: dict, recent_me
         "Return a concise research note with 3-6 bullets. Include source names and URLs inline for any factual claims."
     )
 
-    try:
-        response = await _await_provider(
-            client.responses.create(
-                model=settings.openai_web_search_model or settings.openai_model,
-                tools=[{"type": "web_search_preview"}],
-                tool_choice="auto",
-                input=prompt,
-            ),
-            provider,
-            settings.ai_request_timeout_seconds + 15,
-            "OpenAI web search request",
-        )
-    except AIServiceError:
-        return ""
+    if provider == "gemini":
+        if not settings.gemini_api_key:
+            return ""
+        model = _gemini_model_path(settings.gemini_web_search_model or settings.gemini_model)
+        url = f"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent"
+        body = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "tools": [{"google_search": {}}],
+        }
+        try:
+            async with httpx.AsyncClient(timeout=settings.ai_request_timeout_seconds + 15) as client:
+                response = await _await_provider(
+                    client.post(url, params={"key": settings.gemini_api_key}, json=body),
+                    provider,
+                    settings.ai_request_timeout_seconds + 15,
+                    "Gemini web search request",
+                )
+            if response.status_code >= 400:
+                raise AIServiceError(f"Gemini web search request failed with HTTP {response.status_code}", provider)
+            payload = response.json()
+        except (AIServiceError, ValueError):
+            return ""
 
-    return (getattr(response, "output_text", "") or "").strip()
+        text = _gemini_response_text(payload)
+        sources = _gemini_grounding_sources(payload)
+        if sources:
+            text = f"{text}\n\nSources:\n{chr(10).join(sources)}".strip()
+        return text
+
+    if provider == "openai":
+        if not settings.openai_api_key:
+            return ""
+        client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=settings.ai_request_timeout_seconds)
+        try:
+            response = await _await_provider(
+                client.responses.create(
+                    model=settings.openai_web_search_model or settings.openai_model,
+                    tools=[{"type": "web_search_preview"}],
+                    tool_choice="auto",
+                    input=prompt,
+                ),
+                provider,
+                settings.ai_request_timeout_seconds + 15,
+                "OpenAI web search request",
+            )
+        except AIServiceError:
+            return ""
+        return (getattr(response, "output_text", "") or "").strip()
+
+    return ""
 
 
 async def stream_intake_reply(system_prompt: str, messages: list[dict]) -> AsyncIterator[str]:

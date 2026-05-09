@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Person } from '@/lib/db/schema';
 import { PersonGrid } from '@/components/people/PersonGrid';
 import styles from './PeoplePageClient.module.css';
@@ -43,9 +44,14 @@ function applySortOrder(people: Person[], order: SortOrder): Person[] {
 }
 
 export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
+  const router = useRouter();
   const [people, setPeople] = useState<Person[]>(initialPeople);
   const peopleRef = useRef(people);
   useEffect(() => { peopleRef.current = people; }, [people]);
+
+  useEffect(() => {
+    setPeople(initialPeople);
+  }, [initialPeople, projectId]);
 
   const pollStartRef = useRef<Map<string, number>>(new Map());
 
@@ -134,14 +140,17 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
 
   function handlePersonCreated(person: Person) {
     setPeople((prev) => [...prev, person]);
+    router.refresh();
   }
 
   function handlePersonUpdated(updated: Person) {
     setPeople((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    router.refresh();
   }
 
   function handlePersonDeleted(personId: string) {
     setPeople((prev) => prev.filter((p) => p.id !== personId));
+    router.refresh();
   }
 
   const sortedPeople = applySortOrder(people, sortOrder);

@@ -33,7 +33,10 @@ add_executable(foundry_overlay
     src/common/json_util.cpp
     src/windows/main.cpp
     src/windows/app_paths.cpp
+    src/windows/audio/audio_capture.cpp
     src/windows/http/http_client.cpp
+    src/windows/http/sse_client.cpp
+    src/windows/http/websocket_client.cpp
     src/windows/overlay/window.cpp
     src/windows/overlay/renderer.cpp
     src/windows/tray/tray.cpp
@@ -65,6 +68,7 @@ target_link_libraries(foundry_overlay PRIVATE
     ole32
     shlwapi
     winhttp
+    mmdevapi
 )
 
 # Copy HTML assets next to the exe so file:// URLs resolve at runtime.

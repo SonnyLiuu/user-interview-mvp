@@ -10,6 +10,7 @@ import { BOARD_STATUS_VALUES } from '@/lib/crm';
 const uuidSchema = z.string().uuid();
 const urlSchema = z.string().url();
 const nonEmptyString = z.string().min(1);
+const pastedProfileTextSchema = z.string().max(50_000, 'Pasted text must be 50,000 characters or less').optional();
 
 // Project-related schemas
 export const createProjectSchema = z.object({
@@ -24,10 +25,15 @@ export const createPersonSchema = z.object({
   title: z.string().optional(),
   company: z.string().optional(),
   persona_type: z.enum(['potential_user', 'buyer', 'operator', 'domain_expert', 'skeptic', 'connector']).optional(),
-  source_urls: z.array(urlSchema).min(1, 'At least one URL is required'),
-  raw_pasted_text: z.string().optional(),
+  source_urls: z.array(urlSchema).optional().default([]),
+  raw_pasted_text: pastedProfileTextSchema,
   additional_context: z.array(z.string()).optional(),
   research_depth: z.enum(['quick', 'deep']).default('deep'),
+}).refine((data) => {
+  return data.source_urls.length > 0 || !!data.raw_pasted_text?.trim();
+}, {
+  message: 'Enter at least one URL or paste profile text.',
+  path: ['source_urls'],
 });
 
 export const updatePersonSchema = z.object({
@@ -36,8 +42,8 @@ export const updatePersonSchema = z.object({
   company: z.string().optional(),
   persona_type: z.enum(['potential_user', 'buyer', 'operator', 'domain_expert', 'skeptic', 'connector']).optional(),
   source_urls: z.array(urlSchema).optional(),
-  raw_pasted_text: z.string().optional(),
-  additional_context: z.array(z.string()).optional(),
+  raw_pasted_text: pastedProfileTextSchema,
+  additional_context: z.array(z.string().max(50_000, 'Additional context must be 50,000 characters or less')).optional(),
   board_status: z.enum(BOARD_STATUS_VALUES).optional(),
   call_scheduled_at: z.string().datetime().optional(),
 });

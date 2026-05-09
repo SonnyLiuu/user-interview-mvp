@@ -18,13 +18,17 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <mutex>
 #include <memory>
 #include <string>
 
 #include "common/app_state.h"
 #include "common/json_util.h"
 #include "windows/app_paths.h"
+#include "windows/audio/audio_capture.h"
 #include "windows/http/http_client.h"
+#include "windows/http/sse_client.h"
+#include "windows/http/websocket_client.h"
 #include "overlay/renderer.h"
 #include "overlay/window.h"
 #include "tray/tray.h"
@@ -44,6 +48,9 @@ using foundry::overlay::releaseRendererResources;
 using foundry::tray::TrayIcon;
 using foundry::tray::TrayActions;
 using foundry::webview::WebViewWindow;
+using foundry::windows::audio::MeetingAudioCapture;
+using foundry::windows::http::BinaryWebSocketClient;
+using foundry::windows::http::SseClient;
 
 namespace {
 
@@ -251,6 +258,33 @@ std::vector<OverlayPersonRow> peopleRowsFromJson(const Json& people) {
     return rows;
 }
 
+foundry::TopicCategory categoryFromString(const std::wstring& category) {
+    if (category == L"question") return foundry::TopicCategory::Question;
+    if (category == L"signal") return foundry::TopicCategory::Signal;
+    return foundry::TopicCategory::Goal;
+}
+
+void loadTopicsFromJson(foundry::AppState& appState, const Json& topics) {
+    appState.topics.clear();
+    if (!topics.is_array()) return;
+    for (const auto& item : topics) {
+        if (!item.is_object()) continue;
+        foundry::Topic topic;
+        topic.id = foundry::json::wideValue(item, "id");
+        topic.label = foundry::json::wideValue(item, "label");
+        topic.category =
+            categoryFromString(foundry::json::wideValue(item, "category"));
+        topic.checked = item.value("checked", false);
+        topic.checkedBy = foundry::json::wideValue(item, "checkedBy");
+        topic.checkedAt = foundry::json::wideValue(item, "checkedAt");
+        topic.evidence = foundry::json::wideValue(item, "evidence");
+        topic.manualOverride = item.value("manualOverride", false);
+        if (!topic.id.empty() && !topic.label.empty()) {
+            appState.topics.push_back(topic);
+        }
+    }
+}
+
 void addFallbackCallBriefTopics(foundry::AppState& appState) {
     struct FallbackItem {
         const wchar_t* label;
@@ -289,6 +323,45 @@ void addFallbackCallBriefTopics(foundry::AppState& appState) {
         topic.category = item.category;
         appState.topics.push_back(topic);
     }
+}
+
+std::wstring startLiveSession(foundry::AppState& appState,
+                              const std::wstring& personId,
+                              const std::wstring& personName) {
+    std::wstring url = apiBaseNoSlash(appState) +
+                       L"/api/desktop/sessions/live/start";
+    Json payload{{"personId", foundry::json::toUtf8(personId)}};
+    auto response = foundry::windows::http::postJson(
+        url, foundry::json::dumpUtf8(payload), appState.authToken);
+    if (!response.ok) {
+        std::wstring message = response.error.empty()
+                                   ? foundry::json::fromUtf8(response.body.substr(0, 300))
+                                   : response.error;
+        return foundry::json::dumpWide(Json{
+            {"type", "pickerError"},
+            {"message", foundry::json::toUtf8(message)},
+            {"status", response.status},
+        });
+    }
+
+    Json root = foundry::json::parseUtf8(response.body);
+    appState.selectedPersonId = personId;
+    appState.selectedPersonName = personName;
+    appState.liveSessionId = foundry::json::wideValue(root, "sessionId");
+    appState.liveToken = foundry::json::wideValue(root, "liveToken");
+    appState.foundryBaseUrl = foundry::json::wideValue(root, "foundryBaseUrl");
+    loadTopicsFromJson(appState, root["topics"]);
+    if (appState.topics.empty()) {
+        addFallbackCallBriefTopics(appState);
+    }
+
+    std::wcout << L"[session] live session " << appState.liveSessionId
+               << L"; loaded " << appState.topics.size() << L" topics\n";
+    return foundry::json::dumpWide(Json{
+        {"type", "sessionSelected"},
+        {"personId", foundry::json::toUtf8(personId)},
+        {"topicCount", appState.topics.size()},
+    });
 }
 
 std::wstring loadCallBrief(foundry::AppState& appState,
@@ -379,6 +452,18 @@ std::wstring loadCallBrief(foundry::AppState& appState,
     });
 }
 
+void endLiveSession(foundry::AppState& appState) {
+    if (appState.liveSessionId.empty() || appState.liveToken.empty() ||
+        appState.foundryBaseUrl.empty()) {
+        return;
+    }
+    std::wstring base = appState.foundryBaseUrl;
+    if (!base.empty() && base.back() == L'/') base.pop_back();
+    std::wstring url = base + L"/v1/desktop/live-sessions/" +
+                       appState.liveSessionId + L"/end";
+    foundry::windows::http::postJson(url, "{}", appState.liveToken);
+}
+
 std::wstring endSessionJson(const foundry::AppState& appState) {
     Json topics = Json::array();
     for (const auto& topic : appState.topics) {
@@ -407,12 +492,17 @@ Json endSessionPayload(const foundry::AppState& appState,
             {"id", foundry::json::toUtf8(topic.id)},
             {"label", foundry::json::toUtf8(topic.label)},
             {"checked", topic.checked},
+            {"checkedBy", foundry::json::toUtf8(topic.checkedBy)},
+            {"checkedAt", foundry::json::toUtf8(topic.checkedAt)},
+            {"evidence", foundry::json::toUtf8(topic.evidence)},
+            {"manualOverride", topic.manualOverride},
         });
     }
     return Json{
         {"personId", foundry::json::toUtf8(appState.selectedPersonId)},
         {"startedAt", foundry::json::toUtf8(appState.sessionStartedAt)},
         {"endedAt", foundry::json::toUtf8(isoNowUtc())},
+        {"liveSessionId", foundry::json::toUtf8(appState.liveSessionId)},
         {"topics", topics},
         {"notesRaw", foundry::json::toUtf8(buildNotesSummary(appState))},
         {"transcriptRaw", foundry::json::toUtf8(transcriptRaw)},
@@ -459,10 +549,14 @@ Json saveEndSession(foundry::AppState& appState,
             {"message", foundry::json::toUtf8(message)},
         };
     }
+    endLiveSession(appState);
     appState.sessionStatus = foundry::SessionStatus::Idle;
     appState.selectedPersonId.clear();
     appState.selectedPersonName.clear();
     appState.sessionStartedAt.clear();
+    appState.liveSessionId.clear();
+    appState.liveToken.clear();
+    appState.foundryBaseUrl.clear();
     appState.topics.clear();
     return Json{{"type", "saveSucceeded"}};
 }
@@ -505,6 +599,7 @@ foundry::overlay::TopicCategory toRenderCategory(foundry::TopicCategory c) {
 
 OverlayRenderState overlayRenderState(const foundry::AppState& appState,
                                       unsigned int scrollOffset,
+                                      unsigned int personScrollOffset,
                                       OverlayPage page,
                                       OverlayHoverTarget hoverTarget,
                                       int hoverIndex,
@@ -526,6 +621,7 @@ OverlayRenderState overlayRenderState(const foundry::AppState& appState,
         appState.sessionStatus == foundry::SessionStatus::Active;
     state.hasAuthToken = !appState.authToken.empty();
     state.scrollOffset = scrollOffset;
+    state.personScrollOffset = personScrollOffset;
     state.apiBaseUrl = appState.settings.apiBaseUrl;
     state.settingsStatus = settingsStatus;
     state.pickerStatus = pickerStatus;
@@ -578,6 +674,56 @@ std::vector<size_t> visibleChecklistTopicIndices(
     return indices;
 }
 
+bool applyTopicUpdate(foundry::AppState& appState, const Json& topicJson) {
+    std::wstring id = foundry::json::wideValue(topicJson, "id");
+    if (id.empty()) return false;
+    for (auto& topic : appState.topics) {
+        if (topic.id != id) continue;
+        topic.checked = topicJson.value("checked", topic.checked);
+        std::wstring label = foundry::json::wideValue(topicJson, "label");
+        if (!label.empty()) topic.label = label;
+        topic.checkedBy = foundry::json::wideValue(
+            topicJson, "checkedBy", topic.checkedBy);
+        topic.checkedAt = foundry::json::wideValue(
+            topicJson, "checkedAt", topic.checkedAt);
+        topic.evidence = foundry::json::wideValue(
+            topicJson, "evidence", topic.evidence);
+        topic.manualOverride =
+            topicJson.value("manualOverride", topic.manualOverride);
+        return true;
+    }
+    return false;
+}
+
+bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
+    if (!event.is_object()) return false;
+    std::string type = event.value("type", "");
+    Json data = event.contains("data") && event["data"].is_object()
+        ? event["data"]
+        : Json::object();
+
+    if (type == "session_snapshot") {
+        if (data.contains("topics")) {
+            loadTopicsFromJson(appState, data["topics"]);
+            return true;
+        }
+        return false;
+    }
+    if (type == "topic_checked") {
+        Json topic = data.contains("topic") && data["topic"].is_object()
+            ? data["topic"]
+            : Json::object();
+        return applyTopicUpdate(appState, topic);
+    }
+    if (type == "realtime_error") {
+        std::wstring message = foundry::json::wideValue(data, "message");
+        if (!message.empty()) {
+            std::wcout << L"[live] realtime error: " << message << L"\n";
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 int main() {
@@ -613,6 +759,7 @@ int main() {
     OverlayHoverTarget overlayHoverTarget = OverlayHoverTarget::None;
     int overlayHoverIndex = -1;
     unsigned int overlayScrollOffset = 0;
+    unsigned int overlayPersonScrollOffset = 0;
     int overlayHeightDip = 0;
     std::wstring overlaySettingsStatus = L"Ready.";
     std::wstring overlayPickerStatus = L"Pick person for call.";
@@ -622,6 +769,12 @@ int main() {
     foundry::AppState appState;
     appState.settings = readDesktopSettings();
     appState.authToken = readPersistedToken();
+
+    SseClient liveEvents;
+    BinaryWebSocketClient liveAudioSocket;
+    MeetingAudioCapture meetingAudio;
+    std::mutex liveEventMutex;
+    std::vector<Json> pendingLiveEvents;
 
     OverlayActions overlayActions;
     overlayActions.onSettings = [&] { overlaySettingsRequested = true; };
@@ -648,6 +801,7 @@ int main() {
             Json result = foundry::json::parseWide(peopleJson(appState));
             if (result.value("type", "") == "loadPeople") {
                 overlayPeople = peopleRowsFromJson(result["people"]);
+                overlayPersonScrollOffset = 0;
             }
         }
         overlayHoverTarget = OverlayHoverTarget::None;
@@ -700,6 +854,10 @@ int main() {
         size_t topicIndex = indices[visible];
         appState.topics[topicIndex].checked =
             !appState.topics[topicIndex].checked;
+        appState.topics[topicIndex].checkedBy = L"manual";
+        appState.topics[topicIndex].checkedAt = isoNowUtc();
+        appState.topics[topicIndex].evidence.clear();
+        appState.topics[topicIndex].manualOverride = true;
         overlayDirty = true;
     };
     overlayActions.onSelectPerson = [&](int visibleIndex) {
@@ -707,6 +865,23 @@ int main() {
     };
     overlayActions.onScroll = [&](int rowDelta) {
         if (rowDelta == 0) return;
+        if (overlayPickerOpen) {
+            unsigned int maxOffset = foundry::overlay::maxPersonScrollOffset(
+                static_cast<unsigned int>(overlayPeople.size()),
+                overlayHeightDip);
+            long long next =
+                static_cast<long long>(overlayPersonScrollOffset) + rowDelta;
+            if (next < 0) next = 0;
+            if (next > static_cast<long long>(maxOffset)) next = maxOffset;
+            unsigned int clamped = static_cast<unsigned int>(next);
+            if (clamped != overlayPersonScrollOffset) {
+                overlayPersonScrollOffset = clamped;
+                overlayHoverTarget = OverlayHoverTarget::None;
+                overlayHoverIndex = -1;
+                overlayDirty = true;
+            }
+            return;
+        }
         unsigned int maxOffset = foundry::overlay::maxChecklistScrollOffset(
             topicCountByCategory(appState, foundry::TopicCategory::Goal),
             topicCountByCategory(appState, foundry::TopicCategory::Question),
@@ -736,6 +911,16 @@ int main() {
         return overlayScrollOffset;
     };
     overlayActions.visiblePersonCount = [&] {
+        if (overlayPickerOpen) {
+            unsigned int start = std::min<unsigned int>(
+                overlayPersonScrollOffset,
+                static_cast<unsigned int>(overlayPeople.size()));
+            unsigned int remaining =
+                static_cast<unsigned int>(overlayPeople.size()) - start;
+            return std::min<unsigned int>(
+                remaining,
+                foundry::overlay::maxVisiblePersonRows(overlayHeightDip));
+        }
         return static_cast<unsigned int>(
             std::min<size_t>(overlayPeople.size(), 4));
     };
@@ -812,6 +997,7 @@ int main() {
 
     auto loadPeopleIntoPicker = [&] {
         overlayPeople.clear();
+        overlayPersonScrollOffset = 0;
         overlayPickerStatus = L"Loading people...";
         overlayDirty = true;
 
@@ -841,6 +1027,63 @@ int main() {
             }
         }
         overlayDirty = true;
+    };
+
+    auto startLiveEvents = [&] {
+        liveEvents.stop();
+        if (appState.foundryBaseUrl.empty() ||
+            appState.liveSessionId.empty() ||
+            appState.liveToken.empty()) {
+            return;
+        }
+        std::wstring base = appState.foundryBaseUrl;
+        if (!base.empty() && base.back() == L'/') base.pop_back();
+        std::wstring url = base + L"/v1/desktop/live-sessions/" +
+                           appState.liveSessionId + L"/events";
+        liveEvents.start(
+            url, appState.liveToken,
+            [&](const std::string& eventType, const std::string& data) {
+                Json event = Json{
+                    {"type", eventType},
+                    {"data", foundry::json::parseUtf8(data, Json::object())},
+                };
+                std::lock_guard<std::mutex> lock(liveEventMutex);
+                pendingLiveEvents.push_back(std::move(event));
+            });
+    };
+
+    auto stopLiveAudio = [&] {
+        meetingAudio.stop();
+        liveAudioSocket.close();
+    };
+
+    auto startLiveAudio = [&] {
+        stopLiveAudio();
+        if (appState.foundryBaseUrl.empty() ||
+            appState.liveSessionId.empty() ||
+            appState.liveToken.empty()) {
+            return;
+        }
+        std::wstring path = L"/v1/desktop/live-sessions/" +
+                            appState.liveSessionId + L"/audio";
+        std::wstring url =
+            foundry::windows::http::webSocketUrlFromHttpBase(
+                appState.foundryBaseUrl, path);
+        std::wstring error;
+        if (!liveAudioSocket.connect(url, appState.liveToken, error)) {
+            std::wcout << L"[live] audio websocket failed: " << error << L"\n";
+            return;
+        }
+        if (!meetingAudio.start(
+                [&](const std::vector<std::uint8_t>& chunk) {
+                    liveAudioSocket.sendBinary(chunk);
+                },
+                error)) {
+            std::wcout << L"[live] audio capture failed: " << error << L"\n";
+            liveAudioSocket.close();
+            return;
+        }
+        std::wcout << L"[live] audio capture started\n";
     };
 
     auto startSession = [&] {
@@ -875,6 +1118,7 @@ int main() {
         overlayHoverTarget = OverlayHoverTarget::None;
         overlayHoverIndex = -1;
         overlayPeople.clear();
+        overlayPersonScrollOffset = 0;
         overlayPickerStatus = L"Loading people...";
         overlayDirty = true;
         loadPeopleIntoPicker();
@@ -905,6 +1149,18 @@ int main() {
             authWindow.reset();
             authClosed = false;
         }
+        {
+            std::vector<Json> events;
+            {
+                std::lock_guard<std::mutex> lock(liveEventMutex);
+                events.swap(pendingLiveEvents);
+            }
+            for (const auto& event : events) {
+                if (applyLiveEvent(appState, event)) {
+                    overlayDirty = true;
+                }
+            }
+        }
         if (overlaySettingsRequested) {
             overlaySettingsOpen = true;
             overlayPickerOpen = false;
@@ -929,6 +1185,7 @@ int main() {
         if (overlayPickerBackRequested) {
             overlayPickerOpen = false;
             overlayPersonDropdownOpen = false;
+            overlayPersonScrollOffset = 0;
             overlayHoverTarget = OverlayHoverTarget::None;
             overlayHoverIndex = -1;
             if (appState.sessionStatus == foundry::SessionStatus::PickingPerson) {
@@ -996,16 +1253,21 @@ int main() {
         }
         if (overlaySelectPersonRequested >= 0) {
             size_t index = static_cast<size_t>(overlaySelectPersonRequested);
+            if (overlayPickerOpen) {
+                index += overlayPersonScrollOffset;
+            }
             if (index < overlayPeople.size()) {
                 overlayPickerStatus = L"Loading brief...";
                 overlayDirty = true;
                 const OverlayPersonRow person = overlayPeople[index];
                 Json result = foundry::json::parseWide(
-                    loadCallBrief(appState, person.id, person.name));
+                    startLiveSession(appState, person.id, person.name));
                 std::string type = result.value("type", "");
                 if (type == "sessionSelected") {
                     appState.sessionStatus = foundry::SessionStatus::Active;
                     appState.sessionStartedAt = isoNowUtc();
+                    startLiveEvents();
+                    startLiveAudio();
                     overlayPickerOpen = false;
                     overlayHoverTarget = OverlayHoverTarget::None;
                     overlayHoverIndex = -1;
@@ -1013,6 +1275,7 @@ int main() {
                     overlayGoalsCollapsed = false;
                     overlayQuestionsCollapsed = false;
                     overlayScrollOffset = 0;
+                    overlayPersonScrollOffset = 0;
                 } else {
                     int status = result.value("status", 0);
                     std::wstring message =
@@ -1063,6 +1326,8 @@ int main() {
             Json result = saveEndSession(appState, L"");
             std::string type = result.value("type", "");
             if (type == "saveSucceeded") {
+                stopLiveAudio();
+                liveEvents.stop();
                 overlayEndOpen = false;
                 overlayPersonDropdownOpen = false;
                 overlayScrollOffset = 0;
@@ -1093,6 +1358,7 @@ int main() {
             renderOverlay(swapChain.Get(),
                           overlayRenderState(
                               appState, overlayScrollOffset,
+                              overlayPersonScrollOffset,
                               overlaySettingsOpen
                                   ? OverlayPage::Settings
                                   : (overlayPickerOpen
@@ -1115,6 +1381,8 @@ int main() {
     }
 
 exit:
+    stopLiveAudio();
+    liveEvents.stop();
     authWindow.reset();
     releaseRendererResources();
     CoUninitialize();

@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation';
-import { and, eq, or, isNull, gt, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { call_prep, people, projects, users } from '@/lib/db/schema';
 import { getProjectBySlugOrId } from '@/lib/backend-server';
 import { auth } from '@clerk/nextjs/server';
 import { BoardPageClient } from './BoardPageClient';
+
+export const dynamic = 'force-dynamic';
 
 export default async function BoardPage({
   params,
@@ -34,17 +36,12 @@ export default async function BoardPage({
 
   if (!proj) redirect('/dashboard');
 
-  // All people for this project — bookmarked ones have no TTL, others expire after 24h
-  const now = new Date();
+  // All people for this project. `expires_at` is legacy-only; the board should
+  // reflect the durable project pipeline.
   const boardPeople = await db
     .select()
     .from(people)
-    .where(
-      and(
-        eq(people.project_id, project.id),
-        or(isNull(people.expires_at), gt(people.expires_at, now))
-      )
-    )
+    .where(eq(people.project_id, project.id))
     .orderBy(people.updated_at);
 
   const peopleIds = boardPeople.map((person) => person.id);

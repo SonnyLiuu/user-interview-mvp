@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const [updated] = await db
     .update(people)
-    .set({ board_status: 'scheduled', call_scheduled_at: scheduledAt, updated_at: new Date() })
+    .set({ board_status: 'scheduled', call_scheduled_at: scheduledAt, expires_at: null, updated_at: new Date() })
     .where(eq(people.id, personId))
     .returning();
 

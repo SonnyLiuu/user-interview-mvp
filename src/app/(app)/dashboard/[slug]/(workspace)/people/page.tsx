@@ -1,11 +1,13 @@
 import { redirect } from 'next/navigation';
-import { and, isNull, or, gt, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, projects, users } from '@/lib/db/schema';
 import { getProjectBySlugOrId } from '@/lib/backend-server';
 import { auth } from '@clerk/nextjs/server';
 import { PeoplePageClient } from './PeoplePageClient';
 import styles from './people-page.module.css';
+
+export const dynamic = 'force-dynamic';
 
 export default async function PeoplePage({
   params,
@@ -37,17 +39,13 @@ export default async function PeoplePage({
 
   if (!proj) redirect('/dashboard');
 
-  // Load all people for this project: bookmarked people have no TTL, others expire after 24h
+  // Load all people for this project. `expires_at` is legacy-only; researched
+  // people are project records and should not disappear from the workspace.
   const now = new Date();
   const activePeople = await db
     .select()
     .from(people)
-    .where(
-      and(
-        eq(people.project_id, project.id),
-        or(isNull(people.expires_at), gt(people.expires_at, now))
-      )
-    )
+    .where(eq(people.project_id, project.id))
     .orderBy(people.created_at);
 
   // Recover stale in-progress records — if after() was orphaned by a page refresh or

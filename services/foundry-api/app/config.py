@@ -19,9 +19,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     openai_model: str = Field(default="gpt-4o", alias="OPENAI_MODEL")
+    openai_realtime_model: str = Field(default="gpt-realtime", alias="OPENAI_REALTIME_MODEL")
     openai_web_search_model: str | None = Field(default=None, alias="OPENAI_WEB_SEARCH_MODEL")
     anthropic_model: str = Field(default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL")
     gemini_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_MODEL")
+    gemini_web_search_model: str | None = Field(default=None, alias="GEMINI_WEB_SEARCH_MODEL")
     ai_request_timeout_seconds: float = Field(default=45.0, alias="AI_REQUEST_TIMEOUT_SECONDS")
 
     cors_origins: list[str] = [

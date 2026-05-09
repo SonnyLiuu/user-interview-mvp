@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const [updated] = await db
     .update(people)
-    .set({ board_status: stageToBoardStatus(stage), updated_at: new Date() })
+    .set({ board_status: stageToBoardStatus(stage), expires_at: null, updated_at: new Date() })
     .where(eq(people.id, personId))
     .returning();
 

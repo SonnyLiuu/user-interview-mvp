@@ -4,7 +4,7 @@
   border-radius: 8px;
   overflow: hidden;
   cursor: grab;
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
 }
 
 .card:active {
@@ -20,8 +20,15 @@
 }
 
 .cardOverlay {
-  box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+  box-shadow: 0 12px 28px rgba(45, 31, 19, 0.18);
   cursor: grabbing;
+  transform: rotate(1deg);
+  pointer-events: none;
+}
+
+.cardDragging {
+  opacity: 0.18;
+  box-shadow: none;
 }
 
 .cardLink {

@@ -1,22 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, projects, users } from '@/lib/db/schema';
 import { validateInput, updatePersonSchema } from '@/lib/validation';
+import { getProjectPathSegment } from '@/lib/projects';
 
 type Params = { params: Promise<{ personId: string }> };
 
-// Fetch a person, verifying it belongs to the authenticated user.
-async function getOwnedPerson(personId: string, clerkUserId: string) {
+// Fetch a person and project, verifying they belong to the authenticated user.
+async function getOwnedPersonWithProject(personId: string, clerkUserId: string) {
   const rows = await db
-    .select({ person: people })
+    .select({ person: people, project: projects })
     .from(people)
     .innerJoin(projects, eq(people.project_id, projects.id))
     .innerJoin(users, eq(projects.user_id, users.id))
     .where(and(eq(people.id, personId), eq(users.clerk_user_id, clerkUserId)))
     .limit(1);
-  return rows[0]?.person ?? null;
+  return rows[0] ?? null;
+}
+
+function revalidatePersonProject(project: typeof projects.$inferSelect) {
+  const projectPath = getProjectPathSegment(project);
+  revalidatePath(`/dashboard/${projectPath}/people`);
+  revalidatePath(`/dashboard/${projectPath}/board`);
 }
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -24,10 +32,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { personId } = await params;
-  const person = await getOwnedPerson(personId, clerkUserId);
-  if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const row = await getOwnedPersonWithProject(personId, clerkUserId);
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  return NextResponse.json(person);
+  return NextResponse.json(row.person);
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -35,8 +43,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { personId } = await params;
-  const person = await getOwnedPerson(personId, clerkUserId);
-  if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const row = await getOwnedPersonWithProject(personId, clerkUserId);
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const { person, project } = row;
 
   try {
     const body = await req.json();
@@ -59,6 +68,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .where(eq(people.id, personId))
       .returning();
 
+    revalidatePersonProject(project);
+
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('Validation failed:')) {
@@ -74,9 +85,10 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { personId } = await params;
-  const person = await getOwnedPerson(personId, clerkUserId);
-  if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const row = await getOwnedPersonWithProject(personId, clerkUserId);
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   await db.delete(people).where(eq(people.id, personId));
+  revalidatePersonProject(row.project);
   return new NextResponse(null, { status: 204 });
 }

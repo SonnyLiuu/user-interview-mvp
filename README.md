@@ -166,6 +166,7 @@ Default URLs:
 | `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
 | `GEMINI_MODEL` | No | Defaults to `gemini-2.0-flash`. |
+| `GEMINI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `GEMINI_MODEL`. |
 | `FIRECRAWL_API_KEY` | Yes for person research | Used by `/api/people/[personId]/crawl`. |
 | `FOUNDRY_API_BASE_URL` | Yes | Usually `http://127.0.0.1:8001` locally. |
 | `FOUNDRY_BACKEND_SHARED_SECRET` | Yes | Shared HMAC secret for Next -> FastAPI calls. |
@@ -184,6 +185,7 @@ Default URLs:
 | `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
 | `GEMINI_MODEL` | No | Defaults to `gemini-2.0-flash`. |
+| `GEMINI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `GEMINI_MODEL`. |
 
 ## Common Commands
 

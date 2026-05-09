@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, projects, users } from '@/lib/db/schema';
 import { validateInput, createPersonSchema } from '@/lib/validation';
 
-// Derive a human-readable placeholder name from the first URL while the crawl runs.
-function placeholderName(url: string): string {
+// Derive a human-readable placeholder name while the research runs.
+function placeholderName(url?: string, pastedText?: string): string {
+  if (!url && pastedText?.trim()) {
+    return 'Pasted profile';
+  }
+
   try {
+    if (!url) return 'Discovering...';
     const { hostname, pathname } = new URL(url);
     const slug = pathname.replace(/\//g, ' ').trim();
     return slug || hostname;
@@ -59,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     const [project] = await db
-      .select({ id: projects.id })
+      .select({ id: projects.id, slug: projects.slug })
       .from(projects)
       .where(and(eq(projects.id, data.project_id), eq(projects.user_id, user.id)))
       .limit(1);
@@ -67,25 +73,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
     const [person] = await db
       .insert(people)
       .values({
         project_id: data.project_id,
-        name: data.name ?? placeholderName(data.source_urls[0]),
+        name: data.name ?? placeholderName(data.source_urls[0], data.raw_pasted_text),
         title: data.title,
         company: data.company,
         persona_type: data.persona_type,
         source_urls: data.source_urls,
-        raw_pasted_text: data.raw_pasted_text,
+        raw_pasted_text: data.raw_pasted_text?.trim() || undefined,
         additional_context: data.additional_context,
         research_depth: data.research_depth,
         crawl_status: 'pending',
         analysis_status: 'pending',
-        expires_at: expiresAt,
+        expires_at: null,
       })
       .returning();
+
+    const projectPath = project.slug ?? project.id;
+    revalidatePath(`/dashboard/${projectPath}/people`);
+    revalidatePath(`/dashboard/${projectPath}/board`);
 
     return NextResponse.json(person, { status: 201 });
   } catch (error) {

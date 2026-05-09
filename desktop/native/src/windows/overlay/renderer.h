@@ -63,6 +63,7 @@ struct OverlayRenderState {
     unsigned int goalCount = 0;
     unsigned int checkedCount = 0;
     unsigned int scrollOffset = 0;
+    unsigned int personScrollOffset = 0;
     std::wstring apiBaseUrl;
     std::wstring settingsStatus;
     std::wstring pickerStatus;
@@ -102,6 +103,13 @@ unsigned int maxChecklistScrollOffset(unsigned int goalCount,
 // Returns the zero-based visible person row at the given client coordinate,
 // or -1 when the click is outside the picker list.
 int personIndexAtPoint(int x, int y, unsigned int visiblePersonCount);
+
+// Maximum number of person rows that fit in the picker for the given client
+// height (in DIPs).
+unsigned int maxVisiblePersonRows(int overlayHeightDip);
+
+unsigned int maxPersonScrollOffset(unsigned int personCount,
+                                   int overlayHeightDip);
 
 // Maximum number of topic rows that fit inside an overlay of the given client
 // height (in DIPs). Used by the host to compute the visible window given the

@@ -39,6 +39,41 @@ async function markResearchError(personId: string, message: string) {
     .where(eq(people.id, personId));
 }
 
+function isProbablyUrl(value: string) {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function userProvidedSourceText(person: typeof people.$inferSelect) {
+  const parts: string[] = [];
+  const rawPastedText = person.raw_pasted_text?.trim();
+  if (rawPastedText) {
+    parts.push(`USER-PASTED PROFILE TEXT:\n${rawPastedText}`);
+  }
+
+  const additionalText = (person.additional_context ?? [])
+    .map((item) => item.trim())
+    .filter((item) => item && !isProbablyUrl(item));
+
+  if (additionalText.length) {
+    parts.push(`ADDITIONAL USER-PASTED CONTEXT:\n${additionalText.join('\n\n---\n\n')}`);
+  }
+
+  return parts.join('\n\n');
+}
+
+function combineSourceMaterial(userText: string, crawledText: string, crawlWarning: string | null) {
+  return [
+    userText || null,
+    crawledText ? `CRAWLED WEB SOURCES:\n${crawledText}` : null,
+    crawlWarning ? `CRAWL NOTE:\n${crawlWarning}` : null,
+  ].filter(Boolean).join('\n\n');
+}
+
 export async function POST(_req: NextRequest, { params }: Params) {
   const { userId: clerkUserId } = await auth();
   if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -57,9 +92,12 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const person = rows[0]?.person;
   if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  if (!person.source_urls?.length) {
-    await markResearchError(personId, 'No source URLs to crawl');
-    return NextResponse.json({ error: 'No source URLs to crawl' }, { status: 400 });
+  const sourceUrls = person.source_urls ?? [];
+  const userText = userProvidedSourceText(person);
+
+  if (!sourceUrls.length && !userText) {
+    await markResearchError(personId, 'No source URLs or pasted text to analyze');
+    return NextResponse.json({ error: 'No source URLs or pasted text to analyze' }, { status: 400 });
   }
 
   const foundations = await db
@@ -97,19 +135,37 @@ export async function POST(_req: NextRequest, { params }: Params) {
     );
 
     const work = (async () => {
-      // Crawl
-      const rawContent = await crawlUrls(
-        person.source_urls!,
-        (person.research_depth as CrawlDepth) ?? 'deep'
-      );
+      let crawledText = '';
+      let crawlWarning: string | null = null;
+
+      if (sourceUrls.length) {
+        try {
+          crawledText = await crawlUrls(
+            sourceUrls,
+            (person.research_depth as CrawlDepth) ?? 'deep'
+          );
+        } catch (err) {
+          if (!userText) {
+            throw err;
+          }
+          crawlWarning = err instanceof Error
+            ? `Some URLs could not be read: ${err.message}`
+            : 'Some URLs could not be read.';
+        }
+      }
+
+      const rawContent = combineSourceMaterial(userText, crawledText, crawlWarning);
 
       if (cancelled) return;
 
       await db
         .update(people)
         .set({
-          crawled_content: { content: rawContent },
+          crawled_content: crawlWarning
+            ? { content: rawContent, metadata: { crawl_warning: crawlWarning } }
+            : { content: rawContent },
           crawl_status: 'complete',
+          crawl_error: crawlWarning,
           analysis_status: 'analyzing',
           updated_at: new Date(),
         })

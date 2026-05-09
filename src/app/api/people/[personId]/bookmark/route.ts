@@ -23,13 +23,16 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const current = rows[0].person;
-  const isBookmarked = current.board_status === 'bookmarked';
+  const nextBoardStatus =
+    current.board_status === 'bookmarked'
+      ? null
+      : current.board_status ?? 'bookmarked';
 
   const [updated] = await db
     .update(people)
     .set({
-      board_status: isBookmarked ? null : 'bookmarked',
-      expires_at: null,   // keep permanent regardless of toggle direction
+      board_status: nextBoardStatus,
+      expires_at: null,
       updated_at: new Date(),
     })
     .where(eq(people.id, personId))

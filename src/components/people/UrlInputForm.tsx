@@ -2,9 +2,10 @@ import { useState } from 'react';
 import styles from './UrlInputForm.module.css';
 
 type Props = {
-  onSubmit: (urls: string[], depth: 'quick' | 'deep') => Promise<void>;
+  onSubmit: (urls: string[], depth: 'quick' | 'deep', pastedText: string) => Promise<void>;
   onCancel?: () => void;
   initialUrls?: string[];
+  initialPastedText?: string | null;
   submitLabel?: string;
 };
 
@@ -12,17 +13,34 @@ function isValidUrl(val: string) {
   try { new URL(val); return true; } catch { return false; }
 }
 
-export function UrlInputForm({ onSubmit, onCancel, initialUrls, submitLabel = 'Research' }: Props) {
+export function UrlInputForm({
+  onSubmit,
+  onCancel,
+  initialUrls,
+  initialPastedText,
+  submitLabel = 'Research',
+}: Props) {
   const [urls, setUrls] = useState<string[]>(initialUrls?.length ? initialUrls : ['']);
+  const [pastedText, setPastedText] = useState(initialPastedText ?? '');
   const [depth, setDepth] = useState<'quick' | 'deep'>('deep');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const validUrls = urls.map((u) => u.trim()).filter(Boolean);
-  const canSubmit = validUrls.length > 0 && validUrls.every(isValidUrl) && !submitting;
+  const cleanedPastedText = pastedText.trim();
+  const canSubmit =
+    (validUrls.length > 0 || cleanedPastedText.length > 0) &&
+    validUrls.every(isValidUrl) &&
+    cleanedPastedText.length <= 50_000 &&
+    !submitting;
 
   function handleUrlChange(idx: number, val: string) {
     setUrls((prev) => prev.map((u, i) => (i === idx ? val : u)));
+    if (error) setError('');
+  }
+
+  function handlePastedTextChange(val: string) {
+    setPastedText(val);
     if (error) setError('');
   }
 
@@ -38,14 +56,15 @@ export function UrlInputForm({ onSubmit, onCancel, initialUrls, submitLabel = 'R
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const cleaned = validUrls;
-    if (!cleaned.length) { setError('Enter at least one URL.'); return; }
+    if (!cleaned.length && !cleanedPastedText) { setError('Enter at least one URL or paste profile text.'); return; }
     const invalid = cleaned.find((u) => !isValidUrl(u));
     if (invalid) { setError(`Not a valid URL: ${invalid}`); return; }
+    if (cleanedPastedText.length > 50_000) { setError('Pasted text must be 50,000 characters or less.'); return; }
 
     setSubmitting(true);
     setError('');
     try {
-      await onSubmit(cleaned, depth);
+      await onSubmit(cleaned, depth, cleanedPastedText);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
       setSubmitting(false);
@@ -54,7 +73,7 @@ export function UrlInputForm({ onSubmit, onCancel, initialUrls, submitLabel = 'R
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
-      <p className={styles.hint}>LinkedIn, personal site, GitHub — paste one or more URLs</p>
+      <p className={styles.hint}>Paste URLs, profile text, or both. For LinkedIn, paste copied profile text.</p>
 
       <div className={styles.urlList}>
         {urls.map((url, idx) => (
@@ -90,6 +109,16 @@ export function UrlInputForm({ onSubmit, onCancel, initialUrls, submitLabel = 'R
           + Add another URL
         </button>
       )}
+
+      <textarea
+        className={styles.textarea}
+        placeholder="Paste copied profile text here..."
+        value={pastedText}
+        onChange={(e) => handlePastedTextChange(e.target.value)}
+        disabled={submitting}
+        rows={5}
+      />
+      <p className={styles.count}>{cleanedPastedText.length.toLocaleString()} / 50,000</p>
 
       <div className={styles.depthRow}>
         <span className={styles.depthLabel}>Research depth</span>

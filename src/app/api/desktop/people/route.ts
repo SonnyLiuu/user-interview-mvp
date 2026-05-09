@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, projects } from '@/lib/db/schema';
 import { getDesktopUser } from '@/lib/desktop-auth';
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     })
     .from(people)
     .innerJoin(projects, eq(people.project_id, projects.id))
-    .where(eq(projects.user_id, user.id))
+    .where(and(eq(projects.user_id, user.id), eq(projects.is_archived, false)))
     .orderBy(desc(people.updated_at))
     .limit(50);
 

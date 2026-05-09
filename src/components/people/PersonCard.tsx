@@ -30,17 +30,24 @@ function CardActive({
   onCreated,
   onCancel,
   initialUrls,
+  initialPastedText,
 }: {
   projectId: string;
   onCreated: (person: Person) => void;
   onCancel?: () => void;
   initialUrls?: string[];
+  initialPastedText?: string | null;
 }) {
-  async function handleSubmit(urls: string[], depth: 'quick' | 'deep') {
+  async function handleSubmit(urls: string[], depth: 'quick' | 'deep', pastedText: string) {
     const res = await fetch('/api/people', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_id: projectId, source_urls: urls, research_depth: depth }),
+      body: JSON.stringify({
+        project_id: projectId,
+        source_urls: urls,
+        raw_pasted_text: pastedText || undefined,
+        research_depth: depth,
+      }),
     });
 
     if (!res.ok) {
@@ -67,7 +74,12 @@ function CardActive({
 
   return (
     <div className={styles.active}>
-      <UrlInputForm onSubmit={handleSubmit} onCancel={onCancel} initialUrls={initialUrls} />
+      <UrlInputForm
+        onSubmit={handleSubmit}
+        onCancel={onCancel}
+        initialUrls={initialUrls}
+        initialPastedText={initialPastedText}
+      />
     </div>
   );
 }
@@ -289,6 +301,7 @@ export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, o
             onCreated(newPerson);
           }}
           initialUrls={(person.source_urls as string[]) ?? []}
+          initialPastedText={person.raw_pasted_text}
         />
       </div>
     );

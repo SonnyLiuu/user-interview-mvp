@@ -24,7 +24,6 @@ function formatDate(d: Date | null | undefined) {
 
 function CardContent({ person, bookmarked, stage }: { person: Person; bookmarked: boolean; stage: CRMStage }) {
   const scheduledDate = stage === 'scheduled' ? formatDate(person.call_scheduled_at) : null;
-  const lastContactedDate = stage === 'sent' ? formatDate(person.last_contacted_at) : null;
 
   return (
     <div className={styles.cardBody}>
@@ -47,7 +46,6 @@ function CardContent({ person, bookmarked, stage }: { person: Person; bookmarked
       )}
 
       {scheduledDate && <p className={styles.meta}>Call: {scheduledDate}</p>}
-      {lastContactedDate && <p className={styles.meta}>Sent: {lastContactedDate}</p>}
 
       {person.outcome && (
         <span className={styles.outcomeBadge}>{person.outcome.replace('_', ' ')}</span>
@@ -70,6 +68,7 @@ function CardActions({ person, stage, slug, initialHasBrief, onPersonUpdate }: {
   const [scheduledAt, setScheduledAt] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
   const [briefError, setBriefError] = useState<string | null>(null);
+  const [outreachError, setOutreachError] = useState<string | null>(null);
   const [hasBrief, setHasBrief] = useState(initialHasBrief);
 
   useEffect(() => {
@@ -117,6 +116,29 @@ function CardActions({ person, stage, slug, initialHasBrief, onPersonUpdate }: {
     }
   }
 
+  async function handleGenerateOutreach(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setLoading('outreach');
+    setOutreachError(null);
+    try {
+      const res = await fetch(`/api/people/${person.id}/outreach`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (body?.code === BACKEND_ERROR_CODES.foundationRequired) {
+          setOutreachError('Complete project foundation first.');
+        } else {
+          setOutreachError('Could not generate outreach. Try again on the person page.');
+        }
+        return;
+      }
+      await res.json().catch(() => null);
+      router.push(`/dashboard/${slug}/people/${person.id}#outreach`);
+    } finally {
+      setLoading(null);
+    }
+  }
+
   async function handleSchedule(e: React.FormEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -137,13 +159,15 @@ function CardActions({ person, stage, slug, initialHasBrief, onPersonUpdate }: {
   if (stage === 'to_contact') {
     return (
       <div className={styles.cardActions}>
-        <Link
-          href={`/dashboard/${slug}/people/${person.id}#outreach`}
+        <button
+          type="button"
           className={styles.cardActionBtn}
-          onClick={(e) => e.stopPropagation()}
+          onClick={handleGenerateOutreach}
+          disabled={loading === 'outreach'}
         >
-          Generate outreach message
-        </Link>
+          {loading === 'outreach' ? 'Generating...' : 'Generate outreach message'}
+        </button>
+        {outreachError && <p className={styles.cardErrorText}>{outreachError}</p>}
       </div>
     );
   }
@@ -265,14 +289,13 @@ export function CRMPersonCard({ person, slug, initialHasBrief, onPersonUpdate }:
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`${styles.card} ${bookmarked ? styles.cardBookmarked : ''}`}
+      className={`${styles.card} ${bookmarked ? styles.cardBookmarked : ''} ${isDragging ? styles.cardDragging : ''}`}
       {...attributes}
     >
       <Link href={`/dashboard/${slug}/people/${person.id}`} className={styles.cardLink} {...listeners}>

@@ -9,6 +9,7 @@ import {
   type DragEndEvent,
   type CollisionDetection,
   DragOverlay,
+  type DragOverEvent,
 } from '@dnd-kit/core';
 
 const centerInsideDroppable: CollisionDetection = ({ droppableContainers, collisionRect }) => {
@@ -57,6 +58,7 @@ function groupByStage(people: Person[]): Record<CRMStage, Person[]> {
 export function BoardPageClient({ initialPeople, slug, initialCallBriefPersonIds }: Props) {
   const [people, setPeople] = useState<Person[]>(initialPeople);
   const [activePerson, setActivePerson] = useState<Person | null>(null);
+  const [overStage, setOverStage] = useState<CRMStage | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const groups = groupByStage(people);
@@ -66,16 +68,27 @@ export function BoardPageClient({ initialPeople, slug, initialCallBriefPersonIds
     setPeople((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
   }
 
+  function resolveOverStage(over: DragOverEvent['over']): CRMStage | null {
+    if (!over) return null;
+    return (over.data.current?.stage ?? over.id) as CRMStage;
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    setOverStage(resolveOverStage(event.over));
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActivePerson(null);
+    setOverStage(null);
     if (!over) return;
 
     const personId = active.id as string;
 
     // over.id is either a stage string (empty column droppable) or a card UUID
     // (sortable item). Resolve the stage from data.current in both cases.
-    const targetStage = (over.data.current?.stage ?? over.id) as CRMStage;
+    const targetStage = resolveOverStage(over);
+    if (!targetStage) return;
 
     const person = people.find((p) => p.id === personId);
     if (!person) return;
@@ -87,7 +100,7 @@ export function BoardPageClient({ initialPeople, slug, initialCallBriefPersonIds
     setPeople((prev) =>
       prev.map((p) =>
         p.id === personId
-          ? { ...p, board_status: stageToBoardStatus(targetStage), updated_at: new Date() }
+          ? { ...p, board_status: stageToBoardStatus(targetStage), expires_at: null, updated_at: new Date() }
           : p
       )
     );
@@ -124,8 +137,12 @@ export function BoardPageClient({ initialPeople, slug, initialCallBriefPersonIds
           const person = people.find((p) => p.id === e.active.id);
           if (person) setActivePerson(person);
         }}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
-        onDragCancel={() => setActivePerson(null)}
+        onDragCancel={() => {
+          setActivePerson(null);
+          setOverStage(null);
+        }}
       >
         <div className={styles.board}>
           {CRM_STAGES.map(({ id, label }) => (
@@ -136,6 +153,7 @@ export function BoardPageClient({ initialPeople, slug, initialCallBriefPersonIds
               people={groups[id]}
               slug={slug}
               callBriefPersonIds={callBriefPersonIds}
+              isDropTarget={overStage === id}
               onPersonUpdate={handlePersonUpdate}
             />
           ))}

@@ -10,7 +10,7 @@ type ProjectContext = {
 
 const MAX_CRAWLED_CONTENT_CHARS = 24_000;
 
-function limitCrawledContent(content: string) {
+function limitSourceMaterial(content: string) {
   if (content.length <= MAX_CRAWLED_CONTENT_CHARS) {
     return content;
   }
@@ -21,7 +21,7 @@ export async function analyzePerson(
   crawledContent: string,
   projectContext: ProjectContext
 ): Promise<PersonAnalysis> {
-  const analysisContent = limitCrawledContent(crawledContent);
+  const analysisContent = limitSourceMaterial(crawledContent);
   const prompt = `You are an expert at helping early-stage founders identify the most valuable people to learn from during customer discovery.
 
 FOUNDER'S PROJECT CONTEXT:
@@ -30,14 +30,16 @@ Target customer: ${projectContext.target_customer ?? 'Not specified'}
 Key assumptions to validate: ${projectContext.key_assumptions?.join('; ') ?? 'Not specified'}
 Most promising avenues: ${projectContext.most_promising_avenues?.join('; ') ?? 'Not specified'}
 
-CRAWLED INFORMATION ABOUT THIS PERSON:
+SOURCE MATERIAL ABOUT THIS PERSON:
 ${analysisContent}
 
 Analyze this person's relevance to the founder's discovery goals. Be honest and specific — do not inflate relevance. If this person is genuinely a weak match, say so.
 
 For recommended_questions: write questions the founder could ask this specific person that would validate or invalidate the project's key assumptions. Make them conversational and concrete, not generic.
 
-For contact_info: extract any email, Twitter/X handle, LinkedIn URL, or personal website found in the crawled content. Only include what is actually present.
+For contact_info: extract any email, Twitter/X handle, LinkedIn URL, or personal website found in the source material. Only include what is actually present.
+
+The source material may include user-pasted profile text, crawled web sources, or both. Treat user-pasted profile text as valid source material, especially for LinkedIn profiles that cannot be crawled.
 
 For relevance_rank: score against the founder's specific hypothesis, customer type, and learning value.
 - high: directly matches the target customer or buyer; currently experiences the pain; controls budget for this type of solution; or is actively doing the exact workflow the founder wants to understand.

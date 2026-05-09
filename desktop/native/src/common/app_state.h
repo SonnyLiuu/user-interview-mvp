@@ -22,6 +22,10 @@ struct Topic {
     std::wstring label;
     TopicCategory category = TopicCategory::Goal;
     bool checked = false;
+    std::wstring checkedBy;
+    std::wstring checkedAt;
+    std::wstring evidence;
+    bool manualOverride = false;
 };
 
 struct DesktopSettings {
@@ -38,6 +42,9 @@ struct AppState {
     std::wstring selectedPersonId;
     std::wstring selectedPersonName;
     std::wstring sessionStartedAt;
+    std::wstring liveSessionId;
+    std::wstring liveToken;
+    std::wstring foundryBaseUrl;
     std::vector<Topic> topics;
 };
 

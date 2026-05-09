@@ -11,14 +11,16 @@ type Props = {
   people: Person[];
   slug: string;
   callBriefPersonIds: Set<string>;
+  isDropTarget: boolean;
   onPersonUpdate: (updated: Person) => void;
 };
 
-export function BoardColumn({ stage, label, people, slug, callBriefPersonIds, onPersonUpdate }: Props) {
+export function BoardColumn({ stage, label, people, slug, callBriefPersonIds, isDropTarget, onPersonUpdate }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: stage, data: { stage } });
+  const isActiveTarget = isDropTarget || isOver;
 
   return (
-    <div className={`${styles.column} ${isOver ? styles.over : ''}`}>
+    <div className={`${styles.column} ${isActiveTarget ? styles.over : ''}`}>
       <div className={styles.header}>
         <span className={styles.label}>{label}</span>
         <span className={styles.count}>{people.length}</span>
