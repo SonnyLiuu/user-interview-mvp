@@ -15,10 +15,6 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-.cardBookmarked {
-  border-left: 3px solid #a4532b;
-}
-
 .cardOverlay {
   box-shadow: 0 12px 28px rgba(45, 31, 19, 0.18);
   cursor: grabbing;
@@ -47,13 +43,6 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 2px;
-}
-
-.bookmarkPip {
-  width: 9px;
-  height: 10px;
-  flex-shrink: 0;
-  color: #a4532b;
 }
 
 .name {

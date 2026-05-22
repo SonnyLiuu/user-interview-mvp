@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users, person_events } from '@/lib/db/schema';
+import { outreach, people, projects, users, person_events } from '@/lib/db/schema';
 
 type Params = { params: Promise<{ personId: string }> };
 
-export async function POST(_req: NextRequest, { params }: Params) {
+export async function POST(req: NextRequest, { params }: Params) {
   const { userId: clerkUserId } = await auth();
   if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { personId } = await params;
+  const body = await req.json().catch(() => ({})) as { body?: unknown };
+  const sentBody = typeof body.body === 'string' ? body.body.trim() : '';
 
   const rows = await db
-    .select({ person: people })
+    .select({ person: people, projectSlug: projects.slug, projectId: projects.id })
     .from(people)
     .innerJoin(projects, eq(people.project_id, projects.id))
     .innerJoin(users, eq(projects.user_id, users.id))
@@ -35,5 +38,31 @@ export async function POST(_req: NextRequest, { params }: Params) {
     metadata: {},
   });
 
-  return NextResponse.json(updated);
+  let savedOutreach = null;
+  if (sentBody) {
+    const [currentOutreach] = await db
+      .select({ id: outreach.id, content: outreach.content })
+      .from(outreach)
+      .where(and(eq(outreach.person_id, personId), eq(outreach.is_current, true)))
+      .limit(1);
+
+    if (currentOutreach) {
+      [savedOutreach] = await db
+        .update(outreach)
+        .set({ content: { ...(currentOutreach.content ?? {}), body: sentBody } })
+        .where(eq(outreach.id, currentOutreach.id))
+        .returning({ id: outreach.id, content: outreach.content });
+    } else {
+      [savedOutreach] = await db
+        .insert(outreach)
+        .values({ person_id: personId, content: { body: sentBody } })
+        .returning({ id: outreach.id, content: outreach.content });
+    }
+  }
+
+  const projectPath = rows[0].projectSlug ?? rows[0].projectId;
+  revalidatePath(`/dashboard/${projectPath}/board`);
+  revalidatePath(`/dashboard/${projectPath}/people`);
+
+  return NextResponse.json({ person: updated, outreach: savedOutreach });
 }

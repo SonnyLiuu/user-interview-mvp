@@ -14,16 +14,28 @@ function getClient() {
   return client;
 }
 
+const MAX_OUTPUT_TOKENS = 8192;
+
 export async function generateObject<T>(prompt: string, schema: object, model = env.ANTHROPIC_MODEL): Promise<T> {
   const msg = await getClient().messages.create({
     model,
-    max_tokens: 4096,
+    max_tokens: MAX_OUTPUT_TOKENS,
     tools: [{ name: 'output', description: 'Return structured output', input_schema: schema as Anthropic.Tool['input_schema'] }],
     tool_choice: { type: 'tool', name: 'output' },
     messages: [{ role: 'user', content: prompt }],
   });
+
+  if (msg.stop_reason === 'max_tokens') {
+    throw new AIProviderError(
+      `Anthropic response truncated at ${MAX_OUTPUT_TOKENS} tokens (stop_reason=max_tokens)`,
+      'anthropic',
+      undefined,
+      true,
+    );
+  }
+
   const block = msg.content[0];
-  if (block.type !== 'tool_use') {
+  if (!block || block.type !== 'tool_use') {
     throw new AIProviderError('Expected tool use response from Anthropic API', 'anthropic');
   }
   return block.input as T;

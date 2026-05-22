@@ -14,9 +14,12 @@ function getClient() {
   return client;
 }
 
+const MAX_OUTPUT_TOKENS = 8192;
+
 export async function generateObject<T>(prompt: string, schema: object, model = env.OPENAI_MODEL): Promise<T> {
   const res = await getClient().chat.completions.create({
     model,
+    max_tokens: MAX_OUTPUT_TOKENS,
     messages: [{ role: 'user', content: prompt }],
     tools: [{
       type: 'function',
@@ -28,9 +31,33 @@ export async function generateObject<T>(prompt: string, schema: object, model = 
     }],
     tool_choice: { type: 'function', function: { name: 'output' } },
   });
-  const toolCall = res.choices[0].message.tool_calls?.[0];
+
+  const choice = res.choices[0];
+  const finishReason = choice?.finish_reason;
+
+  if (finishReason === 'length') {
+    throw new AIProviderError(
+      `OpenAI response truncated at ${MAX_OUTPUT_TOKENS} tokens (finish_reason=length)`,
+      'openai',
+      undefined,
+      true,
+    );
+  }
+
+  const toolCall = choice?.message.tool_calls?.[0];
   if (!toolCall || toolCall.type !== 'function') {
     throw new AIProviderError('No function call in OpenAI response', 'openai');
   }
-  return JSON.parse(toolCall.function.arguments) as T;
+
+  try {
+    return JSON.parse(toolCall.function.arguments) as T;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new AIProviderError(
+      `Failed to parse OpenAI tool arguments (finish_reason=${finishReason}): ${msg}`,
+      'openai',
+      undefined,
+      true,
+    );
+  }
 }

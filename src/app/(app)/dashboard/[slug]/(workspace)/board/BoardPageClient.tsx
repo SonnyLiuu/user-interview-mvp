@@ -23,7 +23,7 @@ const centerInsideDroppable: CollisionDetection = ({ droppableContainers, collis
   return [];
 };
 import type { Person } from '@/lib/db/schema';
-import { CRM_STAGES, boardStatusToStage, stageToBoardStatus, isBookmarked, type CRMStage } from '@/lib/crm';
+import { CRM_STAGES, boardStatusToStage, stageToBoardStatus, type CRMStage } from '@/lib/crm';
 import { BoardColumn } from '@/components/board/BoardColumn';
 import { CRMPersonCard, CRMPersonCardOverlay } from '@/components/board/CRMPersonCard';
 import styles from './BoardPageClient.module.css';
@@ -43,14 +43,6 @@ function groupByStage(people: Person[]): Record<CRMStage, Person[]> {
   };
   for (const p of people) {
     groups[boardStatusToStage(p.board_status)].push(p);
-  }
-  // Bookmarked people float to the top of their column
-  for (const stage of Object.keys(groups) as CRMStage[]) {
-    groups[stage].sort((a, b) => {
-      const aB = isBookmarked(a.board_status) ? 0 : 1;
-      const bB = isBookmarked(b.board_status) ? 0 : 1;
-      return aB - bB;
-    });
   }
   return groups;
 }

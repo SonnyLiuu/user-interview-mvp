@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import type { Person, PersonAnalysis, Transcript, CallPrepContent, OutreachContent } from '@/lib/db/schema';
 import { PersonaBubble } from '@/components/people/PersonaBubble';
 import type { PersonaType } from '@/components/people/PersonaBubble';
@@ -20,6 +20,78 @@ type Props = {
   initialCallPrep: { id: string; content: CallPrepContent | null } | null;
   initialTranscripts: Transcript[];
 };
+
+// ── Source derivation ─────────────────────────────────────────────────────────
+//
+// The AI sometimes can't extract a LinkedIn URL — typically when the user
+// pasted profile text because the LinkedIn crawl was blocked. In that case
+// the URL still lives on the person (in source_urls, or sometimes inline in
+// the pasted text). Fall through a priority cascade to surface it.
+
+const LINKEDIN_URL_RE = /https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/in\/[^\s)]+/i;
+const TWITTER_URL_RE = /https?:\/\/(?:www\.)?(?:twitter|x)\.com\/[^\s)]+/i;
+
+function findUrl(re: RegExp, ...haystacks: (string | undefined | null)[]): string | undefined {
+  for (const h of haystacks) {
+    if (!h) continue;
+    const m = h.match(re);
+    if (m) return m[0];
+  }
+  return undefined;
+}
+
+function pickFromSourceUrls(sourceUrls: string[], predicate: (u: string) => boolean): string | undefined {
+  return sourceUrls.find(predicate);
+}
+
+type DerivedSources = {
+  email?: string;
+  linkedin?: string;
+  twitter?: string;
+  website?: string;
+  linkedinPastedNoUrl: boolean;
+};
+
+function deriveSources(person: Person, analysis: PersonAnalysis | null): DerivedSources {
+  const contact = analysis?.contact_info ?? {};
+  const sourceUrls = person.source_urls ?? [];
+  const additionalContext = (person.additional_context ?? []).join('\n');
+  const pastedText = person.raw_pasted_text ?? '';
+
+  const linkedin =
+    contact.linkedin ||
+    pickFromSourceUrls(sourceUrls, (u) => /linkedin\.com\/in\//i.test(u)) ||
+    findUrl(LINKEDIN_URL_RE, pastedText, additionalContext);
+
+  const twitter =
+    contact.twitter ||
+    pickFromSourceUrls(sourceUrls, (u) => /(?:^|\/\/)(?:www\.)?(?:twitter|x)\.com\//i.test(u)) ||
+    findUrl(TWITTER_URL_RE, pastedText, additionalContext);
+
+  const website =
+    contact.website ||
+    pickFromSourceUrls(sourceUrls, (u) =>
+      !/linkedin\.com/i.test(u) && !/(?:twitter|x)\.com/i.test(u)
+    );
+
+  // If text was pasted and looks LinkedIn-shaped but we still couldn't find a
+  // URL, flag it so the UI can render "LinkedIn — URL not provided" instead of
+  // pretending no profile exists.
+  const haystack = `${pastedText}\n${additionalContext}`;
+  const looksLikeLinkedIn =
+    /linkedin/i.test(haystack) ||
+    /\bView .+?'s full profile\b/i.test(haystack) ||
+    (/\bConnections?\b/i.test(haystack) && /\bExperience\b/i.test(haystack));
+  const linkedinPastedNoUrl = !linkedin && pastedText.trim().length > 0 && looksLikeLinkedIn;
+
+  return {
+    email: contact.email,
+    linkedin,
+    twitter,
+    website,
+    linkedinPastedNoUrl,
+  };
+}
 
 // ── CRM Stage Breadcrumb ──────────────────────────────────────────────────────
 
@@ -282,13 +354,16 @@ function TranscriptSection({ personId, stage, initialTranscripts }: TranscriptSe
 export function PersonDetailClient({ person: initialPerson, slug, initialOutreach, initialCallPrep, initialTranscripts }: Props) {
   const router = useRouter();
   const [person, setPerson] = useState<Person>(initialPerson);
+  const [savedOutreach, setSavedOutreach] = useState(initialOutreach);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
   const [showContextForm, setShowContextForm] = useState(false);
   const [recrawling, setRecrawling] = useState(false);
   const [copyingOutreach, setCopyingOutreach] = useState(false);
 
   const analysis = person.analysis as PersonAnalysis | null;
-  const contact = analysis?.contact_info;
+  const sources = deriveSources(person, analysis);
+  const hasAnySource =
+    !!sources.email || !!sources.linkedin || !!sources.twitter || !!sources.website || sources.linkedinPastedNoUrl;
   const stage = boardStatusToStage(person.board_status);
 
   useEffect(() => {
@@ -357,10 +432,18 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
     await navigator.clipboard.writeText(text);
     setCopyingOutreach(true);
     try {
-      const res = await fetch(`/api/people/${person.id}/outreach-sent`, { method: 'POST' });
+      const res = await fetch(`/api/people/${person.id}/outreach-sent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: text }),
+      });
       if (res.ok) {
-        const updated = await res.json() as Person;
-        setPerson(updated);
+        const data = await res.json() as { person: Person; outreach: OutreachRow | null };
+        setPerson(data.person);
+        if (data.outreach) setSavedOutreach(data.outreach);
+        // Backend already moved the person to the `sent` board column; send the
+        // user back to the board so they can see the new position.
+        router.push(`/dashboard/${slug}/board`);
       }
     } finally {
       setCopyingOutreach(false);
@@ -477,18 +560,28 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
             </section>
           ) : null}
 
-          {/* ── Contact info ────────────────────────────────────────────── */}
+          {/* ── Sources ─────────────────────────────────────────────────── */}
           <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Contact</h2>
-            {contact && Object.values(contact).some(Boolean) ? (
+            <h2 className={styles.sectionTitle}>Sources</h2>
+            {hasAnySource ? (
               <dl className={styles.contactGrid}>
-                {contact.email && <><dt className={styles.contactKey}>Email</dt><dd className={styles.contactVal}>{contact.email}</dd></>}
-                {contact.linkedin && <><dt className={styles.contactKey}>LinkedIn</dt><dd className={styles.contactVal}><a href={contact.linkedin} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{contact.linkedin}</a></dd></>}
-                {contact.twitter && <><dt className={styles.contactKey}>Twitter</dt><dd className={styles.contactVal}>{contact.twitter}</dd></>}
-                {contact.website && <><dt className={styles.contactKey}>Website</dt><dd className={styles.contactVal}><a href={contact.website} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{contact.website}</a></dd></>}
+                {sources.email && (
+                  <><dt className={styles.contactKey}>Email</dt><dd className={styles.contactVal}>{sources.email}</dd></>
+                )}
+                {sources.linkedin ? (
+                  <><dt className={styles.contactKey}>LinkedIn</dt><dd className={styles.contactVal}><a href={sources.linkedin} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.linkedin}</a></dd></>
+                ) : sources.linkedinPastedNoUrl ? (
+                  <><dt className={styles.contactKey}>LinkedIn</dt><dd className={styles.contactVal}>URL not provided (pasted profile)</dd></>
+                ) : null}
+                {sources.twitter && (
+                  <><dt className={styles.contactKey}>Twitter</dt><dd className={styles.contactVal}><a href={sources.twitter} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.twitter}</a></dd></>
+                )}
+                {sources.website && (
+                  <><dt className={styles.contactKey}>Website</dt><dd className={styles.contactVal}><a href={sources.website} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.website}</a></dd></>
+                )}
               </dl>
             ) : (
-              <p className={styles.notFound}>Contact information not found in crawled content.</p>
+              <p className={styles.notFound}>No sources found.</p>
             )}
           </section>
 
@@ -500,33 +593,29 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
                 <p className={styles.outreachHint}>
                   Write your outreach message below, then click <strong>Copy &amp; mark sent</strong> to move this person to the Sent stage.
                 </p>
-                <OutreachComposer personId={person.id} slug={slug} initialOutreach={initialOutreach} onCopy={handleCopyOutreach} copying={copyingOutreach} />
+                <OutreachComposer personId={person.id} slug={slug} initialOutreach={savedOutreach} onCopy={handleCopyOutreach} copying={copyingOutreach} />
               </div>
             ) : (
-              <p className={styles.notFound}>
-                Outreach sent.{person.last_contacted_at && <> Last contacted {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(person.last_contacted_at))}.</>}
-              </p>
+              <div className={styles.outreachBox}>
+                <p className={styles.notFound}>
+                  Outreach sent.{person.last_contacted_at && <> Last contacted {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(person.last_contacted_at))}.</>}
+                </p>
+                {savedOutreach?.content?.body && (
+                  <div className={styles.savedOutreach}>
+                    {savedOutreach.content.subject && (
+                      <p className={styles.outreachSubject}>
+                        <span className={styles.outreachSubjectLabel}>Subject:</span> {savedOutreach.content.subject}
+                      </p>
+                    )}
+                    <p className={styles.savedOutreachBody}>{savedOutreach.content.body}</p>
+                  </div>
+                )}
+              </div>
             )}
           </section>
 
           {/* ── Transcripts ─────────────────────────────────────────────── */}
           <TranscriptSection personId={person.id} stage={stage} initialTranscripts={initialTranscripts} />
-
-          {/* ── Source URLs ─────────────────────────────────────────────── */}
-          {person.source_urls?.length ? (
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Sources crawled</h2>
-              <ul className={styles.sourceList}>
-                {person.source_urls.map((url) => (
-                  <li key={url}>
-                    <a href={url} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>
-                      {url}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
 
           {person.raw_pasted_text ? (
             <section className={styles.section}>
@@ -740,9 +829,15 @@ function OutreachComposer({ personId, slug, initialOutreach, onCopy, copying }: 
   const [error, setError] = useState<OutreachError | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const autoTriggered = useRef(false);
+
   async function handleGenerate() {
     setGenerating(true);
     setError(null);
+    setText('');
     try {
       const res = await fetch(`/api/people/${personId}/outreach`, { method: 'POST' });
       if (res.ok) {
@@ -765,6 +860,22 @@ function OutreachComposer({ personId, slug, initialOutreach, onCopy, copying }: 
       setGenerating(false);
     }
   }
+
+  // Auto-generate when navigated here from the board with ?generate=outreach.
+  // Strip the param after firing so it doesn't re-trigger on rerender/back-nav.
+  useEffect(() => {
+    if (autoTriggered.current) return;
+    if (searchParams.get('generate') !== 'outreach') return;
+    autoTriggered.current = true;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('generate');
+    const qs = params.toString();
+    router.replace(`${pathname}${qs ? `?${qs}` : ''}#outreach`, { scroll: false });
+
+    handleGenerate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, pathname]);
 
   async function handleCopy() {
     if (!text.trim()) return;
@@ -808,10 +919,13 @@ function OutreachComposer({ personId, slug, initialOutreach, onCopy, copying }: 
 
       <textarea
         className={styles.outreachTextarea}
-        placeholder="Write or paste your outreach message here, or use Generate with AI above…"
+        placeholder={generating
+          ? 'Generating outreach message…'
+          : 'Write or paste your outreach message here, or use Generate with AI above…'}
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={6}
+        disabled={generating}
       />
       <button
         type="button"

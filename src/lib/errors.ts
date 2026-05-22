@@ -31,7 +31,8 @@ export class AIProviderError extends Error {
   constructor(
     message: string,
     public readonly provider: 'anthropic' | 'openai' | 'gemini',
-    public readonly statusCode?: number
+    public readonly statusCode?: number,
+    public readonly retryable: boolean = false,
   ) {
     super(message);
     this.name = 'AIProviderError';

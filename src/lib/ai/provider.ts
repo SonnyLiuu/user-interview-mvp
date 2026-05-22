@@ -1,6 +1,7 @@
 import { generateObject as generateOpenAIObject } from './providers/openai';
 import { generateObject as generateAnthropicObject } from './providers/anthropic';
 import { generateObject as generateGeminiObject } from './providers/gemini';
+import { AIProviderError } from '@/lib/errors';
 import { env } from '@/lib/server-env';
 
 type Provider = 'openai' | 'anthropic' | 'gemini';
@@ -17,5 +18,14 @@ function impl() {
 }
 
 export async function generateObject<T>(prompt: string, schema: object, model?: string): Promise<T> {
-  return impl()<T>(prompt, schema, model);
+  const call = impl();
+  try {
+    return await call<T>(prompt, schema, model);
+  } catch (err) {
+    if (err instanceof AIProviderError && err.retryable) {
+      console.warn(`[ai] retrying after retryable ${err.provider} error: ${err.message}`);
+      return await call<T>(prompt, schema, model);
+    }
+    throw err;
+  }
 }

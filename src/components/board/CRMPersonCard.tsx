@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Person } from '@/lib/db/schema';
-import { boardStatusToStage, isBookmarked, type CRMStage, type CRMOutcome } from '@/lib/crm';
+import { boardStatusToStage, type CRMStage, type CRMOutcome } from '@/lib/crm';
 import { BACKEND_ERROR_CODES } from '@/lib/error-codes';
 import styles from './CRMPersonCard.module.css';
 
@@ -22,17 +22,12 @@ function formatDate(d: Date | null | undefined) {
 
 // ── Pure visual content — no drag hooks, safe to use in DragOverlay ──────────
 
-function CardContent({ person, bookmarked, stage }: { person: Person; bookmarked: boolean; stage: CRMStage }) {
+function CardContent({ person, stage }: { person: Person; stage: CRMStage }) {
   const scheduledDate = stage === 'scheduled' ? formatDate(person.call_scheduled_at) : null;
 
   return (
     <div className={styles.cardBody}>
       <div className={styles.nameRow}>
-        {bookmarked && (
-          <svg viewBox="0 0 12 14" fill="currentColor" aria-label="Bookmarked" className={styles.bookmarkPip}>
-            <path d="M1 1h10v12l-5-3-5 3V1z" />
-          </svg>
-        )}
         <span className={styles.name}>{person.name}</span>
         {person.relevance_rank && (
           <span className={`${styles.rankDot} ${styles[`rank_${person.relevance_rank}`]}`} title={`${person.relevance_rank} match`} />
@@ -68,7 +63,6 @@ function CardActions({ person, stage, slug, initialHasBrief, onPersonUpdate }: {
   const [scheduledAt, setScheduledAt] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
   const [briefError, setBriefError] = useState<string | null>(null);
-  const [outreachError, setOutreachError] = useState<string | null>(null);
   const [hasBrief, setHasBrief] = useState(initialHasBrief);
 
   useEffect(() => {
@@ -116,27 +110,13 @@ function CardActions({ person, stage, slug, initialHasBrief, onPersonUpdate }: {
     }
   }
 
-  async function handleGenerateOutreach(e: React.MouseEvent) {
+  function handleGenerateOutreach(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    setLoading('outreach');
-    setOutreachError(null);
-    try {
-      const res = await fetch(`/api/people/${person.id}/outreach`, { method: 'POST' });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        if (body?.code === BACKEND_ERROR_CODES.foundationRequired) {
-          setOutreachError('Complete project foundation first.');
-        } else {
-          setOutreachError('Could not generate outreach. Try again on the person page.');
-        }
-        return;
-      }
-      await res.json().catch(() => null);
-      router.push(`/dashboard/${slug}/people/${person.id}#outreach`);
-    } finally {
-      setLoading(null);
-    }
+    // Navigate immediately; the OutreachComposer on the person page will
+    // kick off generation when it sees `?generate=outreach` and show its
+    // own loading state. Avoids blocking the board on a multi-second LLM call.
+    router.push(`/dashboard/${slug}/people/${person.id}?generate=outreach#outreach`);
   }
 
   async function handleSchedule(e: React.FormEvent) {
@@ -163,11 +143,9 @@ function CardActions({ person, stage, slug, initialHasBrief, onPersonUpdate }: {
           type="button"
           className={styles.cardActionBtn}
           onClick={handleGenerateOutreach}
-          disabled={loading === 'outreach'}
         >
-          {loading === 'outreach' ? 'Generating...' : 'Generate outreach message'}
+          Generate outreach message
         </button>
-        {outreachError && <p className={styles.cardErrorText}>{outreachError}</p>}
       </div>
     );
   }
@@ -279,7 +257,6 @@ function CardActions({ person, stage, slug, initialHasBrief, onPersonUpdate }: {
 
 export function CRMPersonCard({ person, slug, initialHasBrief, onPersonUpdate }: Props) {
   const stage = boardStatusToStage(person.board_status);
-  const bookmarked = isBookmarked(person.board_status);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: person.id,
@@ -295,11 +272,11 @@ export function CRMPersonCard({ person, slug, initialHasBrief, onPersonUpdate }:
     <div
       ref={setNodeRef}
       style={style}
-      className={`${styles.card} ${bookmarked ? styles.cardBookmarked : ''} ${isDragging ? styles.cardDragging : ''}`}
+      className={`${styles.card} ${isDragging ? styles.cardDragging : ''}`}
       {...attributes}
     >
       <Link href={`/dashboard/${slug}/people/${person.id}`} className={styles.cardLink} {...listeners}>
-        <CardContent person={person} bookmarked={bookmarked} stage={stage} />
+        <CardContent person={person} stage={stage} />
       </Link>
       <CardActions
         person={person}
@@ -316,12 +293,11 @@ export function CRMPersonCard({ person, slug, initialHasBrief, onPersonUpdate }:
 
 export function CRMPersonCardOverlay({ person }: { person: Person }) {
   const stage = boardStatusToStage(person.board_status);
-  const bookmarked = isBookmarked(person.board_status);
 
   return (
-    <div className={`${styles.card} ${bookmarked ? styles.cardBookmarked : ''} ${styles.cardOverlay}`}>
+    <div className={`${styles.card} ${styles.cardOverlay}`}>
       <div className={styles.cardLink}>
-        <CardContent person={person} bookmarked={bookmarked} stage={stage} />
+        <CardContent person={person} stage={stage} />
       </div>
     </div>
   );

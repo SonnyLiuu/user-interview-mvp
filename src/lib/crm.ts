@@ -40,7 +40,3 @@ export function boardStatusToStage(boardStatus: string | null): CRMStage {
 export function stageToBoardStatus(stage: CRMStage): BoardStatus {
   return STAGE_TO_DB[stage];
 }
-
-export function isBookmarked(boardStatus: string | null): boolean {
-  return boardStatus !== null;
-}

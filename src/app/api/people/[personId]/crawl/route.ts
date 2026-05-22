@@ -126,13 +126,16 @@ export async function POST(_req: NextRequest, { params }: Params) {
   after(async () => {
     const TIMEOUT_MS = 3 * 60 * 1000;
     let cancelled = false;
+    let timeoutHandle: NodeJS.Timeout | null = null;
 
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => {
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
         cancelled = true;
         reject(new Error('Research timed out after 3 minutes'));
-      }, TIMEOUT_MS)
-    );
+      }, TIMEOUT_MS);
+    });
+    // Prevent unhandled rejection when `work` wins the race.
+    timeout.catch(() => {});
 
     const work = (async () => {
       let crawledText = '';
@@ -207,6 +210,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
           updated_at: new Date(),
         })
         .where(eq(people.id, personId));
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
     }
   });
 
