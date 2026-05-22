@@ -45,6 +45,7 @@ struct AppState {
     std::wstring liveSessionId;
     std::wstring liveToken;
     std::wstring foundryBaseUrl;
+    std::wstring liveTranscriptRaw;
     std::vector<Topic> topics;
 };
 

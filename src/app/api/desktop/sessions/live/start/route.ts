@@ -9,7 +9,11 @@ type StartLiveSessionInput = {
 };
 
 function foundryBaseUrl() {
-  return env.FOUNDRY_API_BASE_URL || 'http://127.0.0.1:8001';
+  const raw = (env.FOUNDRY_API_BASE_URL || 'http://127.0.0.1:8001').trim();
+  if (/^https?:\/\//i.test(raw)) {
+    return raw;
+  }
+  return `http://${raw}`;
 }
 
 export async function POST(request: Request) {

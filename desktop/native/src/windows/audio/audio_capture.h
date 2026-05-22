@@ -9,7 +9,13 @@
 
 namespace foundry::windows::audio {
 
-using PcmChunkCallback = std::function<void(const std::vector<std::uint8_t>&)>;
+enum class AudioSource {
+    Loopback,
+    Microphone,
+};
+
+using PcmChunkCallback =
+    std::function<void(AudioSource, const std::vector<std::uint8_t>&)>;
 
 // Captures the default communications microphone and default render device
 // loopback as small mono PCM16 chunks at 24 kHz. This stays deliberately

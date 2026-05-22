@@ -158,11 +158,17 @@ Default URLs:
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk frontend key. |
 | `CLERK_SECRET_KEY` | Yes | Clerk server key. |
 | `CLERK_WEBHOOK_SECRET` | Yes | Clerk webhook signing secret. |
-| `AI_PROVIDER` | Yes | `openai`, `anthropic`, or `gemini`; defaults to OpenAI behavior. |
-| `OPENAI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=openai`. |
+| `AI_PROVIDER` | Yes | General AI provider for app generation flows: `openai`, `anthropic`, or `gemini`; defaults to OpenAI behavior. |
+| `OPENAI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=openai`; can also be used as the checklist Realtime fallback key. |
 | `ANTHROPIC_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=anthropic`. |
 | `GEMINI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=gemini`. |
 | `OPENAI_MODEL` | No | Defaults to `gpt-4o`. |
+| `CHECKLIST_AI_PROVIDER` | No | Desktop live-call checklist provider. Defaults to `openai`; use `azure` for Azure OpenAI Realtime or `mock` for local no-key smoke tests. |
+| `OPENAI_REALTIME_API_KEY` | No | Optional dedicated OpenAI key for the desktop live-call checklist; falls back to `OPENAI_API_KEY`. |
+| `OPENAI_REALTIME_MODEL` | No | Defaults to `gpt-realtime`; used by the desktop live-call auto-cross-off feature. |
+| `AZURE_OPENAI_REALTIME_ENDPOINT` | Required for Azure checklist | Azure OpenAI endpoint, for example `https://resource.openai.azure.com/openai/v1`. |
+| `AZURE_OPENAI_REALTIME_API_KEY` | Required for Azure checklist | Azure OpenAI/Foundry API key used only when `CHECKLIST_AI_PROVIDER=azure`. |
+| `AZURE_OPENAI_REALTIME_DEPLOYMENT` | Required for Azure checklist | Azure realtime deployment name, not necessarily the raw model name. |
 | `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
 | `GEMINI_MODEL` | No | Defaults to `gemini-2.0-flash`. |
@@ -177,11 +183,17 @@ Default URLs:
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | Postgres connection string. |
 | `FOUNDRY_BACKEND_SHARED_SECRET` | Yes | Must match root env. |
-| `AI_PROVIDER` | Yes | `openai`, `anthropic`, or `gemini`. |
-| `OPENAI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=openai`. |
+| `AI_PROVIDER` | Yes | General AI provider for app generation flows: `openai`, `anthropic`, or `gemini`. |
+| `OPENAI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=openai`; can also be used as the checklist Realtime fallback key. |
 | `ANTHROPIC_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=anthropic`. |
 | `GEMINI_API_KEY` | Provider-dependent | Required when `AI_PROVIDER=gemini`. |
 | `OPENAI_MODEL` | No | Defaults to `gpt-4o`. |
+| `CHECKLIST_AI_PROVIDER` | No | Desktop live-call checklist provider. Defaults to `openai`; use `azure` for Azure OpenAI Realtime or `mock` for local no-key smoke tests. |
+| `OPENAI_REALTIME_API_KEY` | No | Optional dedicated OpenAI key for the desktop live-call checklist; falls back to `OPENAI_API_KEY`. |
+| `OPENAI_REALTIME_MODEL` | No | Defaults to `gpt-realtime`; used by the desktop live-call auto-cross-off feature. |
+| `AZURE_OPENAI_REALTIME_ENDPOINT` | Required for Azure checklist | Azure OpenAI endpoint, for example `https://resource.openai.azure.com/openai/v1`. |
+| `AZURE_OPENAI_REALTIME_API_KEY` | Required for Azure checklist | Azure OpenAI/Foundry API key used only when `CHECKLIST_AI_PROVIDER=azure`. |
+| `AZURE_OPENAI_REALTIME_DEPLOYMENT` | Required for Azure checklist | Azure realtime deployment name, not necessarily the raw model name. |
 | `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
 | `GEMINI_MODEL` | No | Defaults to `gemini-2.0-flash`. |

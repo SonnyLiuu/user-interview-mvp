@@ -25,6 +25,23 @@ class LiveSessionEvent(BaseModel):
     data: dict
 
 
+class LiveTranscriptTurn(BaseModel):
+    speaker: str
+    source: str
+    text: str
+    created_at: str = Field(alias="createdAt")
+
+
+class LiveTopicOverrideRequest(BaseModel):
+    checked: bool
+
+
+class LiveTopicOverrideResponse(BaseModel):
+    session_id: str = Field(alias="sessionId")
+    topic: LiveTopic
+    event: LiveSessionEvent
+
+
 class LiveSessionResponse(BaseModel):
     session_id: str = Field(alias="sessionId")
     person_id: str = Field(alias="personId")
@@ -35,6 +52,8 @@ class LiveSessionResponse(BaseModel):
     started_at: str = Field(alias="startedAt")
     realtime_status: str = Field(default="pending", alias="realtimeStatus")
     realtime_error: str | None = Field(default=None, alias="realtimeError")
+    transcript_turns: list[LiveTranscriptTurn] = Field(default_factory=list, alias="transcriptTurns")
+    transcript_raw: str = Field(default="", alias="transcriptRaw")
     events: list[LiveSessionEvent] = Field(default_factory=list)
 
 
@@ -48,6 +67,8 @@ class LiveSessionStateResponse(BaseModel):
     ended_at: str | None = Field(default=None, alias="endedAt")
     realtime_status: str = Field(default="pending", alias="realtimeStatus")
     realtime_error: str | None = Field(default=None, alias="realtimeError")
+    transcript_turns: list[LiveTranscriptTurn] = Field(default_factory=list, alias="transcriptTurns")
+    transcript_raw: str = Field(default="", alias="transcriptRaw")
     events: list[LiveSessionEvent] = Field(default_factory=list)
 
 

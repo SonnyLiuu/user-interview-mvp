@@ -10,7 +10,7 @@ export type PersonaType =
 
 const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: string }> = {
   potential_user: {
-    label: 'Potential user',
+    label: 'Target user',
     mod: styles.user,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -20,7 +20,7 @@ const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: s
     ),
   },
   buyer: {
-    label: 'Buyer',
+    label: 'Decision maker',
     mod: styles.buyer,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -30,7 +30,7 @@ const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: s
     ),
   },
   operator: {
-    label: 'Operator',
+    label: 'Experienced builder',
     mod: styles.operator,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -40,7 +40,7 @@ const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: s
     ),
   },
   domain_expert: {
-    label: 'Domain expert',
+    label: 'Industry expert',
     mod: styles.expert,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -50,7 +50,7 @@ const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: s
     ),
   },
   skeptic: {
-    label: 'Skeptic',
+    label: 'Critical voice',
     mod: styles.skeptic,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -61,7 +61,7 @@ const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: s
     ),
   },
   connector: {
-    label: 'Connector',
+    label: 'Introducer',
     mod: styles.connector,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">

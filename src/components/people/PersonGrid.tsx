@@ -4,6 +4,7 @@ import styles from './PersonGrid.module.css';
 
 type Props = {
   people: Person[];
+  searchActive?: boolean;
   projectId: string;
   slug: string;
   onPersonCreated: (person: Person) => void;
@@ -25,12 +26,12 @@ function coverageGap(people: Person[]): string | null {
   if (!missing.length) return null;
 
   const labels: Record<string, string> = {
-    potential_user: 'potential users',
-    buyer: 'budget owners',
-    operator: 'operators',
-    domain_expert: 'domain experts',
-    skeptic: 'skeptics',
-    connector: 'connectors',
+    potential_user: 'target users',
+    buyer: 'decision makers',
+    operator: 'experienced builders',
+    domain_expert: 'industry experts',
+    skeptic: 'critical voices',
+    connector: 'introducers',
   };
 
   const present = Object.entries(counts)
@@ -43,35 +44,49 @@ function coverageGap(people: Person[]): string | null {
   return `You have ${present} and 0 ${gap}.`;
 }
 
-export function PersonGrid({ people, projectId, slug, onPersonCreated, onPersonUpdated, onPersonDeleted }: Props) {
+export function PersonGrid({
+  people,
+  searchActive = false,
+  projectId,
+  slug,
+  onPersonCreated,
+  onPersonUpdated,
+  onPersonDeleted,
+}: Props) {
   // Always have at least 6 slots; add a new row of 3 whenever all slots are filled
   const minSlots = Math.max(9, people.length + 1);
   const totalSlots = Math.ceil(minSlots / 3) * 3;
 
-  const slots = Array.from({ length: totalSlots }, (_, i) => people[i] ?? undefined);
+  const slots = searchActive
+    ? people
+    : Array.from({ length: totalSlots }, (_, i) => people[i] ?? undefined);
   const firstEmptyIdx = slots.findIndex((s) => !s);
 
-  const gap = coverageGap(people);
+  const gap = searchActive ? null : coverageGap(people);
 
   return (
     <div className={styles.wrap}>
       {gap && (
         <p className={styles.gapBanner} role="status">{gap}</p>
       )}
-      <div className={styles.grid}>
-        {slots.map((person, idx) => (
-          <PersonCard
-            key={person?.id ?? `empty-${idx}`}
-            person={person}
-            isFirstEmpty={idx === firstEmptyIdx}
-            projectId={projectId}
-            slug={slug}
-            onCreated={onPersonCreated}
-            onUpdated={onPersonUpdated}
-            onDeleted={onPersonDeleted}
-          />
-        ))}
-      </div>
+      {searchActive && people.length === 0 ? (
+        <p className={styles.searchEmpty} role="status">No people match your search.</p>
+      ) : (
+        <div className={styles.grid}>
+          {slots.map((person, idx) => (
+            <PersonCard
+              key={person?.id ?? `empty-${idx}`}
+              person={person}
+              isFirstEmpty={idx === firstEmptyIdx}
+              projectId={projectId}
+              slug={slug}
+              onCreated={onPersonCreated}
+              onUpdated={onPersonUpdated}
+              onDeleted={onPersonDeleted}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

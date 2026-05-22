@@ -70,8 +70,7 @@ std::vector<std::uint8_t> convertToMonoPcm24k(const BYTE* data,
     auto* outSamples = reinterpret_cast<int16_t*>(out.data());
 
     if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
-        std::fill(out.begin(), out.end(), 0);
-        return out;
+        return {};
     }
 
     for (UINT32 i = 0; i < outFrames; ++i) {
@@ -205,7 +204,8 @@ void MeetingAudioCapture::captureLoop(bool loopback) {
         captureClient->ReleaseBuffer(frames);
 
         if (!chunk.empty() && callback_) {
-            callback_(chunk);
+            callback_(loopback ? AudioSource::Loopback : AudioSource::Microphone,
+                      chunk);
         }
     }
 

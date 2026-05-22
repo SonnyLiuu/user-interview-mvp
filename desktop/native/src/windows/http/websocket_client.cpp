@@ -18,13 +18,23 @@ std::wstring errorFromLastError(const wchar_t* prefix) {
 }
 
 bool parseUrl(const std::wstring& url, ParsedUrl& parsed, std::wstring& error) {
+    std::wstring crackUrl = url;
+    if (crackUrl.rfind(L"wss://", 0) == 0) {
+        crackUrl.replace(0, 6, L"https://");
+    } else if (crackUrl.rfind(L"ws://", 0) == 0) {
+        crackUrl.replace(0, 5, L"http://");
+    } else if (crackUrl.rfind(L"http://", 0) != 0 &&
+               crackUrl.rfind(L"https://", 0) != 0) {
+        crackUrl = L"http://" + crackUrl;
+    }
+
     URL_COMPONENTSW parts{};
     parts.dwStructSize = sizeof(parts);
     parts.dwHostNameLength = static_cast<DWORD>(-1);
     parts.dwUrlPathLength = static_cast<DWORD>(-1);
     parts.dwExtraInfoLength = static_cast<DWORD>(-1);
 
-    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts)) {
+    if (!WinHttpCrackUrl(crackUrl.c_str(), 0, 0, &parts)) {
         error = errorFromLastError(L"WinHttpCrackUrl");
         return false;
     }
@@ -165,6 +175,9 @@ std::wstring webSocketUrlFromHttpBase(const std::wstring& baseUrl,
         base.replace(0, 8, L"wss://");
     } else if (base.rfind(L"http://", 0) == 0) {
         base.replace(0, 7, L"ws://");
+    } else if (base.rfind(L"wss://", 0) != 0 &&
+               base.rfind(L"ws://", 0) != 0) {
+        base = L"ws://" + base;
     }
     return base + pathAndQuery;
 }

@@ -71,7 +71,23 @@ Prereqs:
    npm run dev
    ```
 
-2. Build and run the signed desktop copy:
+2. Run the FastAPI service from repo root:
+
+   ```pwsh
+   cd services\foundry-api
+   .\.venv\Scripts\python.exe app/main.py
+   cd ..\..
+   ```
+
+   `services/foundry-api/.env.local` must include realtime checklist
+   credentials. For Azure, set `CHECKLIST_AI_PROVIDER=azure`,
+   `AZURE_OPENAI_REALTIME_ENDPOINT`, `AZURE_OPENAI_REALTIME_API_KEY`, and
+   `AZURE_OPENAI_REALTIME_DEPLOYMENT`. For public OpenAI, set
+   `CHECKLIST_AI_PROVIDER=openai` and either `OPENAI_REALTIME_API_KEY` or
+   `OPENAI_API_KEY`. The root `.env.local` must point `FOUNDRY_API_BASE_URL`
+   at this service, usually `http://127.0.0.1:8001`.
+
+3. Build and run the signed desktop copy:
 
    ```pwsh
    cd desktop\native
@@ -93,25 +109,34 @@ Gate:
    `%LOCALAPPDATA%\foundry\token.json`.
 5. Click **Start Session** with a saved token. The picker fetches
    `<base>/api/desktop/people` and lists people.
-6. Select a person. Native fetches
-   `<base>/api/desktop/people/[personId]/call-brief`, extracts goals,
-   questions, and signals, and renders them in the overlay.
-7. Click overlay topic rows to check/uncheck them. Checked rows show a checkmark
+6. Select a person. Native creates a live FastAPI session through
+   `<base>/api/desktop/sessions/live/start`. FastAPI loads the current call
+   brief, starts an OpenAI Realtime WebSocket, and returns the checklist,
+   `sessionId`, `liveToken`, and FastAPI base URL.
+7. Join a Zoom/Meet call using the normal Windows default speaker/mic devices.
+   Native streams default system audio and microphone audio to
+   `<foundryBaseUrl>/v1/desktop/live-sessions/[sessionId]/audio`; FastAPI
+   forwards 24 kHz mono PCM chunks to OpenAI Realtime.
+8. Ask one of the displayed questions, or cover one of the displayed goals.
+   A clearly covered goal/question should auto-check with strikethrough after
+   the Realtime model calls `mark_item_covered`. Signal rows are intentionally
+   not auto-checked in this V1.
+9. Click overlay topic rows to check/uncheck them. Checked rows show a checkmark
    and strikethrough.
-8. Drag the overlay somewhere obvious, quit, and relaunch. The position should
+10. Drag the overlay somewhere obvious, quit, and relaunch. The position should
    restore from `%LOCALAPPDATA%\foundry\desktop-settings.json`.
-9. Click **Reset overlay position** in Settings. The overlay should return to
+11. Click **Reset overlay position** in Settings. The overlay should return to
    the default top-right location.
-10. Click **End** on the overlay. The end-session form opens with checked and
+12. Click **End** on the overlay. The end-session form opens with checked and
    unchecked topic summaries.
-11. Paste notes or transcript text and click **Save**. Native POSTs to
+13. Paste notes or transcript text and click **Save**. Native POSTs to
     `<base>/api/desktop/sessions/end`.
-12. On success, the form shows saved, the overlay returns to idle, and the web
+14. On success, the form shows saved, the overlay returns to idle, and the web
     app database has:
     - an `interactions` row with `notes_raw`, `transcript_raw`, and
       `completed_at`
     - a `person_events` row with type `desktop_call_session_saved`
-13. Click **Quit** in the tray menu. The app exits cleanly.
+15. Click **Quit** in the tray menu. The app exits cleanly.
 
 ## Troubleshooting
 
@@ -125,6 +150,16 @@ Gate:
 - **Call brief fails to load** — check the Next.js terminal for
   `/api/desktop/people/[personId]/call-brief` errors. Brief generation may fail
   if AI provider keys are missing.
+- **Auto-cross-off does not start** — confirm FastAPI is running, root
+  `FOUNDRY_API_BASE_URL` points to it, and the FastAPI console does not show a
+  Realtime error. For Azure matching, set `CHECKLIST_AI_PROVIDER=azure` plus
+  the `AZURE_OPENAI_REALTIME_*` variables. For public OpenAI matching, set
+  `CHECKLIST_AI_PROVIDER=openai` and either `OPENAI_REALTIME_API_KEY` or
+  `OPENAI_API_KEY`. For no-key smoke tests, set `CHECKLIST_AI_PROVIDER=mock`.
+- **Audio connects but nothing crosses off** — confirm Zoom audio is playing
+  through the Windows default output device and your mic is the default
+  communications input. The Realtime prompt only marks existing goal/question
+  rows when evidence is clear.
 - **Save fails** — keep the end-session form open, check the displayed error,
   and inspect the Next.js terminal for `/api/desktop/sessions/end`. The session
   remains active until save succeeds.

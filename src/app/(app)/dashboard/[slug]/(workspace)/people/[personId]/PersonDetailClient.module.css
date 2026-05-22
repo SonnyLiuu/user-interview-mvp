@@ -496,6 +496,24 @@
 
 .outreachTextarea:focus { border-color: #a4532b; }
 
+.savedOutreach {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.savedOutreachBody {
+  margin: 0;
+  padding: 10px 12px;
+  color: #3a2a1e;
+  background: #fff;
+  border: 1px solid #d8c5ae;
+  border-radius: 8px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 /* ── Call Brief ──────────────────────────────────────────────────────────── */
 
 .callBriefHeader {

@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <winhttp.h>
 
+#include <iostream>
 #include <vector>
 
 namespace foundry::windows::http {
@@ -16,12 +17,18 @@ struct ParsedUrl {
 };
 
 bool parseUrl(const std::wstring& url, ParsedUrl& parsed) {
+    std::wstring crackUrl = url;
+    if (crackUrl.rfind(L"http://", 0) != 0 &&
+        crackUrl.rfind(L"https://", 0) != 0) {
+        crackUrl = L"http://" + crackUrl;
+    }
+
     URL_COMPONENTSW parts{};
     parts.dwStructSize = sizeof(parts);
     parts.dwHostNameLength = static_cast<DWORD>(-1);
     parts.dwUrlPathLength = static_cast<DWORD>(-1);
     parts.dwExtraInfoLength = static_cast<DWORD>(-1);
-    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts)) return false;
+    if (!WinHttpCrackUrl(crackUrl.c_str(), 0, 0, &parts)) return false;
     parsed.host.assign(parts.lpszHostName, parts.dwHostNameLength);
     parsed.path.assign(parts.lpszUrlPath, parts.dwUrlPathLength);
     if (parts.dwExtraInfoLength > 0) {
@@ -129,7 +136,10 @@ void SseClient::run(std::wstring url, std::wstring bearerToken) {
             if (GetLastError() == ERROR_WINHTTP_TIMEOUT) continue;
             break;
         }
-        if (available == 0) break;
+        if (available == 0) {
+            Sleep(50);
+            continue;
+        }
         std::vector<char> chunk(available);
         DWORD read = 0;
         if (!WinHttpReadData(req, chunk.data(), available, &read)) {
@@ -144,6 +154,7 @@ void SseClient::run(std::wstring url, std::wstring bearerToken) {
     WinHttpCloseHandle(req);
     WinHttpCloseHandle(connect);
     WinHttpCloseHandle(session);
+    std::cout << "[live] event stream closed\n";
     running_ = false;
 }
 

@@ -39,11 +39,14 @@
 
 .gridToolbar {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
 }
 
 .sortWrap {
   position: relative;
+  flex: none;
 }
 
 .sortBtn {
@@ -105,4 +108,41 @@
 .sortOptionActive {
   color: #b87333;
   font-weight: 520;
+}
+
+.searchInput {
+  width: min(320px, 100%);
+  min-width: 0;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 440;
+  color: #3d2b1a;
+  background: #fff;
+  border: 1px solid #d8c5ae;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 100ms, box-shadow 100ms;
+}
+
+.searchInput::placeholder {
+  color: #8b7560;
+}
+
+.searchInput:focus {
+  border-color: #c98b4d;
+  box-shadow: 0 0 0 3px rgba(201, 139, 77, 0.14);
+}
+
+@media (max-width: 520px) {
+  .gridToolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+
+  .searchInput {
+    flex: 1 1 220px;
+    width: auto;
+  }
 }

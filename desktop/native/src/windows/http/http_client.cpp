@@ -21,13 +21,19 @@ std::wstring errorFromLastError(const wchar_t* prefix) {
 }
 
 bool parseUrl(const std::wstring& url, ParsedUrl& parsed, std::wstring& error) {
+    std::wstring crackUrl = url;
+    if (crackUrl.rfind(L"http://", 0) != 0 &&
+        crackUrl.rfind(L"https://", 0) != 0) {
+        crackUrl = L"http://" + crackUrl;
+    }
+
     URL_COMPONENTSW parts{};
     parts.dwStructSize = sizeof(parts);
     parts.dwHostNameLength = static_cast<DWORD>(-1);
     parts.dwUrlPathLength = static_cast<DWORD>(-1);
     parts.dwExtraInfoLength = static_cast<DWORD>(-1);
 
-    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts)) {
+    if (!WinHttpCrackUrl(crackUrl.c_str(), 0, 0, &parts)) {
         error = errorFromLastError(L"WinHttpCrackUrl");
         return false;
     }

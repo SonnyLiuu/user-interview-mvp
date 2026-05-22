@@ -18,6 +18,18 @@ def _read_provider() -> str:
     return provider if provider in {"openai", "anthropic", "gemini"} else "openai"
 
 
+def _gemini_rest_thinking_config(model: str) -> dict | None:
+    level = (get_settings().gemini_thinking_level or "").strip().lower()
+    if not level or level == "off":
+        return None
+    if "gemini-3" in model:
+        return {"thinkingLevel": "high" if level == "high" else "low"}
+    if "gemini-2.5" in model:
+        budgets = {"low": 4096, "high": -1}
+        return {"thinkingBudget": budgets.get(level, -1)}
+    return None
+
+
 def _parse_json_response(raw: str, provider: str) -> dict:
     text = raw.strip()
     if text.startswith("```"):
@@ -129,30 +141,30 @@ async def _generate_json_once(messages: list[dict], schema_hint: str) -> dict:
     if provider == "gemini":
         if not settings.gemini_api_key:
             raise AIServiceError("GEMINI_API_KEY is not configured", provider)
-        try:
-            import google.generativeai as genai
-        except ImportError as exc:
-            raise AIServiceError(
-                "google-generativeai is not installed. Run `pip install -r requirements.txt` "
-                "or set AI_PROVIDER to openai/anthropic.",
-                provider,
-            ) from exc
-        genai.configure(api_key=settings.gemini_api_key)
-        gemini_model = genai.GenerativeModel(
-            model_name=settings.gemini_model,
-            generation_config={"response_mime_type": "application/json"},
-        )
+        model = _gemini_model_path(settings.gemini_model)
+        url = f"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent"
         prompt = f"{messages[0]['content']}\n\nReturn strict JSON only. Schema hint:\n{schema_hint}"
-        response = await _await_provider(
-            gemini_model.generate_content_async(
-                prompt,
-                request_options={"timeout": timeout},
-            ),
-            provider,
-            timeout + 5,
-            "Gemini request",
-        )
-        return _parse_json_response(response.text or "{}", provider)
+        body: dict = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json"},
+        }
+        thinking = _gemini_rest_thinking_config(model)
+        if thinking:
+            body["generationConfig"]["thinkingConfig"] = thinking
+        async with httpx.AsyncClient(timeout=timeout + 5) as client:
+            response = await _await_provider(
+                client.post(url, params={"key": settings.gemini_api_key}, json=body),
+                provider,
+                timeout + 5,
+                "Gemini request",
+            )
+        if response.status_code >= 400:
+            raise AIServiceError(f"Gemini request failed with HTTP {response.status_code}", provider)
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise AIServiceError("Gemini request did not return valid JSON", provider) from exc
+        return _parse_json_response(_gemini_response_text(payload) or "{}", provider)
 
     if not settings.openai_api_key:
         raise AIServiceError("OPENAI_API_KEY is not configured", provider)
@@ -185,21 +197,21 @@ async def _generate_json(messages: list[dict], schema_hint: str) -> dict:
 
 async def extract_kickoff_idea(user_message: str) -> dict:
     prompt = (
-        "A founder has just described their startup idea. Extract a concise summary and assess quality.\n\n"
+        "A founder has just described their startup idea. Extract every Foundation field that is actually present.\n\n"
         f'Founder message:\n"""\n{user_message}\n"""\n\n'
         "Rules:\n"
-        "- ideaSummary must be 1-3 sentences, written as a neutral description (not first-person)\n"
-        '- quality is "solid" if the message clearly conveys: what is being built AND who it is for\n'
-        '- quality is "weak" if either of those is vague or missing'
+        "- ideaSummary should be 1-3 sentences, written as a neutral description, not first-person.\n"
+        "- Extract targetUser, painPoint, valueProp, and idealPeopleTypes only when the founder gives usable evidence.\n"
+        '- quality is "solid" when the value is specific enough to build on without immediately asking the same question.\n'
+        '- quality is "weak" when the founder has the right direction but the answer still needs one clarifying probe.\n'
+        '- Use quality "missing" and an empty value when the field is not actually present.\n'
+        "- idealPeopleTypes should be a short list of conversation targets implied by the message."
     )
     raw = await _generate_json(
         [{"role": "user", "content": prompt}],
-        '{"ideaSummary": "string", "quality": "weak|solid"}',
+        '{"ideaSummary":{"value":"string","quality":"missing|weak|solid"},"targetUser":{"value":"string","quality":"missing|weak|solid"},"painPoint":{"value":"string","quality":"missing|weak|solid"},"valueProp":{"value":"string","quality":"missing|weak|solid"},"idealPeopleTypes":{"values":["string"],"quality":"missing|weak|solid"}}',
     )
-    return {
-        "ideaSummary": raw.get("ideaSummary") or "",
-        "quality": raw.get("quality") or "weak",
-    }
+    return raw if isinstance(raw, dict) else {}
 
 
 async def generate_next_question(target_slot: str, recent_messages: list[dict], state: dict) -> dict:
@@ -227,24 +239,29 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
         state_lines.append(f"Differentiation: {state['differentiation']}")
     if state.get("disqualifiers"):
         state_lines.append(f"Disqualifiers: {', '.join(state['disqualifiers'])}")
+    follow_up = state.get("completeness", {}).get(target_slot) == "weak"
     snippet = "\n".join([f"{'AI' if msg['role'] == 'assistant' else 'Founder'}: {msg['content']}" for msg in recent_messages[-6:]]) or "(none yet)"
     prompt = (
         "You are a senior startup advisor having a direct, low-key conversation with a founder. "
-        "Your job is to ask one focused question to understand their startup better, then present concrete options.\n\n"
+        "Your job is to ask one focused question to understand their startup better, then offer concrete answer starters.\n\n"
         f"You need to learn: {slot_context[target_slot]}\n\n"
+        f"This is {'a clarification of a weak answer' if follow_up else 'the next useful Foundation question'}.\n"
+        "When a clarifying probe would sharpen the answer, ask about the real status quo, urgency, "
+        "current workaround, or the riskiest assumption instead of repeating the field label.\n\n"
         "What you know so far:\n"
         f"{chr(10).join(state_lines) or '(nothing yet)'}\n\n"
         f"Recent conversation:\n{snippet}\n\n"
         "Write the question as you would actually say it to a founder — direct, brief, no fluff. "
         "1-2 sentences max. No bullet points, no numbered lists, no markdown. "
         "Reference what you already know about their idea so it feels like a real conversation, not a form.\n\n"
-        "Then generate a concrete answer tailored to this specific founder's context.\n\n"
+        "Then generate detailed suggestion chips that could help the founder answer quickly without making "
+        "the conversation feel like a generic form.\n\n"
         "Requirements:\n"
         f'- question: 1-2 natural sentences, conversational tone, no formatting\n'
         f'- Generate exactly 3-5 distinct, concrete choices relevant to this specific founder\'s context\n'
         f'- Each choice should target the "{target_slot}" slot\n'
         '- Do NOT include a "Something else" option - the UI adds that automatically\n'
-        '- Labels must be concise (under 60 characters)\n'
+        '- Labels may be detailed but must stay under 110 characters\n'
         '- Assign a short unique id to each choice (e.g. "a", "b", "c")\n'
         '- normalizedValue should be a clean sentence suitable for storage\n'
         '- customPlaceholder should be a short prompt for the free-text field'
@@ -314,7 +331,7 @@ async def generate_foundation(messages: list[dict], state: dict) -> dict:
     )
     raw = await _generate_json(
         [{"role": "user", "content": prompt}],
-        '{"foundation":{"summary":"string","targetUser":"string","painPoint":"string","valueProp":"string","idealPeopleTypes":["string"],"differentiation":"string","disqualifiers":["string"]}}',
+        '{"foundation":{"summary":"string","targetUser":"string","painPoint":"string","valueProp":"string","idealPeopleTypes":["string"],"differentiation":"string","disqualifiers":["string"],"biggestUnknown":"string","nextResearchAction":"string"}}',
     )
     # Normalize: AI sometimes returns foundation fields at top level without the wrapper key
     if "foundation" not in raw:
@@ -375,27 +392,34 @@ async def generate_outreach_message(person: dict, project_context: dict) -> dict
     key_assumptions = project_context.get("key_assumptions") or []
 
     prompt = (
-        f"""I want you to generate a short outreach message, less than 300 letters. I will provide my project/startup idea and detailed background, and the background of the person I want to setup a call with. The recipient's background will provide context on what I wish to learn from conversation with that person. Choose one topic that I would want to learn about and introduce their familiarity with that topic, followed by my wish to learn about how they handled it in a 20 minute call. The topic should center on a real past experience the recipient likely had, especially one that could validate or falsify my project assumptions. Avoid adding any information about my project/startup, my goal is not to pitch, rather to validate all aspects of my project/startup idea one person at a time.
-
-        MY PROJECT CONTEXT:\n
-        Idea: {project_context.get('idea_summary') or 'Not specified'}\n
-        Target customer: {project_context.get('target_customer') or 'Not specified'}\n
-        Pain point: {project_context.get('pain_point') or 'Not specified'}\n
-        Ideal people to talk to: {_join_prompt_list(ideal_people)}\n
-        Assumptions to validate: {_join_prompt_list(key_assumptions)}\n\n
-
-        RECIPIENT CONTEXT:\n
-        Name: {person.get('name') or 'Unknown'}\n
-        Title: {person.get('title') or 'Unknown'}\n
-        Company: {person.get('company') or 'Unknown'}\n
-        Persona type: {person.get('persona_type') or 'Unknown'}\n
-        Background: {analysis.get('summary') or 'Not specified'}\n
-        Why they matter: {analysis.get('why_they_matter') or 'Not specified'}\n
-        Key insights: {_join_prompt_list(key_insights)}\n\n
-
-        Return only valid JSON with this schema:
-        {{"subject":"string","body":"string"}}
-        """
+        "I want you to generate a short outreach message, less than 300 letters. "
+        "I will provide my project/startup idea and detailed background, and the background of the person "
+        "I want to setup a call with. The recipient's background will provide context on what I wish to "
+        "learn from conversation with that person. Choose one topic that I would want to learn about and "
+        "introduce their familiarity with that topic, followed by my wish to learn about how they handled "
+        "it in a 20 minute call. The topic should center on a real past experience the recipient likely had, "
+        "especially one that could validate or falsify my project assumptions. Avoid adding any information "
+        "about my project/startup; my goal is not to pitch, but to validate all aspects of my project/startup "
+        "idea one person at a time.\n\n"
+        "MY PROJECT CONTEXT:\n"
+        f"Idea: {project_context.get('idea_summary') or 'Not specified'}\n"
+        f"Target customer: {project_context.get('target_customer') or 'Not specified'}\n"
+        f"Pain point: {project_context.get('pain_point') or 'Not specified'}\n"
+        f"Ideal people to talk to: {_join_prompt_list(ideal_people)}\n"
+        f"Assumptions to validate: {_join_prompt_list(key_assumptions)}\n\n"
+        "RECIPIENT CONTEXT:\n"
+        f"Name: {person.get('name') or 'Unknown'}\n"
+        f"Title: {person.get('title') or 'Unknown'}\n"
+        f"Company: {person.get('company') or 'Unknown'}\n"
+        f"Persona type: {person.get('persona_type') or 'Unknown'}\n"
+        f"Background: {analysis.get('summary') or 'Not specified'}\n"
+        f"Why they matter: {analysis.get('why_they_matter') or 'Not specified'}\n"
+        f"Key insights: {_join_prompt_list(key_insights)}\n\n"
+        "The key insights area is a very valuable segment to base your outreach message on. "
+        "Relate to the best one that is both interesting and applicable to my idea.\n\n"
+        "The body must be at most 300 characters total, including the greeting, spaces, and punctuation. "
+        "Count characters, not words. Keep the subject separate from that body limit.\n\n"
+        'Return only valid JSON with this schema: {"subject":"string","body":"string"}'
     )
     return await _generate_json(
         [{"role": "user", "content": prompt}],
@@ -473,10 +497,13 @@ async def get_advisor_web_context(user_message: str, foundation: dict, recent_me
             return ""
         model = _gemini_model_path(settings.gemini_web_search_model or settings.gemini_model)
         url = f"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent"
-        body = {
+        body: dict = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "tools": [{"google_search": {}}],
         }
+        thinking = _gemini_rest_thinking_config(model)
+        if thinking:
+            body["generationConfig"] = {"thinkingConfig": thinking}
         try:
             async with httpx.AsyncClient(timeout=settings.ai_request_timeout_seconds + 15) as client:
                 response = await _await_provider(

@@ -12,6 +12,9 @@ from ..repositories import people as people_repo
 from .project_context import foundation_to_project_context, normalize_json
 
 
+OUTREACH_BODY_MAX_CHARS = 300
+
+
 def _person_payload(row) -> dict:
     analysis = normalize_json(row["analysis"]) if row["analysis"] else None
     return {
@@ -33,6 +36,14 @@ def _strip(value) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def _clip(value: str, limit: int) -> str:
+    text = _flatten(value)
+    if len(text) <= limit:
+        return text
+    clipped = text[:limit].rsplit(" ", 1)[0].rstrip(" ,.;:-")
+    return clipped or text[:limit].rstrip(" ,.;:-")
+
+
 def normalize_outreach_content(content: dict | None) -> dict:
     raw = content if isinstance(content, dict) else {}
     return {
@@ -42,38 +53,38 @@ def normalize_outreach_content(content: dict | None) -> dict:
 
 
 def fallback_outreach_content(person: dict, project_context: dict) -> dict:
-    analysis = person.get("analysis") or {}
     name = _flatten(person.get("name")) or "there"
     first_name = name.split(" ", 1)[0] if name != "there" else "there"
-    title = _flatten(person.get("title"))
-    company = _flatten(person.get("company"))
+    first_name = _clip(first_name, 32) or "there"
+    title = _clip(person.get("title"), 24)
+    company = _clip(person.get("company"), 24)
     role = ", ".join(part for part in [title, company] if part)
-    why = _strip(analysis.get("why_they_matter"))
-    summary = _strip(analysis.get("summary"))
     assumptions = project_context.get("key_assumptions") or []
-    learning_topic = _flatten(assumptions[0]) if assumptions else ""
+    learning_topic = _clip(assumptions[0], 72) if assumptions else ""
+    role_fragment = f" as {role}" if role else ""
 
-    context_sentence = why or summary
-    if context_sentence:
-        context_sentence = f"I came across your background{f' as {role}' if role else ''}, and {context_sentence[:220].rstrip('.')}."
+    if learning_topic:
+        body = (
+            f"Hi {first_name}, your experience{role_fragment} stood out. "
+            f"I am learning how people handle {learning_topic.lower()}. "
+            "Would you be open to a 20 minute call about what you have seen?"
+        )
     else:
-        context_sentence = f"I came across your background{f' as {role}' if role else ''} and thought your perspective would be useful."
-
-    topic_sentence = (
-        f"I am trying to learn how people with direct experience think about {learning_topic.lower()}."
-        if learning_topic
-        else "I am trying to learn from people who have seen this kind of problem up close."
-    )
+        body = (
+            f"Hi {first_name}, your experience{role_fragment} stood out. "
+            "I am learning from people who have seen this problem up close. "
+            "Would you be open to a 20 minute call about what you have seen?"
+        )
 
     return {
         "subject": f"Quick question, {first_name}",
-        "body": (
-            f"Hi {first_name}, {context_sentence} "
-            f"{topic_sentence} "
-            "Would you be open to a 20 minute call so I can ask how you have handled this in practice? "
-            "I am not looking to pitch anything; I am trying to learn from the right people."
-        ),
+        "body": body,
     }
+
+
+def has_usable_outreach_body(content: dict) -> bool:
+    body = content.get("body") or ""
+    return bool(body) and len(body) <= OUTREACH_BODY_MAX_CHARS
 
 
 async def refresh_outreach(user_id: str, person_id: str):
@@ -102,10 +113,10 @@ async def refresh_outreach(user_id: str, person_id: str):
 
     content = normalize_outreach_content(generated)
 
-    if not content.get("body"):
+    if not has_usable_outreach_body(content):
         content = normalize_outreach_content(fallback_outreach_content(person_payload, project_context))
 
-    if not content.get("body"):
+    if not has_usable_outreach_body(content):
         raise BadRequestError("Could not create a usable outreach message. Try again.", code=GENERATION_FAILED)
 
     async with pool.acquire() as conn:

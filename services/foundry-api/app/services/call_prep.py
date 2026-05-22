@@ -19,7 +19,7 @@ FALLBACK_CALL_BRIEF = {
     "goals": [
         "Validate how often the pain happens and when it becomes urgent.",
         "Learn what workaround they use today and why it is not good enough.",
-        "Clarify whether this person is the user, buyer, influencer, or connector.",
+        "Clarify whether this person is the target user, decision maker, influencer, or introducer.",
     ],
     "questions": [
         "When did you last run into this problem?",

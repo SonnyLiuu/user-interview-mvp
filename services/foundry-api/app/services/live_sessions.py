@@ -21,6 +21,7 @@ from ..repositories import people as people_repo
 from .call_prep import fallback_call_brief_content, normalize_call_brief_content
 from .project_context import normalize_json
 from .realtime_bridge import RealtimeBridge
+from .source_transcription_bridge import SourceTranscriptionBridge
 
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,22 @@ class LiveSessionEvent:
 
 
 @dataclass
+class LiveTranscriptTurn:
+    speaker: str
+    source: str
+    text: str
+    created_at: str
+
+    def to_dict(self) -> dict:
+        return {
+            "speaker": self.speaker,
+            "source": self.source,
+            "text": self.text,
+            "createdAt": self.created_at,
+        }
+
+
+@dataclass
 class LiveSessionState:
     session_id: str
     user_id: str
@@ -92,6 +109,7 @@ class LiveSessionState:
     ended_at: str | None = None
     realtime_status: str = "pending"
     realtime_error: str | None = None
+    transcript_turns: list[LiveTranscriptTurn] = field(default_factory=list)
     events: list[LiveSessionEvent] = field(default_factory=list)
 
     def to_dict(self, *, include_token: str | None = None) -> dict:
@@ -105,6 +123,8 @@ class LiveSessionState:
             "endedAt": self.ended_at,
             "realtimeStatus": self.realtime_status,
             "realtimeError": self.realtime_error,
+            "transcriptTurns": [turn.to_dict() for turn in self.transcript_turns],
+            "transcriptRaw": format_transcript(self),
             "events": [event.to_dict() for event in self.events],
         }
         if include_token is not None:
@@ -114,6 +134,7 @@ class LiveSessionState:
 
 _sessions: dict[str, LiveSessionState] = {}
 _bridges: dict[str, RealtimeBridge] = {}
+_transcription_bridges: dict[str, SourceTranscriptionBridge] = {}
 _event_queues: dict[str, list[asyncio.Queue[LiveSessionEvent]]] = {}
 
 
@@ -185,6 +206,25 @@ def _topics_from_call_brief(content: dict) -> list[LiveTopicState]:
     return topics
 
 
+def _checklist_provider() -> str:
+    provider = get_settings().checklist_ai_provider.strip().lower()
+    return provider if provider else "openai"
+
+
+def _speaker_for_source(source: str) -> str:
+    if source == "mic":
+        return "Founder"
+    if source == "loopback":
+        return "Interviewee"
+    return "Unknown"
+
+
+def format_transcript(session: LiveSessionState) -> str:
+    return "\n".join(
+        f"{turn.speaker}: {turn.text}" for turn in session.transcript_turns
+    )
+
+
 async def start_live_session(user_id: str, person_id: str) -> dict:
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -209,6 +249,7 @@ async def start_live_session(user_id: str, person_id: str) -> dict:
     )
     _sessions[session.session_id] = session
     _start_realtime_bridge(session)
+    _start_transcription_bridge(session)
     token = sign_live_session_token(session)
     return session.to_dict(include_token=token)
 
@@ -220,16 +261,78 @@ def get_live_session(session_id: str, live_token: str) -> dict:
     return session.to_dict()
 
 
-async def stream_audio_to_live_session(session_id: str, live_token: str, audio: bytes) -> bool:
+def override_live_session_topic(
+    session_id: str,
+    live_token: str,
+    topic_id: str,
+    *,
+    checked: bool,
+) -> dict:
+    session = verify_live_session_token(live_token)
+    if session.session_id != session_id:
+        raise UnauthorizedError("Live session token does not match session")
+    if session.status != "active":
+        raise NotFoundError("Live session is not active")
+
+    topic = _topic_by_id(session, topic_id)
+    if not topic:
+        raise NotFoundError("Topic not found")
+
+    topic.checked = checked
+    topic.checked_by = "manual"
+    topic.checked_at = _now_iso()
+    topic.evidence = None
+    topic.manual_override = True
+
+    event = _append_event(
+        session,
+        "topic_updated",
+        {
+            "sessionId": session.session_id,
+            "topic": topic.to_dict(),
+            "source": "manual",
+        },
+    )
+    logger.info(
+        "Manual topic override session=%s topic_id=%s checked=%s",
+        session.session_id,
+        topic.id,
+        checked,
+    )
+    return {
+        "sessionId": session.session_id,
+        "topic": topic.to_dict(),
+        "event": event.to_dict(),
+    }
+
+
+async def stream_audio_to_live_session(
+    session_id: str,
+    live_token: str,
+    audio: bytes,
+    *,
+    source: str = "mixed",
+) -> bool:
     session = verify_live_session_token(live_token)
     if session.session_id != session_id:
         raise UnauthorizedError("Live session token does not match session")
     if session.status != "active":
         return False
-    bridge = _bridges.get(session.session_id)
-    if not bridge:
+    if source in {"mixed", "unknown"}:
+        logger.warning(
+            "Ignoring unlabeled audio for hybrid matcher session=%s source=%s",
+            session.session_id,
+            source,
+        )
         return False
-    return await bridge.send_audio(audio)
+    if _checklist_provider() == "mock":
+        text = f"Mock {source} transcript turn received {len(audio)} bytes of live audio."
+        await _handle_transcript_turn(session, source, text)
+        return True
+    transcriber = _transcription_bridges.get(session.session_id)
+    if not transcriber:
+        return False
+    return await transcriber.send_audio(source, audio)
 
 
 async def stream_live_session_events(
@@ -240,15 +343,14 @@ async def stream_live_session_events(
     if session.session_id != session_id:
         raise UnauthorizedError("Live session token does not match session")
 
-    yield {
-        "id": "snapshot",
-        "type": "session_snapshot",
-        "data": session.to_dict(),
-    }
-
     queue: asyncio.Queue[LiveSessionEvent] = asyncio.Queue()
     _event_queues.setdefault(session.session_id, []).append(queue)
     try:
+        yield {
+            "id": "snapshot",
+            "type": "session_snapshot",
+            "data": session.to_dict(),
+        }
         while session.status == "active":
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=15)
@@ -284,6 +386,9 @@ async def end_live_session(session_id: str, live_token: str) -> dict:
                 "endedAt": session.ended_at,
             },
         )
+    transcriber = _transcription_bridges.pop(session.session_id, None)
+    if transcriber:
+        await transcriber.stop()
     bridge = _bridges.pop(session.session_id, None)
     if bridge:
         await bridge.stop()
@@ -305,9 +410,34 @@ def _start_realtime_bridge(session: LiveSessionState) -> None:
     bridge.start()
 
 
+def _start_transcription_bridge(session: LiveSessionState) -> None:
+    if _checklist_provider() == "mock":
+        return
+    bridge = SourceTranscriptionBridge(
+        session,
+        on_transcript=lambda source, transcript: _handle_transcript_turn(
+            session, source, transcript
+        ),
+        on_status=lambda status, error: _set_realtime_status(
+            session, status, error
+        ),
+    )
+    _transcription_bridges[session.session_id] = bridge
+    bridge.start()
+
+
 def _set_realtime_status(session: LiveSessionState, status: str, error: str | None) -> None:
     session.realtime_status = status
     session.realtime_error = error
+    _append_event(
+        session,
+        "realtime_status",
+        {
+            "sessionId": session.session_id,
+            "status": status,
+            "message": error,
+        },
+    )
     if error:
         _append_event(
             session,
@@ -321,15 +451,79 @@ def _set_realtime_status(session: LiveSessionState, status: str, error: str | No
         logger.warning("Realtime session %s status=%s error=%s", session.session_id, status, error)
 
 
+async def _handle_transcript_turn(
+    session: LiveSessionState,
+    source: str,
+    transcript: str,
+) -> None:
+    text = _clean_arg(transcript)
+    if not text:
+        return
+    turn = LiveTranscriptTurn(
+        speaker=_speaker_for_source(source),
+        source=source,
+        text=text,
+        created_at=_now_iso(),
+    )
+    session.transcript_turns.append(turn)
+    logger.warning(
+        "Transcript turn session=%s source=%s speaker=%s text=%s",
+        session.session_id,
+        source,
+        turn.speaker,
+        text[:160],
+    )
+    _append_event(
+        session,
+        "transcript_turn",
+        {
+            "sessionId": session.session_id,
+            "turn": turn.to_dict(),
+            "transcriptRaw": format_transcript(session),
+        },
+    )
+    bridge = _bridges.get(session.session_id)
+    if bridge:
+        await bridge.send_labeled_turn(source, text)
+
+
 async def _handle_realtime_tool_call(
     session: LiveSessionState,
     name: str,
     args: dict[str, Any],
 ) -> dict[str, Any]:
+    if name == "mark_items_covered":
+        return _mark_items_covered(session, args)
     if name != "mark_item_covered":
         return _reject_tool_call(session, "unsupported_tool", args)
 
     return _mark_item_covered(session, args)
+
+
+def _mark_items_covered(session: LiveSessionState, args: dict[str, Any]) -> dict[str, Any]:
+    raw_items = args.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        return _reject_tool_call(session, "items_required", args)
+
+    results: list[dict[str, Any]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            results.append(
+                {
+                    "accepted": False,
+                    "reason": "invalid_item",
+                    "topic": None,
+                }
+            )
+            continue
+        results.append(_mark_item_covered(session, item))
+
+    accepted = [result for result in results if result.get("accepted")]
+    return {
+        "accepted": bool(accepted),
+        "acceptedCount": len(accepted),
+        "results": results,
+    }
 
 
 def _mark_item_covered(session: LiveSessionState, args: dict[str, Any]) -> dict[str, Any]:
@@ -342,10 +536,6 @@ def _mark_item_covered(session: LiveSessionState, args: dict[str, Any]) -> dict[
 
     if not item_id:
         return _reject_tool_call(session, "item_id_required", args)
-    if reason not in {"question_asked", "goal_covered"}:
-        return _reject_tool_call(session, "invalid_reason", args)
-    if not evidence:
-        return _reject_tool_call(session, "evidence_required", args)
 
     topic = _topic_by_id(session, item_id)
     if not topic:
@@ -356,6 +546,11 @@ def _mark_item_covered(session: LiveSessionState, args: dict[str, Any]) -> dict[
         return _reject_tool_call(session, "manual_override_locked", args, topic=topic)
     if topic.checked:
         return _reject_tool_call(session, "already_checked", args, topic=topic)
+
+    if reason not in {"question_asked", "goal_covered"}:
+        reason = "question_asked" if topic.category == "question" else "goal_covered"
+    if not evidence:
+        evidence = "Realtime checklist assistant marked this item as covered from the live call audio."
 
     checked_at = _now_iso()
     topic.checked = True
@@ -390,6 +585,8 @@ def _topic_by_id(session: LiveSessionState, item_id: str) -> LiveTopicState | No
 
 def _clean_arg(value: Any) -> str:
     if not isinstance(value, str):
+        if isinstance(value, int):
+            return str(value)
         return ""
     return " ".join(value.strip().split())
 
@@ -402,6 +599,13 @@ def _append_event(session: LiveSessionState, event_type: str, data: dict[str, An
         data=data,
     )
     session.events.append(event)
+    if event_type == "topic_checked":
+        logger.warning(
+            "Emitting topic_checked session=%s topic_id=%s queues=%s",
+            session.session_id,
+            ((data.get("topic") or {}).get("id") if isinstance(data.get("topic"), dict) else None),
+            len(_event_queues.get(session.session_id, [])),
+        )
     for queue in _event_queues.get(session.session_id, []):
         queue.put_nowait(event)
     return event

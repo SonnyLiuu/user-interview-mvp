@@ -21,6 +21,8 @@
 #include <mutex>
 #include <memory>
 #include <string>
+#include <atomic>
+#include <thread>
 
 #include "common/app_state.h"
 #include "common/json_util.h"
@@ -48,6 +50,7 @@ using foundry::overlay::releaseRendererResources;
 using foundry::tray::TrayIcon;
 using foundry::tray::TrayActions;
 using foundry::webview::WebViewWindow;
+using foundry::windows::audio::AudioSource;
 using foundry::windows::audio::MeetingAudioCapture;
 using foundry::windows::http::BinaryWebSocketClient;
 using foundry::windows::http::SseClient;
@@ -55,6 +58,8 @@ using foundry::windows::http::SseClient;
 namespace {
 
 using foundry::json::Json;
+
+std::atomic_bool g_liveRealtimeConnected{false};
 
 bool createDeviceAndSwapChain(const OverlayWindow& win,
                               ComPtr<ID3D11Device>& device,
@@ -193,8 +198,39 @@ std::wstring apiBaseNoSlash(foundry::AppState& appState) {
     std::wstring base = appState.settings.apiBaseUrl.empty()
                             ? L"http://localhost:3000"
                             : appState.settings.apiBaseUrl;
+    if (base.rfind(L"http://", 0) != 0 &&
+        base.rfind(L"https://", 0) != 0) {
+        base = L"http://" + base;
+    }
     if (!base.empty() && base.back() == L'/') base.pop_back();
     return base;
+}
+
+std::wstring httpBaseNoSlash(std::wstring base) {
+    if (base.empty()) return L"";
+    if (base.rfind(L"http://", 0) != 0 &&
+        base.rfind(L"https://", 0) != 0) {
+        base = L"http://" + base;
+    }
+    if (!base.empty() && base.back() == L'/') base.pop_back();
+    return base;
+}
+
+std::vector<std::uint8_t> taggedAudioFrame(
+    AudioSource source,
+    const std::vector<std::uint8_t>& pcm) {
+    constexpr std::uint8_t kMagic[] = {'F', 'A', 'C', '1'};
+    constexpr std::uint8_t kMicSource = 1;
+    constexpr std::uint8_t kLoopbackSource = 2;
+
+    std::vector<std::uint8_t> frame;
+    frame.reserve(sizeof(kMagic) + 1 + pcm.size());
+    frame.insert(frame.end(), std::begin(kMagic), std::end(kMagic));
+    frame.push_back(source == AudioSource::Microphone
+                        ? kMicSource
+                        : kLoopbackSource);
+    frame.insert(frame.end(), pcm.begin(), pcm.end());
+    return frame;
 }
 
 std::wstring authSelfTestJson(foundry::AppState& appState) {
@@ -264,7 +300,10 @@ foundry::TopicCategory categoryFromString(const std::wstring& category) {
     return foundry::TopicCategory::Goal;
 }
 
-void loadTopicsFromJson(foundry::AppState& appState, const Json& topics) {
+void loadTopicsFromJson(foundry::AppState& appState,
+                        const Json& topics,
+                        bool preserveManualOverrides = false) {
+    std::vector<foundry::Topic> previousTopics = appState.topics;
     appState.topics.clear();
     if (!topics.is_array()) return;
     for (const auto& item : topics) {
@@ -279,6 +318,21 @@ void loadTopicsFromJson(foundry::AppState& appState, const Json& topics) {
         topic.checkedAt = foundry::json::wideValue(item, "checkedAt");
         topic.evidence = foundry::json::wideValue(item, "evidence");
         topic.manualOverride = item.value("manualOverride", false);
+        if (preserveManualOverrides && topic.checkedBy == L"gpt_realtime" &&
+            !topic.manualOverride) {
+            auto previous = std::find_if(
+                previousTopics.begin(), previousTopics.end(),
+                [&](const foundry::Topic& candidate) {
+                    return candidate.id == topic.id && candidate.manualOverride;
+                });
+            if (previous != previousTopics.end()) {
+                topic.checked = previous->checked;
+                topic.checkedBy = previous->checkedBy;
+                topic.checkedAt = previous->checkedAt;
+                topic.evidence = previous->evidence;
+                topic.manualOverride = previous->manualOverride;
+            }
+        }
         if (!topic.id.empty() && !topic.label.empty()) {
             appState.topics.push_back(topic);
         }
@@ -349,7 +403,9 @@ std::wstring startLiveSession(foundry::AppState& appState,
     appState.selectedPersonName = personName;
     appState.liveSessionId = foundry::json::wideValue(root, "sessionId");
     appState.liveToken = foundry::json::wideValue(root, "liveToken");
-    appState.foundryBaseUrl = foundry::json::wideValue(root, "foundryBaseUrl");
+    appState.foundryBaseUrl = httpBaseNoSlash(
+        foundry::json::wideValue(root, "foundryBaseUrl"));
+    appState.liveTranscriptRaw.clear();
     loadTopicsFromJson(appState, root["topics"]);
     if (appState.topics.empty()) {
         addFallbackCallBriefTopics(appState);
@@ -464,6 +520,38 @@ void endLiveSession(foundry::AppState& appState) {
     foundry::windows::http::postJson(url, "{}", appState.liveToken);
 }
 
+void syncLiveTopicOverride(const foundry::AppState& appState,
+                           const foundry::Topic& topic) {
+    if (appState.liveSessionId.empty() || appState.liveToken.empty() ||
+        appState.foundryBaseUrl.empty() || topic.id.empty()) {
+        return;
+    }
+
+    std::wstring base = appState.foundryBaseUrl;
+    if (!base.empty() && base.back() == L'/') base.pop_back();
+    std::wstring url = base + L"/v1/desktop/live-sessions/" +
+                       appState.liveSessionId + L"/topics/" +
+                       topic.id + L"/override";
+    std::wstring token = appState.liveToken;
+    std::wstring topicId = topic.id;
+    std::string body = foundry::json::dumpUtf8(Json{
+        {"checked", topic.checked},
+    });
+
+    std::thread([url, token, topicId, body] {
+        auto response = foundry::windows::http::postJson(url, body, token);
+        if (!response.ok) {
+            std::wstring message =
+                response.error.empty()
+                    ? foundry::json::fromUtf8(response.body.substr(0, 300))
+                    : response.error;
+            std::wcout << L"[live] manual topic override sync failed id="
+                       << topicId << L" status=" << response.status
+                       << L" message=" << message << L"\n";
+        }
+    }).detach();
+}
+
 std::wstring endSessionJson(const foundry::AppState& appState) {
     Json topics = Json::array();
     for (const auto& topic : appState.topics) {
@@ -557,6 +645,7 @@ Json saveEndSession(foundry::AppState& appState,
     appState.liveSessionId.clear();
     appState.liveToken.clear();
     appState.foundryBaseUrl.clear();
+    appState.liveTranscriptRaw.clear();
     appState.topics.clear();
     return Json{{"type", "saveSucceeded"}};
 }
@@ -679,20 +768,95 @@ bool applyTopicUpdate(foundry::AppState& appState, const Json& topicJson) {
     if (id.empty()) return false;
     for (auto& topic : appState.topics) {
         if (topic.id != id) continue;
-        topic.checked = topicJson.value("checked", topic.checked);
-        std::wstring label = foundry::json::wideValue(topicJson, "label");
-        if (!label.empty()) topic.label = label;
-        topic.checkedBy = foundry::json::wideValue(
-            topicJson, "checkedBy", topic.checkedBy);
-        topic.checkedAt = foundry::json::wideValue(
-            topicJson, "checkedAt", topic.checkedAt);
-        topic.evidence = foundry::json::wideValue(
-            topicJson, "evidence", topic.evidence);
-        topic.manualOverride =
+        std::wstring incomingCheckedBy = foundry::json::wideValue(topicJson, "checkedBy");
+        bool incomingManualOverride =
             topicJson.value("manualOverride", topic.manualOverride);
-        return true;
+        if (topic.manualOverride && incomingCheckedBy == L"gpt_realtime" &&
+            !incomingManualOverride) {
+            return false;
+        }
+        bool changed = false;
+        bool checked = topicJson.value("checked", topic.checked);
+        if (topic.checked != checked) {
+            topic.checked = checked;
+            changed = true;
+        }
+        std::wstring label = foundry::json::wideValue(topicJson, "label");
+        if (!label.empty() && topic.label != label) {
+            topic.label = label;
+            changed = true;
+        }
+        std::wstring checkedBy = incomingCheckedBy.empty()
+                                     ? topic.checkedBy
+                                     : incomingCheckedBy;
+        if (topic.checkedBy != checkedBy) {
+            topic.checkedBy = checkedBy;
+            changed = true;
+        }
+        std::wstring checkedAt = foundry::json::wideValue(
+            topicJson, "checkedAt", topic.checkedAt);
+        if (topic.checkedAt != checkedAt) {
+            topic.checkedAt = checkedAt;
+            changed = true;
+        }
+        std::wstring evidence = foundry::json::wideValue(
+            topicJson, "evidence", topic.evidence);
+        if (topic.evidence != evidence) {
+            topic.evidence = evidence;
+            changed = true;
+        }
+        if (topic.manualOverride != incomingManualOverride) {
+            topic.manualOverride = incomingManualOverride;
+            changed = true;
+        }
+        return changed;
     }
     return false;
+}
+
+bool applyRealtimeTopicSnapshot(foundry::AppState& appState, const Json& topics) {
+    if (!topics.is_array()) return false;
+    bool changed = false;
+    for (const auto& topic : topics) {
+        if (!topic.is_object()) continue;
+        bool checked = topic.value("checked", false);
+        std::wstring checkedBy = foundry::json::wideValue(topic, "checkedBy");
+        if (!checked || checkedBy != L"gpt_realtime") continue;
+        if (applyTopicUpdate(appState, topic)) {
+            std::wstring topicId = foundry::json::wideValue(topic, "id");
+            std::wcout << L"[live] topic checked snapshot"
+                       << (topicId.empty() ? L"" : L" id=" + topicId)
+                       << L"\n";
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+bool applyTranscriptRaw(foundry::AppState& appState, const Json& json) {
+    std::wstring transcriptRaw =
+        foundry::json::wideValue(json, "transcriptRaw", appState.liveTranscriptRaw);
+    if (transcriptRaw == appState.liveTranscriptRaw) return false;
+    appState.liveTranscriptRaw = transcriptRaw;
+    return true;
+}
+
+bool pollLiveSession(foundry::AppState& appState) {
+    if (appState.foundryBaseUrl.empty() ||
+        appState.liveSessionId.empty() ||
+        appState.liveToken.empty()) {
+        return false;
+    }
+    std::wstring base = appState.foundryBaseUrl;
+    if (!base.empty() && base.back() == L'/') base.pop_back();
+    std::wstring url = base + L"/v1/desktop/live-sessions/" +
+                       appState.liveSessionId;
+    auto response = foundry::windows::http::get(url, appState.liveToken);
+    if (!response.ok) return false;
+    Json root = foundry::json::parseUtf8(response.body, Json::object());
+    bool changed = applyRealtimeTopicSnapshot(appState, root["topics"]);
+    changed = applyTranscriptRaw(appState, root) || changed;
+    return changed;
 }
 
 bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
@@ -703,13 +867,38 @@ bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
         : Json::object();
 
     if (type == "session_snapshot") {
+        std::wstring realtimeStatus =
+            foundry::json::wideValue(data, "realtimeStatus");
+        std::wstring realtimeError =
+            foundry::json::wideValue(data, "realtimeError");
+        if (!realtimeStatus.empty()) {
+            std::wcout << L"[live] realtime status: "
+                       << realtimeStatus << L"\n";
+            g_liveRealtimeConnected.store(realtimeStatus == L"connected");
+        }
+        if (!realtimeError.empty()) {
+            std::wcout << L"[live] realtime error: "
+                       << realtimeError << L"\n";
+        }
+        bool changed = applyTranscriptRaw(appState, data);
         if (data.contains("topics")) {
-            loadTopicsFromJson(appState, data["topics"]);
+            loadTopicsFromJson(appState, data["topics"], true);
+            applyRealtimeTopicSnapshot(appState, data["topics"]);
             return true;
         }
-        return false;
+        return changed;
     }
     if (type == "topic_checked") {
+        Json topic = data.contains("topic") && data["topic"].is_object()
+            ? data["topic"]
+            : Json::object();
+        std::wstring topicId = foundry::json::wideValue(topic, "id");
+        std::wcout << L"[live] topic checked event"
+                   << (topicId.empty() ? L"" : L" id=" + topicId)
+                   << L"\n";
+        return applyTopicUpdate(appState, topic);
+    }
+    if (type == "topic_updated") {
         Json topic = data.contains("topic") && data["topic"].is_object()
             ? data["topic"]
             : Json::object();
@@ -720,6 +909,20 @@ bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
         if (!message.empty()) {
             std::wcout << L"[live] realtime error: " << message << L"\n";
         }
+    }
+    if (type == "realtime_status") {
+        std::wstring status = foundry::json::wideValue(data, "status");
+        std::wstring message = foundry::json::wideValue(data, "message");
+        if (!status.empty()) {
+            std::wcout << L"[live] realtime status: " << status << L"\n";
+            g_liveRealtimeConnected.store(status == L"connected");
+        }
+        if (!message.empty()) {
+            std::wcout << L"[live] realtime error: " << message << L"\n";
+        }
+    }
+    if (type == "transcript_turn") {
+        return applyTranscriptRaw(appState, data);
     }
     return false;
 }
@@ -765,6 +968,7 @@ int main() {
     std::wstring overlayPickerStatus = L"Pick person for call.";
     std::wstring overlayEndStatus = L"Ready to save.";
     std::vector<OverlayPersonRow> overlayPeople;
+    ULONGLONG nextLivePollTick = 0;
 
     foundry::AppState appState;
     appState.settings = readDesktopSettings();
@@ -858,6 +1062,7 @@ int main() {
         appState.topics[topicIndex].checkedAt = isoNowUtc();
         appState.topics[topicIndex].evidence.clear();
         appState.topics[topicIndex].manualOverride = true;
+        syncLiveTopicOverride(appState, appState.topics[topicIndex]);
         overlayDirty = true;
     };
     overlayActions.onSelectPerson = [&](int visibleIndex) {
@@ -965,9 +1170,9 @@ int main() {
         authWindow = std::make_unique<WebViewWindow>(
             L"Foundry Sign In", 720, 760, authUrl(appState),
             [&](const std::wstring& json) {
-                std::wcout << L"[auth -> native] " << json << L"\n";
                 Json msg = foundry::json::parseWide(json);
                 std::string type = msg.value("type", "");
+                std::cout << "[auth -> native] type=" << type << "\n";
                 if (type == "desktopAuthToken") {
                     appState.authToken =
                         foundry::json::wideValue(msg, "token", L"");
@@ -1055,6 +1260,7 @@ int main() {
     auto stopLiveAudio = [&] {
         meetingAudio.stop();
         liveAudioSocket.close();
+        g_liveRealtimeConnected.store(false);
     };
 
     auto startLiveAudio = [&] {
@@ -1074,9 +1280,40 @@ int main() {
             std::wcout << L"[live] audio websocket failed: " << error << L"\n";
             return;
         }
+        auto sentChunks = std::make_shared<std::atomic<unsigned long long>>(0);
+        auto failedChunks = std::make_shared<std::atomic<unsigned long long>>(0);
+        auto skippedChunks = std::make_shared<std::atomic<unsigned long long>>(0);
         if (!meetingAudio.start(
-                [&](const std::vector<std::uint8_t>& chunk) {
-                    liveAudioSocket.sendBinary(chunk);
+                [&, sentChunks, failedChunks, skippedChunks](
+                    AudioSource source,
+                    const std::vector<std::uint8_t>& chunk) {
+                    if (!g_liveRealtimeConnected.load()) {
+                        unsigned long long count = ++(*skippedChunks);
+                        if (count == 1 || count == 25 || count == 100 ||
+                            count % 500 == 0) {
+                            std::wcout << L"[live] audio waiting for realtime chunks="
+                                       << count << L"\n";
+                        }
+                        return;
+                    }
+                    std::vector<std::uint8_t> frame =
+                        taggedAudioFrame(source, chunk);
+                    bool sent = liveAudioSocket.sendBinary(frame);
+                    if (sent) {
+                        unsigned long long count = ++(*sentChunks);
+                        if (count == 1 || count == 25 || count == 100 ||
+                            count % 500 == 0) {
+                            std::wcout << L"[live] audio sent chunks="
+                                       << count << L"\n";
+                        }
+                    } else {
+                        unsigned long long count = ++(*failedChunks);
+                        if (count == 1 || count == 25 || count == 100 ||
+                            count % 500 == 0) {
+                            std::wcout << L"[live] audio send failed chunks="
+                                       << count << L"\n";
+                        }
+                    }
                 },
                 error)) {
             std::wcout << L"[live] audio capture failed: " << error << L"\n";
@@ -1160,6 +1397,18 @@ int main() {
                     overlayDirty = true;
                 }
             }
+        }
+        if (appState.sessionStatus == foundry::SessionStatus::Active &&
+            !appState.liveSessionId.empty()) {
+            ULONGLONG now = GetTickCount64();
+            if (nextLivePollTick == 0 || now >= nextLivePollTick) {
+                if (pollLiveSession(appState)) {
+                    overlayDirty = true;
+                }
+                nextLivePollTick = now + 1000;
+            }
+        } else {
+            nextLivePollTick = 0;
         }
         if (overlaySettingsRequested) {
             overlaySettingsOpen = true;
@@ -1266,6 +1515,7 @@ int main() {
                 if (type == "sessionSelected") {
                     appState.sessionStatus = foundry::SessionStatus::Active;
                     appState.sessionStartedAt = isoNowUtc();
+                    nextLivePollTick = 0;
                     startLiveEvents();
                     startLiveAudio();
                     overlayPickerOpen = false;
@@ -1323,11 +1573,12 @@ int main() {
         if (overlaySaveEndRequested) {
             overlayEndStatus = L"Saving call...";
             overlayDirty = true;
-            Json result = saveEndSession(appState, L"");
+            Json result = saveEndSession(appState, appState.liveTranscriptRaw);
             std::string type = result.value("type", "");
             if (type == "saveSucceeded") {
                 stopLiveAudio();
                 liveEvents.stop();
+                nextLivePollTick = 0;
                 overlayEndOpen = false;
                 overlayPersonDropdownOpen = false;
                 overlayScrollOffset = 0;
@@ -1376,7 +1627,7 @@ int main() {
             swapChain->Present(1, 0);
             overlayDirty = false;
         }
-        MsgWaitForMultipleObjectsEx(0, nullptr, INFINITE, QS_ALLINPUT,
+        MsgWaitForMultipleObjectsEx(0, nullptr, 100, QS_ALLINPUT,
                                     MWMO_INPUTAVAILABLE);
     }
 

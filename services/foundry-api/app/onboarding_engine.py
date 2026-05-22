@@ -20,56 +20,57 @@ REQUIRED_SLOTS = [
 ]
 SLOT_ORDER = SLOT_KEYS[:]
 ARRAY_SLOTS = {"idealPeopleTypes", "disqualifiers"}
+COMPLETENESS_LEVELS = {"missing", "weak", "solid"}
 
 FALLBACKS = {
     "ideaSummary": {
         "question": "What are you building?",
         "choices": [
-            {"id": "a", "label": "A SaaS tool for businesses", "normalizedValue": "A SaaS tool for businesses"},
-            {"id": "b", "label": "A consumer app", "normalizedValue": "A consumer app"},
-            {"id": "c", "label": "A marketplace connecting two groups", "normalizedValue": "A marketplace connecting two groups"},
-            {"id": "d", "label": "A services business with AI/software support", "normalizedValue": "A services business with AI/software support"},
+            {"id": "a", "label": "A focused SaaS tool that helps a specific business team finish a painful workflow faster", "normalizedValue": "A focused SaaS tool for a specific business workflow"},
+            {"id": "b", "label": "A consumer product that changes how an individual handles a repeated personal problem", "normalizedValue": "A consumer product for a repeated personal problem"},
+            {"id": "c", "label": "A marketplace that connects two groups who struggle to find or trust each other today", "normalizedValue": "A marketplace connecting two groups with matching or trust friction"},
+            {"id": "d", "label": "A service-led business where software or AI removes the hardest delivery bottleneck", "normalizedValue": "A service-led business with software or AI support"},
         ],
         "customPlaceholder": "Describe what you're building in a sentence or two...",
     },
     "targetUser": {
         "question": "Who is the primary person you're building this for?",
         "choices": [
-            {"id": "a", "label": "Individual professionals / knowledge workers", "normalizedValue": "Individual professionals or knowledge workers"},
-            {"id": "b", "label": "Small business owners", "normalizedValue": "Small business owners"},
-            {"id": "c", "label": "Teams at mid-size companies", "normalizedValue": "Teams at mid-size companies"},
-            {"id": "d", "label": "Enterprise teams", "normalizedValue": "Enterprise teams"},
-            {"id": "e", "label": "Consumers / general public", "normalizedValue": "Consumers or general public"},
+            {"id": "a", "label": "Individual professionals who personally feel the workflow pain during their day-to-day work", "normalizedValue": "Individual professionals who personally feel the workflow pain"},
+            {"id": "b", "label": "Small business owners who both feel the problem and decide whether a tool is worth trying", "normalizedValue": "Small business owners who feel the problem and decide on tools"},
+            {"id": "c", "label": "A specific team inside a mid-size company that owns this workflow and its results", "normalizedValue": "A specific team at a mid-size company that owns the workflow"},
+            {"id": "d", "label": "Enterprise teams where the user and buying decision may be split across roles", "normalizedValue": "Enterprise teams with separate users and buying decisions"},
+            {"id": "e", "label": "Consumers who run into this problem repeatedly outside a work setting", "normalizedValue": "Consumers who repeatedly experience this problem"},
         ],
         "customPlaceholder": "Describe the primary person you're building this for...",
     },
     "painPoint": {
         "question": "What's the core problem this solves?",
         "choices": [
-            {"id": "a", "label": "Too much manual work / repetitive tasks", "normalizedValue": "Too much manual or repetitive work"},
-            {"id": "b", "label": "Hard to find the right information", "normalizedValue": "Difficulty finding the right information"},
-            {"id": "c", "label": "Coordination or communication breakdown", "normalizedValue": "Coordination or communication breakdown"},
-            {"id": "d", "label": "Existing tools are too complex or expensive", "normalizedValue": "Existing tools are too complex or expensive"},
+            {"id": "a", "label": "They lose time to manual or repetitive work that still needs human attention", "normalizedValue": "Manual or repetitive work consumes time and attention"},
+            {"id": "b", "label": "They cannot find or trust the information needed to make the next decision", "normalizedValue": "Difficulty finding trustworthy information for decisions"},
+            {"id": "c", "label": "The workflow breaks when people coordinate across handoffs, tools, or teams", "normalizedValue": "Coordination breaks across handoffs, tools, or teams"},
+            {"id": "d", "label": "Current tools exist, but they are too complex, expensive, or awkward for this use case", "normalizedValue": "Existing tools are too complex, expensive, or awkward for the use case"},
         ],
         "customPlaceholder": "Describe the core problem in your own words...",
     },
     "valueProp": {
         "question": "What's the main value you deliver?",
         "choices": [
-            {"id": "a", "label": "Save significant time", "normalizedValue": "Saves significant time"},
-            {"id": "b", "label": "Reduce cost", "normalizedValue": "Reduces cost"},
-            {"id": "c", "label": "Improve quality of outcomes", "normalizedValue": "Improves quality of outcomes"},
-            {"id": "d", "label": "Remove painful friction", "normalizedValue": "Removes painful friction from a workflow"},
+            {"id": "a", "label": "Give them meaningful time back on a workflow they repeat often", "normalizedValue": "Saves meaningful time on a repeated workflow"},
+            {"id": "b", "label": "Reduce the cost of getting the same work done well", "normalizedValue": "Reduces the cost of completing the work well"},
+            {"id": "c", "label": "Improve the quality, reliability, or confidence of the result", "normalizedValue": "Improves the quality and reliability of outcomes"},
+            {"id": "d", "label": "Remove enough friction that people actually complete the workflow", "normalizedValue": "Removes friction that blocks workflow completion"},
         ],
         "customPlaceholder": "Describe the specific value you deliver...",
     },
     "idealPeopleTypes": {
         "question": "Who would be ideal early users or customers?",
         "choices": [
-            {"id": "a", "label": "Founders at early-stage startups", "normalizedValue": "Founders at early-stage startups"},
-            {"id": "b", "label": "Operators at SMBs (10-200 employees)", "normalizedValue": "Operators at small to mid-size businesses"},
-            {"id": "c", "label": "Domain experts / practitioners", "normalizedValue": "Domain experts or practitioners in the field"},
-            {"id": "d", "label": "Power users of existing incumbent tools", "normalizedValue": "Power users frustrated with existing tools"},
+            {"id": "a", "label": "Target users who feel this problem often enough to describe their current workaround", "normalizedValue": "Target users who feel the problem and can describe their workaround"},
+            {"id": "b", "label": "Experienced builders who have already navigated a similar product or startup challenge", "normalizedValue": "Experienced builders with similar product or startup experience"},
+            {"id": "c", "label": "Industry experts or practitioners who understand the workflow and its failure modes deeply", "normalizedValue": "Industry experts or practitioners who understand the workflow deeply"},
+            {"id": "d", "label": "Decision makers or power users who know why current tools get adopted or rejected", "normalizedValue": "Decision makers or power users who know why current tools win or fail"},
         ],
         "customPlaceholder": "Describe your ideal early user...",
     },
@@ -107,7 +108,25 @@ def empty_onboarding_state() -> dict:
         "differentiation": None,
         "disqualifiers": [],
         "completeness": completeness,
+        "followUpCounts": {key: 0 for key in SLOT_KEYS},
     }
+
+
+def normalize_onboarding_state(state: dict | None) -> dict:
+    normalized = empty_onboarding_state()
+    if not isinstance(state, dict):
+        return normalized
+    for key in SLOT_KEYS:
+        if key in state:
+            normalized[key] = state[key]
+    raw_completeness = state.get("completeness") or {}
+    raw_followups = state.get("followUpCounts") or {}
+    for key in SLOT_KEYS:
+        if raw_completeness.get(key) in COMPLETENESS_LEVELS:
+            normalized["completeness"][key] = raw_completeness[key]
+        if isinstance(raw_followups.get(key), int):
+            normalized["followUpCounts"][key] = max(0, raw_followups[key])
+    return normalized
 
 
 def choose_next_slot(state: dict) -> str | None:
@@ -115,7 +134,11 @@ def choose_next_slot(state: dict) -> str | None:
         if key in REQUIRED_SLOTS and state["completeness"][key] == "missing":
             return key
     for key in SLOT_ORDER:
-        if key in REQUIRED_SLOTS and state["completeness"][key] == "weak":
+        if (
+            key in REQUIRED_SLOTS
+            and state["completeness"][key] == "weak"
+            and state["followUpCounts"].get(key, 0) < 1
+        ):
             return key
     for key in SLOT_ORDER:
         if key not in REQUIRED_SLOTS and state["completeness"][key] == "missing":
@@ -126,11 +149,17 @@ def choose_next_slot(state: dict) -> str | None:
 def is_onboarding_finishable(state: dict) -> bool:
     solid_count = len([key for key in REQUIRED_SLOTS if state["completeness"][key] == "solid"])
     none_missing = all(state["completeness"][key] != "missing" for key in REQUIRED_SLOTS)
-    return none_missing and solid_count >= 3
+    weak_slots_probed = all(
+        state["completeness"][key] != "weak" or state["followUpCounts"].get(key, 0) >= 1
+        for key in REQUIRED_SLOTS
+    )
+    return none_missing and (solid_count >= 3 or weak_slots_probed)
 
 
 def merge_slot_patch(state: dict, slot_key: str, value, quality: str) -> dict:
     next_state = deepcopy(state)
+    if next_state["completeness"].get(slot_key) == "weak":
+        next_state["followUpCounts"][slot_key] = next_state["followUpCounts"].get(slot_key, 0) + 1
     next_state["completeness"][slot_key] = quality
     if slot_key in ARRAY_SLOTS:
         next_state[slot_key] = value if isinstance(value, list) else [value]
@@ -139,8 +168,23 @@ def merge_slot_patch(state: dict, slot_key: str, value, quality: str) -> dict:
     return next_state
 
 
-def merge_kickoff_idea(state: dict, idea_summary: str, quality: str) -> dict:
-    return merge_slot_patch(state, "ideaSummary", idea_summary, quality)
+def merge_kickoff_context(state: dict, extracted: dict) -> dict:
+    next_state = deepcopy(state)
+    for key in REQUIRED_SLOTS:
+        patch = extracted.get(key) if isinstance(extracted, dict) else None
+        if not isinstance(patch, dict):
+            continue
+        quality = patch.get("quality")
+        if quality not in {"weak", "solid"}:
+            continue
+        value = patch.get("values") if key in ARRAY_SLOTS else patch.get("value")
+        if key in ARRAY_SLOTS:
+            if not isinstance(value, list) or not [item for item in value if isinstance(item, str) and item.strip()]:
+                continue
+        elif not isinstance(value, str) or not value.strip():
+            continue
+        next_state = merge_slot_patch(next_state, key, value, quality)
+    return next_state
 
 
 def validate_choices(choices: list[dict], target_slot: str) -> tuple[bool, str | None]:

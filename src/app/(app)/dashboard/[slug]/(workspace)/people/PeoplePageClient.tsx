@@ -43,6 +43,12 @@ function applySortOrder(people: Person[], order: SortOrder): Person[] {
   return [...sortGroup(bookmarked, order), ...sortGroup(unbookmarked, order)];
 }
 
+function matchesSearch(person: Person, query: string): boolean {
+  return [person.name, person.company, person.title].some((value) =>
+    value?.toLowerCase().includes(query)
+  );
+}
+
 export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
   const router = useRouter();
   const [people, setPeople] = useState<Person[]>(initialPeople);
@@ -57,6 +63,7 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
 
   const [sortOrder, setSortOrder] = useState<SortOrder>('recent-asc');
   const [sortOpen, setSortOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const sortRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -153,7 +160,12 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
     router.refresh();
   }
 
-  const sortedPeople = applySortOrder(people, sortOrder);
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const searchActive = normalizedSearch.length > 0;
+  const visiblePeople = searchActive
+    ? people.filter((person) => matchesSearch(person, normalizedSearch))
+    : people;
+  const sortedPeople = applySortOrder(visiblePeople, sortOrder);
 
   return (
     <div className={styles.wrap}>
@@ -201,11 +213,20 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
               </ul>
             )}
           </div>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className={styles.searchInput}
+            placeholder="Search name, company, or title"
+            aria-label="Search people by name, company, or title"
+          />
         </div>
       )}
 
       <PersonGrid
         people={sortedPeople}
+        searchActive={searchActive}
         projectId={projectId}
         slug={slug}
         onPersonCreated={handlePersonCreated}

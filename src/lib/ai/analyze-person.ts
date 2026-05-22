@@ -48,6 +48,14 @@ For relevance_rank: score against the founder's specific hypothesis, customer ty
 
 Important: Do not assign low relevance solely because the person is not the exact target customer. If the person is a founder, former founder, startup operator, technical builder, accelerator participant, or works closely with early-stage founders, they should usually be medium unless their background has almost no connection to startup formation, customer discovery, or founder workflows.`;
 
+  const personaTypeDescription = `The persona type that best describes this person relative to the founder's startup:
+- potential_user: a target user who may directly use the product or feel the pain.
+- buyer: a decision maker who can decide, approve, or block adoption.
+- operator: an experienced builder with relevant startup, product, or company-building experience.
+- domain_expert: an industry expert with deep knowledge of the market, workflow, or domain.
+- skeptic: a critical voice likely to challenge weak assumptions.
+- connector: an introducer who can connect the founder to better interviewees.`;
+
   return generateObject<PersonAnalysis>(prompt, {
     type: 'object',
     required: ['name', 'summary', 'relevance_rank', 'why_they_matter', 'key_insights', 'recommended_questions'],
@@ -67,7 +75,7 @@ Important: Do not assign low relevance solely because the person is not the exac
       persona_type: {
         type: 'string',
         enum: ['potential_user', 'buyer', 'operator', 'domain_expert', 'skeptic', 'connector'],
-        description: 'The persona type that best describes this person relative to the founder\'s startup.',
+        description: personaTypeDescription,
       },
       summary: {
         type: 'string',

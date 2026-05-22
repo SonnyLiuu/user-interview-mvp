@@ -37,8 +37,8 @@ function ProjectBriefMockup() {
       </div>
       <div className={styles.mockupSection}>
         <span className={styles.mockupLabel}>Recommended conversations</span>
-        <div className={`${styles.mockupRow} ${styles.mockupRowMuted}`}>→ 2 potential users</div>
-        <div className={`${styles.mockupRow} ${styles.mockupRowMuted}`}>→ 1 budget holder · 1 skeptic</div>
+        <div className={`${styles.mockupRow} ${styles.mockupRowMuted}`}>→ 2 target users</div>
+        <div className={`${styles.mockupRow} ${styles.mockupRowMuted}`}>→ 1 decision maker · 1 critical voice</div>
       </div>
     </>
   );
@@ -54,7 +54,7 @@ function PersonAnalysisMockup() {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-        <span className={`${styles.badge} ${styles.badgePersona}`}>potential_user</span>
+        <span className={`${styles.badge} ${styles.badgePersona}`}>Target user</span>
         <span className={`${styles.badge} ${styles.badgeValue}`}>high value</span>
       </div>
       <div className={styles.mockupDivider} />

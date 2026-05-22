@@ -21,3 +21,16 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
 }
+
+.searchEmpty {
+  margin: 0;
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  border: 1px dashed #d8c5ae;
+  border-radius: 8px;
+  color: #7c6854;
+  font-size: 14px;
+  font-weight: 440;
+}
