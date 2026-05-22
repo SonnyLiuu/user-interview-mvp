@@ -260,7 +260,7 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
         f'- question: 1-2 natural sentences, conversational tone, no formatting\n'
         f'- Generate exactly 3-5 distinct, concrete choices relevant to this specific founder\'s context\n'
         f'- Each choice should target the "{target_slot}" slot\n'
-        '- Do NOT include a "Something else" option - the UI adds that automatically\n'
+        "- Do not include a generic escape hatch; the UI always keeps free text available\n"
         '- Labels may be detailed but must stay under 110 characters\n'
         '- Assign a short unique id to each choice (e.g. "a", "b", "c")\n'
         '- normalizedValue should be a clean sentence suitable for storage\n'
@@ -278,16 +278,45 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
     }
 
 
-async def extract_custom_slot_answer(target_slot: str, custom_text: str, recent_messages: list[dict]) -> dict:
+async def extract_custom_slot_answer(
+    target_slot: str,
+    custom_text: str,
+    recent_messages: list[dict],
+    current_choices: list[dict] | None = None,
+    selected_choices: list[dict] | None = None,
+) -> dict:
     is_array_slot = target_slot in {"idealPeopleTypes", "disqualifiers"}
     snippet = "\n".join([f"{'AI' if msg['role'] == 'assistant' else 'Founder'}: {msg['content']}" for msg in recent_messages[-4:]]) or "(none)"
+    suggestion_context = [
+        {
+            "number": index + 1,
+            "id": choice.get("id"),
+            "label": choice.get("label"),
+            "normalizedValue": choice.get("normalizedValue"),
+        }
+        for index, choice in enumerate(current_choices or [])
+    ]
+    selected_ids = {choice.get("id") for choice in selected_choices or []}
+    selected_suggestions = [
+        suggestion
+        for suggestion in suggestion_context
+        if suggestion["id"] in selected_ids
+    ]
     prompt = (
         "A founder typed a custom answer during onboarding. Extract a clean value for the target slot.\n\n"
         f"Target slot: {target_slot}\n"
         f"{'This slot stores an array - extract one or more distinct items.' if is_array_slot else 'This slot stores a single string.'}\n\n"
         f"Recent conversation:\n{snippet}\n\n"
+        "Current suggestions shown to the founder, in their visible numbered order:\n"
+        f"{json.dumps(suggestion_context, indent=2)}\n\n"
+        "Suggestions the founder explicitly selected before sending:\n"
+        f"{json.dumps(selected_suggestions, indent=2)}\n\n"
         f'Founder\'s custom answer:\n"""\n{custom_text}\n"""\n\n'
         "Rules:\n"
+        "- The founder may refer to suggestions by visible number, position, or a short description.\n"
+        "- Use numbered suggestion context to resolve those references before extracting the value.\n"
+        "- The founder's typed answer is authoritative when it combines, narrows, overrides, or contradicts suggestions.\n"
+        "- Explicitly selected suggestions are supporting context unless the typed answer changes them.\n"
         f'- Extract only what\'s relevant to the "{target_slot}" slot\n'
         '- quality is "solid" if specific and clearly addresses the slot; "weak" if vague\n'
         f"- {'Return values as an array of strings' if is_array_slot else 'Return value as a single string'}"
@@ -327,7 +356,9 @@ async def generate_foundation(messages: list[dict], state: dict) -> dict:
         "- Use the collected state as the primary source; use the transcript to fill gaps or improve clarity\n"
         "- summary should read as a neutral, polished description - not first-person\n"
         "- Keep all fields concise and specific\n"
-        "- If differentiation or disqualifiers were not discussed, omit or set to null/empty"
+        "- If differentiation or disqualifiers were not discussed, omit or set to null/empty\n"
+        "- biggestUnknown should name the highest-value assumption the founder still needs to test.\n"
+        "- nextResearchAction should be one concrete people-research action that would test that unknown."
     )
     raw = await _generate_json(
         [{"role": "user", "content": prompt}],

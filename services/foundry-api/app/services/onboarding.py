@@ -7,11 +7,11 @@ from ..db import get_pool
 from ..errors import BadRequestError, NotFoundError
 from ..onboarding_engine import (
     choose_next_slot,
-    empty_onboarding_state,
     get_fallback_choices,
     is_onboarding_finishable,
-    merge_kickoff_idea,
+    merge_kickoff_context,
     merge_slot_patch,
+    normalize_onboarding_state,
     validate_choices,
 )
 from ..repositories import onboarding as onboarding_repo
@@ -33,7 +33,7 @@ async def _get_context(user_id: str, project_id: str):
 
     if isinstance(raw_state, str):
         raw_state = json.loads(raw_state)
-    state = raw_state if raw_state else empty_onboarding_state()
+    state = normalize_onboarding_state(raw_state)
 
     chat_history = [
         {
@@ -70,6 +70,43 @@ async def _generate_turn(state: dict, chat_history: list[dict]) -> dict:
         fallback = get_fallback_choices(next_slot)
         result = {"targetSlot": next_slot, **fallback}
     return result
+
+
+def _resolve_selected_choices(last_turn: dict, choice_ids: list[str]) -> list[dict]:
+    if not isinstance(choice_ids, list):
+        raise BadRequestError("choiceIds must be a list")
+    if any(not isinstance(choice_id, str) for choice_id in choice_ids):
+        raise BadRequestError("Invalid choice for current turn")
+    requested_ids = set(choice_ids)
+    if len(requested_ids) != len(choice_ids):
+        raise BadRequestError("Invalid choice for current turn")
+    selected = [
+        choice
+        for choice in last_turn.get("choices") or []
+        if choice.get("id") in requested_ids
+    ]
+    if len(selected) != len(requested_ids):
+        raise BadRequestError("Invalid choice for current turn")
+    return selected
+
+
+def _format_selected_suggestions(last_turn: dict, selected_choices: list[dict]) -> str:
+    selected_ids = {choice.get("id") for choice in selected_choices}
+    labels = [
+        f"{index}. {choice['label']}"
+        for index, choice in enumerate(last_turn.get("choices") or [], start=1)
+        if choice.get("id") in selected_ids
+    ]
+    return f"Selected suggestions: {'; '.join(labels)}"
+
+
+def _format_answer_message(last_turn: dict, selected_choices: list[dict], custom_text: str) -> str:
+    if not selected_choices:
+        return custom_text
+    selected_summary = _format_selected_suggestions(last_turn, selected_choices)
+    if custom_text:
+        return f"{custom_text}\n{selected_summary}"
+    return selected_summary
 
 
 async def process_onboarding_request(user_id: str, project_id: str, body: dict):
@@ -126,7 +163,64 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
             await onboarding_repo.save_message(conn, session["id"], project_id, "user", message, "custom_answer")
         chat_history.append({"role": "user", "content": message, "messageType": "custom_answer"})
         extracted = await extract_kickoff_idea(message)
-        next_state = merge_kickoff_idea(state, extracted["ideaSummary"], extracted["quality"])
+        next_state = merge_kickoff_context(state, extracted)
+        finishable = is_onboarding_finishable(next_state)
+        current_turn = None if finishable else await _generate_turn(next_state, chat_history)
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await onboarding_repo.save_state(conn, project_id, next_state)
+                await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, "ready" if finishable else "active")
+                if current_turn:
+                    await onboarding_repo.save_message(conn, session["id"], project_id, "assistant", current_turn["question"], "question")
+        if current_turn:
+            chat_history.append({"role": "assistant", "content": current_turn["question"], "messageType": "question"})
+        return {
+            "messages": chat_history,
+            "currentTurn": current_turn,
+            "isFinishable": finishable,
+            "sessionStatus": "ready" if finishable else (session["status"] or "active"),
+        }
+
+    if request_type == "answer":
+        if not last_turn:
+            raise BadRequestError("No active turn to answer")
+        custom_text = (body.get("customText") or "").strip()
+        selected_choices = _resolve_selected_choices(last_turn, body.get("choiceIds") or [])
+        if not custom_text and not selected_choices:
+            raise BadRequestError("Answer text or choices are required")
+
+        answer_content = _format_answer_message(last_turn, selected_choices, custom_text)
+        message_type = "custom_answer" if custom_text else "choice_answer"
+        async with pool.acquire() as conn:
+            await onboarding_repo.save_message(conn, session["id"], project_id, "user", answer_content, message_type)
+        chat_history.append({"role": "user", "content": answer_content, "messageType": message_type})
+
+        if custom_text:
+            recent = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history[-4:]]
+            extracted = await extract_custom_slot_answer(
+                last_turn["targetSlot"],
+                custom_text,
+                recent,
+                last_turn.get("choices") or [],
+                selected_choices,
+            )
+            next_state = merge_slot_patch(state, last_turn["targetSlot"], extracted["value"], extracted["quality"])
+        else:
+            selected_values = [choice["normalizedValue"] for choice in selected_choices]
+            next_state = merge_slot_patch(state, last_turn["targetSlot"], selected_values, "solid")
+
+        if is_onboarding_finishable(next_state):
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await onboarding_repo.save_state(conn, project_id, next_state)
+                    await onboarding_repo.persist_session_turn(conn, session["id"], None, "ready")
+            return {
+                "messages": chat_history,
+                "currentTurn": None,
+                "isFinishable": True,
+                "sessionStatus": "ready",
+            }
+
         current_turn = await _generate_turn(next_state, chat_history)
         async with pool.acquire() as conn:
             async with conn.transaction():
@@ -137,7 +231,7 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
         return {
             "messages": chat_history,
             "currentTurn": current_turn,
-            "isFinishable": is_onboarding_finishable(next_state),
+            "isFinishable": False,
             "sessionStatus": session["status"] or "active",
         }
 
@@ -190,7 +284,12 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
             await onboarding_repo.save_message(conn, session["id"], project_id, "user", custom_text, "custom_answer")
         chat_history.append({"role": "user", "content": custom_text, "messageType": "custom_answer"})
         recent = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history[-4:]]
-        extracted = await extract_custom_slot_answer(last_turn["targetSlot"], custom_text, recent)
+        extracted = await extract_custom_slot_answer(
+            last_turn["targetSlot"],
+            custom_text,
+            recent,
+            last_turn.get("choices") or [],
+        )
         next_state = merge_slot_patch(state, last_turn["targetSlot"], extracted["value"], extracted["quality"])
         if is_onboarding_finishable(next_state):
             async with pool.acquire() as conn:

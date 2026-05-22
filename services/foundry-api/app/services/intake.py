@@ -63,6 +63,10 @@ def get_foundation_advisor_prompt(foundation: dict) -> str:
         lines.append(f"  Differentiation: {foundation['differentiation']}")
     if foundation.get("disqualifiers"):
         lines.append(f"  Disqualifiers: {', '.join(foundation['disqualifiers'])}")
+    if foundation.get("biggestUnknown"):
+        lines.append(f"  Biggest Unknown: {foundation['biggestUnknown']}")
+    if foundation.get("nextResearchAction"):
+        lines.append(f"  Next Research Action: {foundation['nextResearchAction']}")
     lines += [
         "",
         "How to behave:",
@@ -78,7 +82,7 @@ def get_foundation_advisor_prompt(foundation: dict) -> str:
         "Editing the document:",
         "When you want to make a concrete change to the foundation document, end your response with this exact JSON block on its own line:",
         '{"foundation_patch": {"fieldName": "updated value"}}',
-        "Available fields: summary, targetUser, painPoint, valueProp, idealPeopleTypes (array of strings), differentiation, disqualifiers (array of strings).",
+        "Available fields: summary, targetUser, painPoint, valueProp, idealPeopleTypes (array of strings), differentiation, disqualifiers (array of strings), biggestUnknown, nextResearchAction.",
         "Only include fields you are actually changing. Only emit the patch block when making a real edit, not for discussion.",
         'Do not output {"intake_complete": true}. Do not restart the intake flow.',
     ]

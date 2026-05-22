@@ -49,6 +49,16 @@ type Phase = 'kickoff' | 'choices' | 'finishing' | 'done';
 
 const BOTTOM_THRESHOLD_PX = 32;
 
+const FINISHING_STATUSES = [
+  'Re-reading your answers',
+  'Identifying the sharpest pain points',
+  'Sketching your target user',
+  'Drafting your Foundation',
+  'Polishing the details',
+];
+
+const FINISHING_STATUS_INTERVAL_MS = 2400;
+
 export default function OnboardingChat({ projectId, onComplete }: OnboardingChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentTurn, setCurrentTurn] = useState<CurrentTurn | null>(null);
@@ -57,9 +67,10 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [showCustomInput, setShowCustomInput] = useState(false);
   const [customText, setCustomText] = useState('');
+  const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([]);
   const [kickoffText, setKickoffText] = useState('');
+  const [finishingStatusIndex, setFinishingStatusIndex] = useState(0);
   const messagesRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const customInputRef = useRef<HTMLTextAreaElement>(null);
@@ -81,19 +92,12 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
     }
   }, [messages, currentTurn, loading]);
 
-  // Focus custom input when shown
-  useEffect(() => {
-    if (showCustomInput) {
-      customInputRef.current?.focus();
-    }
-  }, [showCustomInput]);
-
   const applyResponse = useCallback((data: ChatResponse) => {
     setMessages(data.messages);
     setCurrentTurn(data.currentTurn);
     setIsFinishable(data.isFinishable);
-    setShowCustomInput(false);
     setCustomText('');
+    setSelectedChoiceIds([]);
     setError('');
     shouldStickToBottomRef.current = true;
 
@@ -136,6 +140,17 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
     void loadChat();
   }, [loadChat]);
 
+  useEffect(() => {
+    if (phase !== 'finishing') {
+      setFinishingStatusIndex(0);
+      return;
+    }
+    const id = window.setInterval(() => {
+      setFinishingStatusIndex((prev) => Math.min(prev + 1, FINISHING_STATUSES.length - 1));
+    }, FINISHING_STATUS_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [phase]);
+
   async function submitKickoff() {
     const text = kickoffText.trim();
     if (!text || submitting) return;
@@ -164,37 +179,19 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
     }
   }
 
-  async function submitChoice(choice: GeneratedChoice) {
+  function toggleChoice(choice: GeneratedChoice) {
     if (submitting) return;
-    setSubmitting(true);
-    setError('');
-
-    try {
-      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'choice',
-          choiceId: choice.id,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to submit choice');
-      }
-
-      const data = await res.json() as ChatResponse;
-      applyResponse(data);
-    } catch {
-      setError('That selection did not go through. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+    setSelectedChoiceIds((current) => (
+      current.includes(choice.id)
+        ? current.filter((choiceId) => choiceId !== choice.id)
+        : [...current, choice.id]
+    ));
+    if (error) setError('');
   }
 
-  async function submitCustom() {
+  async function submitAnswer() {
     const text = customText.trim();
-    if (!text || submitting || !currentTurn) return;
+    if ((!text && selectedChoiceIds.length === 0) || submitting || !currentTurn) return;
 
     setSubmitting(true);
     setError('');
@@ -204,19 +201,20 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'custom',
-          customText: text,
+          type: 'answer',
+          choiceIds: selectedChoiceIds,
+          customText: text || undefined,
         }),
       });
 
       if (!res.ok) {
-        throw new Error('Failed to submit custom answer');
+        throw new Error('Failed to submit answer');
       }
 
       const data = await res.json() as ChatResponse;
       applyResponse(data);
     } catch {
-      setError('Your custom answer did not go through. Please try again.');
+      setError('Your answer did not go through. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -329,54 +327,53 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
         {/* Choices phase */}
         {phase === 'choices' && !submitting && currentTurn && (
           <div className={styles.choicesArea}>
+            <p className={styles.choiceIntro}>
+              Select suggestions to combine, or reference their numbers while you refine your answer below.
+            </p>
             <div className={styles.choiceGrid}>
-              {currentTurn.choices.map((choice) => (
-                <button
-                  key={choice.id}
-                  className={styles.choiceBtn}
-                  onClick={() => void submitChoice(choice)}
-                  disabled={submitting}
-                >
-                  {choice.label}
-                </button>
-              ))}
-              <button
-                className={[styles.choiceBtn, styles.somethingElseBtn].join(' ')}
-                onClick={() => setShowCustomInput(true)}
-                disabled={submitting}
-              >
-                Something else
-              </button>
+              {currentTurn.choices.map((choice, index) => {
+                const selected = selectedChoiceIds.includes(choice.id);
+                return (
+                  <button
+                    key={choice.id}
+                    className={[styles.choiceBtn, selected && styles.choiceBtnSelected].filter(Boolean).join(' ')}
+                    onClick={() => toggleChoice(choice)}
+                    aria-pressed={selected}
+                    disabled={submitting}
+                  >
+                    <span className={styles.choiceNumber}>{index + 1}</span>
+                    <span>{choice.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {showCustomInput && (
-              <div className={styles.customInputRow}>
-                <textarea
-                  ref={customInputRef}
-                  className={styles.customTextarea}
-                  placeholder={currentTurn.customPlaceholder}
-                  value={customText}
-                  onChange={(e) => {
-                    setCustomText(e.target.value);
-                    if (error) setError('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      void submitCustom();
-                    }
-                  }}
-                  rows={2}
-                />
-                <button
-                  className={styles.sendBtn}
-                  onClick={() => void submitCustom()}
-                  disabled={!customText.trim() || submitting}
-                >
-                  Send
-                </button>
-              </div>
-            )}
+            <div className={styles.customInputRow}>
+              <textarea
+                ref={customInputRef}
+                className={styles.customTextarea}
+                placeholder={currentTurn.customPlaceholder}
+                value={customText}
+                onChange={(e) => {
+                  setCustomText(e.target.value);
+                  if (error) setError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void submitAnswer();
+                  }
+                }}
+                rows={2}
+              />
+              <button
+                className={styles.sendBtn}
+                onClick={() => void submitAnswer()}
+                disabled={(!customText.trim() && selectedChoiceIds.length === 0) || submitting}
+              >
+                Send
+              </button>
+            </div>
           </div>
         )}
 
@@ -394,10 +391,19 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
 
         {/* Finishing state */}
         {phase === 'finishing' && (
-          <div className={styles.finishArea}>
-            <p className={styles.finishText}>Generating your Foundation...</p>
-            <div className={styles.typing}>
-              <span /><span /><span />
+          <div className={styles.finishingArea} role="status" aria-live="polite">
+            <div className={styles.finishingHeader}>
+              <span className={styles.finishingPulse} aria-hidden="true" />
+              <p className={styles.finishingTitle}>Generating your Foundation</p>
+            </div>
+            <p key={finishingStatusIndex} className={styles.finishingStatus}>
+              {FINISHING_STATUSES[finishingStatusIndex]}
+              <span className={styles.finishingEllipsis} aria-hidden="true">
+                <span /><span /><span />
+              </span>
+            </p>
+            <div className={styles.finishingProgress} aria-hidden="true">
+              <div className={styles.finishingProgressBar} />
             </div>
           </div>
         )}

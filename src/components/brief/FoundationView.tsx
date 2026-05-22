@@ -128,6 +128,24 @@ export default function FoundationView({
       {/* Document */}
       <div className={styles.editableContent}>
         <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Research Cue</h2>
+          <AutoTextarea
+            className={styles.editableField}
+            value={foundation.biggestUnknown ?? ''}
+            onChange={(v) => handleChange({ ...foundation, biggestUnknown: v })}
+            onBlur={handleBlur}
+            placeholder="What is the biggest unknown to test next?"
+          />
+          <AutoTextarea
+            className={styles.editableField}
+            value={foundation.nextResearchAction ?? ''}
+            onChange={(v) => handleChange({ ...foundation, nextResearchAction: v })}
+            onBlur={handleBlur}
+            placeholder="What people research action would test it?"
+          />
+        </section>
+
+        <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Summary</h2>
           <AutoTextarea
             className={styles.editableField}

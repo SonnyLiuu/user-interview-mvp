@@ -131,14 +131,14 @@ def normalize_onboarding_state(state: dict | None) -> dict:
 
 def choose_next_slot(state: dict) -> str | None:
     for key in SLOT_ORDER:
-        if key in REQUIRED_SLOTS and state["completeness"][key] == "missing":
-            return key
-    for key in SLOT_ORDER:
         if (
             key in REQUIRED_SLOTS
             and state["completeness"][key] == "weak"
             and state["followUpCounts"].get(key, 0) < 1
         ):
+            return key
+    for key in SLOT_ORDER:
+        if key in REQUIRED_SLOTS and state["completeness"][key] == "missing":
             return key
     for key in SLOT_ORDER:
         if key not in REQUIRED_SLOTS and state["completeness"][key] == "missing":

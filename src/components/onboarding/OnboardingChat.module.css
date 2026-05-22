@@ -163,11 +163,21 @@
   gap: 8px;
 }
 
+.choiceIntro {
+  margin: 0;
+  font-size: 13px;
+  color: #715b49;
+}
+
 .choiceBtn {
-  padding: 9px 16px;
+  max-width: min(100%, 420px);
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
   background: #fffdf8;
   border: 1px solid #d4bfa6;
-  border-radius: 20px;
+  border-radius: 12px;
   font-size: 13px;
   font-family: inherit;
   color: #2e2115;
@@ -182,20 +192,34 @@
   border-color: #b39472;
 }
 
+.choiceBtnSelected {
+  background: #f4e4cc;
+  border-color: #a4532b;
+}
+
+.choiceNumber {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #edd7b8;
+  color: #653616;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.choiceBtnSelected .choiceNumber {
+  background: #a4532b;
+  color: #fff6ea;
+}
+
 .choiceBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.somethingElseBtn {
-  background: transparent;
-  border-color: #c9b89e;
-  color: #7c6854;
-}
-
-.somethingElseBtn:hover:not(:disabled) {
-  background: #faf4ec;
-  color: #2e2115;
 }
 
 /* ── Custom text input ───────────────────────────────────────────────────── */
@@ -256,4 +280,107 @@
 
 .finishBtn:hover {
   opacity: 0.85;
+}
+
+/* ── Finishing (Foundation generation) loader ───────────────────────────── */
+.finishingArea {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 0 8px;
+  animation: finishingFadeIn 320ms ease-out;
+}
+
+.finishingHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.finishingPulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #a4532b;
+  box-shadow: 0 0 0 0 rgba(164, 83, 43, 0.55);
+  animation: finishingPulse 1.8s ease-out infinite;
+}
+
+.finishingTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #2e2115;
+  letter-spacing: 0.1px;
+}
+
+.finishingStatus {
+  margin: 0;
+  font-size: 13px;
+  color: #715b49;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  animation: finishingStatusFade 420ms ease-out;
+}
+
+.finishingEllipsis {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+}
+
+.finishingEllipsis span {
+  width: 3px;
+  height: 3px;
+  background: #a4532b;
+  border-radius: 50%;
+  opacity: 0.4;
+  animation: finishingDot 1.2s infinite;
+}
+
+.finishingEllipsis span:nth-child(2) { animation-delay: 0.2s; }
+.finishingEllipsis span:nth-child(3) { animation-delay: 0.4s; }
+
+.finishingProgress {
+  width: 220px;
+  max-width: 100%;
+  height: 2px;
+  background: #ead9c0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.finishingProgressBar {
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, #a4532b, transparent);
+  animation: finishingSlide 1.6s ease-in-out infinite;
+}
+
+@keyframes finishingPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(164, 83, 43, 0.55); transform: scale(1); }
+  70%  { box-shadow: 0 0 0 10px rgba(164, 83, 43, 0);  transform: scale(1.08); }
+  100% { box-shadow: 0 0 0 0 rgba(164, 83, 43, 0);    transform: scale(1); }
+}
+
+@keyframes finishingDot {
+  0%, 80%, 100% { opacity: 0.35; }
+  40%           { opacity: 1; }
+}
+
+@keyframes finishingSlide {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(260%); }
+}
+
+@keyframes finishingStatusFade {
+  0%   { opacity: 0; transform: translateY(2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes finishingFadeIn {
+  0%   { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
 }

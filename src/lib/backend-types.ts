@@ -20,6 +20,8 @@ export type Foundation = {
   idealPeopleTypes: string[];
   differentiation?: string | null;
   disqualifiers?: string[];
+  biggestUnknown?: string | null;
+  nextResearchAction?: string | null;
 };
 
 export type LatestProjectPayload = {
