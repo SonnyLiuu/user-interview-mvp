@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { backendClientFetch } from '@/lib/backend-client';
+import type { ProjectType } from '@/lib/backend-types';
 import styles from './OnboardingChat.module.css';
 
 type SlotKey =
@@ -42,6 +43,7 @@ type ChatResponse = {
 
 type OnboardingChatProps = {
   projectId: string;
+  projectType: ProjectType;
   onComplete: () => void;
 };
 
@@ -49,7 +51,7 @@ type Phase = 'kickoff' | 'choices' | 'finishing' | 'done';
 
 const BOTTOM_THRESHOLD_PX = 32;
 
-const FINISHING_STATUSES = [
+const STARTUP_FINISHING_STATUSES = [
   'Re-reading your answers',
   'Identifying the sharpest pain points',
   'Sketching your target user',
@@ -57,9 +59,17 @@ const FINISHING_STATUSES = [
   'Polishing the details',
 ];
 
+const NETWORKING_FINISHING_STATUSES = [
+  'Re-reading your answers',
+  'Clarifying the outreach context',
+  'Sketching your recipient profile',
+  'Drafting your outreach Foundation',
+  'Polishing the details',
+];
+
 const FINISHING_STATUS_INTERVAL_MS = 2400;
 
-export default function OnboardingChat({ projectId, onComplete }: OnboardingChatProps) {
+export default function OnboardingChat({ projectId, projectType, onComplete }: OnboardingChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentTurn, setCurrentTurn] = useState<CurrentTurn | null>(null);
   const [isFinishable, setIsFinishable] = useState(false);
@@ -76,6 +86,8 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
   const customInputRef = useRef<HTMLTextAreaElement>(null);
   const initialized = useRef(false);
   const shouldStickToBottomRef = useRef(true);
+  const isNetworking = projectType === 'networking';
+  const finishingStatuses = isNetworking ? NETWORKING_FINISHING_STATUSES : STARTUP_FINISHING_STATUSES;
 
   const syncScrollIntent = useCallback(() => {
     const container = messagesRef.current;
@@ -146,10 +158,10 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
       return;
     }
     const id = window.setInterval(() => {
-      setFinishingStatusIndex((prev) => Math.min(prev + 1, FINISHING_STATUSES.length - 1));
+      setFinishingStatusIndex((prev) => Math.min(prev + 1, finishingStatuses.length - 1));
     }, FINISHING_STATUS_INTERVAL_MS);
     return () => window.clearInterval(id);
-  }, [phase]);
+  }, [finishingStatuses.length, phase]);
 
   async function submitKickoff() {
     const text = kickoffText.trim();
@@ -247,6 +259,11 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
   }
 
   const isEmpty = messages.length === 0 && !loading;
+  const emptyHeading = isNetworking ? "Let's frame your outreach." : "Let's get to know your idea.";
+  const kickoffPlaceholder = isNetworking
+    ? 'Describe who you want to contact, the shared context, and what you want to ask...'
+    : "Describe your idea, who it's for, and what problem it solves...";
+  const finishLabel = isNetworking ? 'outreach Foundation' : 'Foundation';
 
   return (
     <div className={[styles.chat, isEmpty && styles.chatEmpty].filter(Boolean).join(' ')}>
@@ -293,12 +310,12 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
         {phase === 'kickoff' && !loading && (
           <>
             {isEmpty && (
-              <p className={styles.kickoffHeading}>Let&apos;s get to know your idea.</p>
+              <p className={styles.kickoffHeading}>{emptyHeading}</p>
             )}
             <div className={styles.kickoffRow}>
               <textarea
                 className={styles.kickoffTextarea}
-                placeholder="Describe your idea, who it's for, and what problem it solves..."
+                placeholder={kickoffPlaceholder}
                 value={kickoffText}
                 onChange={(e) => {
                   setKickoffText(e.target.value);
@@ -381,7 +398,7 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
         {phase === 'choices' && !submitting && !currentTurn && isFinishable && !error && (
           <div className={styles.finishArea}>
             <p className={styles.finishText}>
-              That&apos;s enough to build your Foundation. Ready to continue?
+              That&apos;s enough to build your {finishLabel}. Ready to continue?
             </p>
             <button className={styles.finishBtn} onClick={() => void finish()}>
               Generate Foundation -&gt;
@@ -394,10 +411,10 @@ export default function OnboardingChat({ projectId, onComplete }: OnboardingChat
           <div className={styles.finishingArea} role="status" aria-live="polite">
             <div className={styles.finishingHeader}>
               <span className={styles.finishingPulse} aria-hidden="true" />
-              <p className={styles.finishingTitle}>Generating your Foundation</p>
+              <p className={styles.finishingTitle}>Generating your {finishLabel}</p>
             </div>
             <p key={finishingStatusIndex} className={styles.finishingStatus}>
-              {FINISHING_STATUSES[finishingStatusIndex]}
+              {finishingStatuses[finishingStatusIndex]}
               <span className={styles.finishingEllipsis} aria-hidden="true">
                 <span /><span /><span />
               </span>

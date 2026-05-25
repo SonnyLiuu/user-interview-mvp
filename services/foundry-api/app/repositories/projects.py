@@ -4,7 +4,7 @@ from __future__ import annotations
 async def list_projects(conn, user_id: str):
     return await conn.fetch(
         """
-        select id, name, slug
+        select id, name, slug, project_type
         from projects
         where user_id = $1 and is_archived = false
         order by created_at desc
@@ -55,7 +55,7 @@ async def find_owned_project_by_slug_or_id(conn, user_id: str, slug_or_id: str):
 async def find_latest_project(conn, user_id: str):
     return await conn.fetchrow(
         """
-        select id, name, slug
+        select id, name, slug, project_type
         from projects
         where user_id = $1 and is_archived = false
         order by created_at desc
@@ -65,16 +65,17 @@ async def find_latest_project(conn, user_id: str):
     )
 
 
-async def create_project(conn, user_id: str, name: str, slug: str):
+async def create_project(conn, user_id: str, name: str, slug: str, project_type: str):
     return await conn.fetchrow(
         """
-        insert into projects (user_id, name, slug)
-        values ($1, $2, $3)
+        insert into projects (user_id, name, slug, project_type)
+        values ($1, $2, $3, $4)
         returning *
         """,
         user_id,
         name,
         slug,
+        project_type,
     )
 
 

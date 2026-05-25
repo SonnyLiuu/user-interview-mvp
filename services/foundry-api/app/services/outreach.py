@@ -63,6 +63,24 @@ def fallback_outreach_content(person: dict, project_context: dict) -> dict:
     learning_topic = _clip(assumptions[0], 72) if assumptions else ""
     role_fragment = f" as {role}" if role else ""
 
+    if project_context.get("project_type") == "networking":
+        context = _clip(project_context.get("pain_point") or project_context.get("idea_summary"), 82)
+        ask = _clip(project_context.get("value_prop"), 64) or "connect"
+        if context:
+            body = (
+                f"Hi {first_name}, your work{role_fragment} stood out. "
+                f"{context}. I would love to {ask.lower()}."
+            )
+        else:
+            body = (
+                f"Hi {first_name}, your work{role_fragment} stood out. "
+                f"I would love to {ask.lower()}."
+            )
+        return {
+            "subject": f"Quick hello, {first_name}",
+            "body": body,
+        }
+
     if learning_topic:
         body = (
             f"Hi {first_name}, your experience{role_fragment} stood out. "
@@ -104,7 +122,7 @@ async def refresh_outreach(user_id: str, person_id: str):
             code=FOUNDATION_REQUIRED,
         )
 
-    project_context = foundation_to_project_context(foundation)
+    project_context = foundation_to_project_context(foundation, person["project_type"])
     person_payload = _person_payload(person)
     try:
         generated = await generate_outreach_message(person_payload, project_context)

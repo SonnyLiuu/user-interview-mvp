@@ -11,7 +11,7 @@ export default async function OnboardingPage() {
       <div className={styles.card}>
         <p className={styles.eyebrow}>New project</p>
         <h1 className={styles.heading}>What are you working on?</h1>
-        <p className={styles.sub}>Give your startup idea a name. You can always change it later.</p>
+        <p className={styles.sub}>Choose a project type and give it a name. You can always change the name later.</p>
         <OnboardingForm existingProjectNames={existingProjectNames} />
       </div>
     </div>

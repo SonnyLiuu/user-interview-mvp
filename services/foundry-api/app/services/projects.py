@@ -4,6 +4,7 @@ from fastapi.encoders import jsonable_encoder
 
 from ..db import get_pool
 from ..errors import BadRequestError, NotFoundError
+from ..project_modes import is_valid_project_type, normalize_project_type
 from ..repositories import projects as project_repo
 from ..utils import slugify
 
@@ -15,10 +16,13 @@ async def list_projects_for_user(user_id: str):
     return [jsonable_encoder(dict(row)) for row in rows]
 
 
-async def create_project_for_user(user_id: str, name: str):
+async def create_project_for_user(user_id: str, name: str, project_type: str | None = None):
     trimmed_name = (name or "").strip()
     if not trimmed_name:
         raise BadRequestError("Name is required")
+    if not is_valid_project_type(project_type):
+        raise BadRequestError("Invalid project type")
+    normalized_type = normalize_project_type(project_type)
     slug = slugify(trimmed_name)
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -26,7 +30,7 @@ async def create_project_for_user(user_id: str, name: str):
         if duplicate:
             raise BadRequestError("You already have a project with this name")
         async with conn.transaction():
-            project = await project_repo.create_project(conn, user_id, trimmed_name, slug)
+            project = await project_repo.create_project(conn, user_id, trimmed_name, slug, normalized_type)
             await project_repo.create_empty_intake(conn, project["id"])
     return jsonable_encoder(dict(project))
 

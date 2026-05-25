@@ -6,12 +6,13 @@ import { db } from '@/lib/db';
 import { people, projects, users, project_foundations } from '@/lib/db/schema';
 import { crawlUrls, CrawlDepth } from '@/lib/firecrawl';
 import { analyzePerson } from '@/lib/ai/analyze-person';
-import type { Foundation } from '@/lib/backend-types';
+import type { Foundation, ProjectType } from '@/lib/backend-types';
 
 type Params = { params: Promise<{ personId: string }> };
 
-function foundationToAnalysisContext(foundation: Foundation | null) {
+function foundationToAnalysisContext(foundation: Foundation | null, projectType: ProjectType) {
   return {
+    project_type: projectType,
     idea_summary: foundation
       ? [
           foundation.summary,
@@ -82,7 +83,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   // Verify ownership and fetch person data
   const rows = await db
-    .select({ person: people })
+    .select({ person: people, projectType: projects.project_type })
     .from(people)
     .innerJoin(projects, eq(people.project_id, projects.id))
     .innerJoin(users, eq(projects.user_id, users.id))
@@ -90,6 +91,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     .limit(1);
 
   const person = rows[0]?.person;
+  const projectType = (rows[0]?.projectType ?? 'startup') as ProjectType;
   if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const sourceUrls = person.source_urls ?? [];
@@ -174,7 +176,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
         })
         .where(eq(people.id, personId));
 
-      const projectContext = foundationToAnalysisContext(foundation);
+      const projectContext = foundationToAnalysisContext(foundation, projectType);
 
       // Analyze
       const analysis = await analyzePerson(rawContent, projectContext);

@@ -8,6 +8,7 @@ from fastapi.encoders import jsonable_encoder
 from ..ai import get_advisor_web_context, stream_intake_reply
 from ..db import get_pool
 from ..errors import NotFoundError
+from ..project_modes import normalize_project_type
 from ..repositories import foundations as foundation_repo
 from ..repositories import intake as intake_repo
 from ..repositories import projects as project_repo
@@ -42,25 +43,36 @@ def get_system_prompt(has_brief: bool) -> str:
     )
 
 
-def get_foundation_advisor_prompt(foundation: dict) -> str:
+def get_foundation_advisor_prompt(foundation: dict, project_type: str = "startup") -> str:
+    is_networking = normalize_project_type(project_type) == "networking"
     lines = [
-        "You are a strategic advisor and editor for this founder's project foundation document.",
-        "Your role is to help them pressure-test, sharpen, and build on what they have — not to re-run intake.",
+        (
+            "You are a strategic advisor and editor for this networking outreach foundation document."
+            if is_networking
+            else
+            "You are a strategic advisor and editor for this founder's project foundation document."
+        ),
+        (
+            "Your role is to help them sharpen targeting, message context, and outreach asks - not to re-run intake."
+            if is_networking
+            else
+            "Your role is to help them pressure-test, sharpen, and build on what they have - not to re-run intake."
+        ),
         "",
         "Current foundation document:",
     ]
     if foundation.get("summary"):
         lines.append(f"  Summary: {foundation['summary']}")
     if foundation.get("targetUser"):
-        lines.append(f"  Target User: {foundation['targetUser']}")
+        lines.append(f"  {'Target Recipients' if is_networking else 'Target User'}: {foundation['targetUser']}")
     if foundation.get("painPoint"):
-        lines.append(f"  Core Problem: {foundation['painPoint']}")
+        lines.append(f"  {'Reason/Context' if is_networking else 'Core Problem'}: {foundation['painPoint']}")
     if foundation.get("valueProp"):
-        lines.append(f"  Value Proposition: {foundation['valueProp']}")
+        lines.append(f"  {'Core Message/Ask' if is_networking else 'Value Proposition'}: {foundation['valueProp']}")
     if foundation.get("idealPeopleTypes"):
         lines.append(f"  Ideal People to Talk To: {', '.join(foundation['idealPeopleTypes'])}")
     if foundation.get("differentiation"):
-        lines.append(f"  Differentiation: {foundation['differentiation']}")
+        lines.append(f"  {'Credibility Hook' if is_networking else 'Differentiation'}: {foundation['differentiation']}")
     if foundation.get("disqualifiers"):
         lines.append(f"  Disqualifiers: {', '.join(foundation['disqualifiers'])}")
     if foundation.get("biggestUnknown"):
@@ -145,7 +157,7 @@ async def stream_chat(user_id: str, project_id: str, message: str, recent_messag
     if has_foundation:
         raw = foundation_row["foundation_json"]
         foundation = json.loads(raw) if isinstance(raw, str) else raw
-        system_prompt = get_foundation_advisor_prompt(foundation)
+        system_prompt = get_foundation_advisor_prompt(foundation, dict(project).get("project_type"))
     else:
         system_prompt = get_system_prompt(False)
 

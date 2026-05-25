@@ -16,7 +16,7 @@ async def list_projects(auth: AuthContext = Depends(get_auth_context)):
 
 @router.post("")
 async def create_project(body: dict, auth: AuthContext = Depends(get_auth_context)):
-    return await project_service.create_project_for_user(auth.user_id, body.get("name", ""))
+    return await project_service.create_project_for_user(auth.user_id, body.get("name", ""), body.get("project_type"))
 
 
 @router.get("/{project_id}")

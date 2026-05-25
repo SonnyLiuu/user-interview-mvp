@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import OnboardingChat from '@/components/onboarding/OnboardingChat';
+import type { ProjectType } from '@/lib/backend-types';
 import styles from './setup-page.module.css';
 
 type SetupStage = 'chat' | 'done';
@@ -39,9 +40,11 @@ function Confetti() {
 export default function SetupPageClient({
   projectId,
   projectSlug,
+  projectType,
 }: {
   projectId: string;
   projectSlug: string;
+  projectType: ProjectType;
 }) {
   const router = useRouter();
   const [stage, setStage] = useState<SetupStage>('chat');
@@ -60,6 +63,7 @@ export default function SetupPageClient({
         <div className={styles.intakeChatArea}>
           <OnboardingChat
             projectId={projectId}
+            projectType={projectType}
             onComplete={() => setStage('done')}
           />
         </div>
@@ -73,9 +77,11 @@ export default function SetupPageClient({
         <div className={`${styles.statusCard} ${styles.doneCard}`}>
           <Confetti />
           <span className={styles.eyebrow}>Setup Complete</span>
-          <h1 className={styles.statusTitle}>Your startup strategy is ready.</h1>
+          <h1 className={styles.statusTitle}>
+            {projectType === 'networking' ? 'Your outreach foundation is ready.' : 'Your startup strategy is ready.'}
+          </h1>
           <p className={styles.statusText}>
-            Opening the project workspace now so you can review the overview and keep refining it.
+            Opening the project workspace now so you can review the foundation and keep refining it.
           </p>
         </div>
       </div>

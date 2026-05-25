@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 
 from .config import get_settings
 from .errors import AIServiceError
+from .project_modes import get_slot_context, normalize_project_type, project_actor
 
 
 def _read_provider() -> str:
@@ -195,15 +196,30 @@ async def _generate_json(messages: list[dict], schema_hint: str) -> dict:
         return await _generate_json_once(_with_json_retry_instruction(messages, schema_hint), schema_hint)
 
 
-async def extract_kickoff_idea(user_message: str) -> dict:
+async def extract_kickoff_idea(user_message: str, project_type: str = "startup") -> dict:
+    normalized_type = normalize_project_type(project_type)
+    if normalized_type == "networking":
+        intro = (
+            "A user has just described a networking outreach project. Extract every Foundation field that is actually present.\n\n"
+            "Field meanings:\n"
+            "- ideaSummary: the outreach campaign context and goal.\n"
+            "- targetUser: the recipients or audience they want to contact.\n"
+            "- painPoint: the timely reason, shared context, or relevance hook for reaching out.\n"
+            "- valueProp: the core message, ask, or desired next step.\n"
+            "- idealPeopleTypes: the types of people who should be contacted first.\n"
+        )
+    else:
+        intro = "A founder has just described their startup idea. Extract every Foundation field that is actually present.\n\n"
+    actor = "user" if normalized_type == "networking" else "founder"
     prompt = (
-        "A founder has just described their startup idea. Extract every Foundation field that is actually present.\n\n"
-        f'Founder message:\n"""\n{user_message}\n"""\n\n'
+        intro
+        +
+        f'{actor.title()} message:\n"""\n{user_message}\n"""\n\n'
         "Rules:\n"
         "- ideaSummary should be 1-3 sentences, written as a neutral description, not first-person.\n"
-        "- Extract targetUser, painPoint, valueProp, and idealPeopleTypes only when the founder gives usable evidence.\n"
+        f"- Extract targetUser, painPoint, valueProp, and idealPeopleTypes only when the {actor} gives usable evidence.\n"
         '- quality is "solid" when the value is specific enough to build on without immediately asking the same question.\n'
-        '- quality is "weak" when the founder has the right direction but the answer still needs one clarifying probe.\n'
+        f'- quality is "weak" when the {actor} has the right direction but the answer still needs one clarifying probe.\n'
         '- Use quality "missing" and an empty value when the field is not actually present.\n'
         "- idealPeopleTypes should be a short list of conversation targets implied by the message."
     )
@@ -214,36 +230,38 @@ async def extract_kickoff_idea(user_message: str) -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
-async def generate_next_question(target_slot: str, recent_messages: list[dict], state: dict) -> dict:
-    slot_context = {
-        "ideaSummary": "what the founder is building and for whom",
-        "targetUser": "who the primary user is - the person who experiences the problem",
-        "painPoint": "the core pain or problem the product addresses",
-        "valueProp": "what specific value the product delivers to users",
-        "idealPeopleTypes": "the types of people who would be ideal early users or customers",
-        "differentiation": "what makes this different from existing solutions",
-        "disqualifiers": "who would NOT be a good fit for this product",
-    }
+async def generate_next_question(target_slot: str, recent_messages: list[dict], state: dict, project_type: str = "startup") -> dict:
+    normalized_type = normalize_project_type(project_type)
+    slot_context = get_slot_context(normalized_type)
     state_lines: list[str] = []
     if state.get("ideaSummary"):
-        state_lines.append(f"Idea: {state['ideaSummary']}")
+        state_lines.append(f"{'Campaign' if normalized_type == 'networking' else 'Idea'}: {state['ideaSummary']}")
     if state.get("targetUser"):
-        state_lines.append(f"Target user: {state['targetUser']}")
+        state_lines.append(f"{'Target recipients' if normalized_type == 'networking' else 'Target user'}: {state['targetUser']}")
     if state.get("painPoint"):
-        state_lines.append(f"Pain point: {state['painPoint']}")
+        state_lines.append(f"{'Outreach context' if normalized_type == 'networking' else 'Pain point'}: {state['painPoint']}")
     if state.get("valueProp"):
-        state_lines.append(f"Value prop: {state['valueProp']}")
+        state_lines.append(f"{'Core message/ask' if normalized_type == 'networking' else 'Value prop'}: {state['valueProp']}")
     if state.get("idealPeopleTypes"):
         state_lines.append(f"Ideal people: {', '.join(state['idealPeopleTypes'])}")
     if state.get("differentiation"):
-        state_lines.append(f"Differentiation: {state['differentiation']}")
+        state_lines.append(f"{'Credibility hook' if normalized_type == 'networking' else 'Differentiation'}: {state['differentiation']}")
     if state.get("disqualifiers"):
-        state_lines.append(f"Disqualifiers: {', '.join(state['disqualifiers'])}")
+        state_lines.append(f"{'Exclude' if normalized_type == 'networking' else 'Disqualifiers'}: {', '.join(state['disqualifiers'])}")
     follow_up = state.get("completeness", {}).get(target_slot) == "weak"
-    snippet = "\n".join([f"{'AI' if msg['role'] == 'assistant' else 'Founder'}: {msg['content']}" for msg in recent_messages[-6:]]) or "(none yet)"
-    prompt = (
+    user_label = "User" if normalized_type == "networking" else "Founder"
+    snippet = "\n".join([f"{'AI' if msg['role'] == 'assistant' else user_label}: {msg['content']}" for msg in recent_messages[-6:]]) or "(none yet)"
+    advisor_role = (
+        "You are a practical outreach strategist helping someone set up a focused networking campaign. "
+        "Your job is to ask one focused question to understand the outreach goal better, then offer concrete answer starters.\n\n"
+        if normalized_type == "networking"
+        else
         "You are a senior startup advisor having a direct, low-key conversation with a founder. "
         "Your job is to ask one focused question to understand their startup better, then offer concrete answer starters.\n\n"
+    )
+    prompt = (
+        advisor_role
+        +
         f"You need to learn: {slot_context[target_slot]}\n\n"
         f"This is {'a clarification of a weak answer' if follow_up else 'the next useful Foundation question'}.\n"
         "When a clarifying probe would sharpen the answer, ask about the real status quo, urgency, "
@@ -251,14 +269,14 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
         "What you know so far:\n"
         f"{chr(10).join(state_lines) or '(nothing yet)'}\n\n"
         f"Recent conversation:\n{snippet}\n\n"
-        "Write the question as you would actually say it to a founder — direct, brief, no fluff. "
+        f"Write the question as you would actually say it to a {user_label.lower()} — direct, brief, no fluff. "
         "1-2 sentences max. No bullet points, no numbered lists, no markdown. "
-        "Reference what you already know about their idea so it feels like a real conversation, not a form.\n\n"
-        "Then generate detailed suggestion chips that could help the founder answer quickly without making "
+        f"Reference what you already know about their {'outreach project' if normalized_type == 'networking' else 'idea'} so it feels like a real conversation, not a form.\n\n"
+        f"Then generate detailed suggestion chips that could help the {user_label.lower()} answer quickly without making "
         "the conversation feel like a generic form.\n\n"
         "Requirements:\n"
         f'- question: 1-2 natural sentences, conversational tone, no formatting\n'
-        f'- Generate exactly 3-5 distinct, concrete choices relevant to this specific founder\'s context\n'
+        f'- Generate exactly 3-5 distinct, concrete choices relevant to this specific {user_label.lower()}\'s context\n'
         f'- Each choice should target the "{target_slot}" slot\n'
         "- Do not include a generic escape hatch; the UI always keeps free text available\n"
         '- Labels may be detailed but must stay under 110 characters\n'
@@ -284,9 +302,11 @@ async def extract_custom_slot_answer(
     recent_messages: list[dict],
     current_choices: list[dict] | None = None,
     selected_choices: list[dict] | None = None,
+    project_type: str = "startup",
 ) -> dict:
+    actor = project_actor(project_type)
     is_array_slot = target_slot in {"idealPeopleTypes", "disqualifiers"}
-    snippet = "\n".join([f"{'AI' if msg['role'] == 'assistant' else 'Founder'}: {msg['content']}" for msg in recent_messages[-4:]]) or "(none)"
+    snippet = "\n".join([f"{'AI' if msg['role'] == 'assistant' else actor.title()}: {msg['content']}" for msg in recent_messages[-4:]]) or "(none)"
     suggestion_context = [
         {
             "number": index + 1,
@@ -303,19 +323,19 @@ async def extract_custom_slot_answer(
         if suggestion["id"] in selected_ids
     ]
     prompt = (
-        "A founder typed a custom answer during onboarding. Extract a clean value for the target slot.\n\n"
+        f"A {actor} typed a custom answer during onboarding. Extract a clean value for the target slot.\n\n"
         f"Target slot: {target_slot}\n"
         f"{'This slot stores an array - extract one or more distinct items.' if is_array_slot else 'This slot stores a single string.'}\n\n"
         f"Recent conversation:\n{snippet}\n\n"
-        "Current suggestions shown to the founder, in their visible numbered order:\n"
+        f"Current suggestions shown to the {actor}, in their visible numbered order:\n"
         f"{json.dumps(suggestion_context, indent=2)}\n\n"
-        "Suggestions the founder explicitly selected before sending:\n"
+        f"Suggestions the {actor} explicitly selected before sending:\n"
         f"{json.dumps(selected_suggestions, indent=2)}\n\n"
-        f'Founder\'s custom answer:\n"""\n{custom_text}\n"""\n\n'
+        f'{actor.title()}\'s custom answer:\n"""\n{custom_text}\n"""\n\n'
         "Rules:\n"
-        "- The founder may refer to suggestions by visible number, position, or a short description.\n"
+        f"- The {actor} may refer to suggestions by visible number, position, or a short description.\n"
         "- Use numbered suggestion context to resolve those references before extracting the value.\n"
-        "- The founder's typed answer is authoritative when it combines, narrows, overrides, or contradicts suggestions.\n"
+        f"- The {actor}'s typed answer is authoritative when it combines, narrows, overrides, or contradicts suggestions.\n"
         "- Explicitly selected suggestions are supporting context unless the typed answer changes them.\n"
         f'- Extract only what\'s relevant to the "{target_slot}" slot\n'
         '- quality is "solid" if specific and clearly addresses the slot; "weak" if vague\n'
@@ -334,8 +354,10 @@ async def extract_custom_slot_answer(
     return {"slotKey": target_slot, "value": raw.get("value") or "", "quality": raw.get("quality") or "weak"}
 
 
-async def generate_foundation(messages: list[dict], state: dict) -> dict:
-    transcript = "\n\n".join([f"{'AI' if msg['role'] == 'assistant' else 'Founder'}: {msg['content']}" for msg in messages])
+async def generate_foundation(messages: list[dict], state: dict, project_type: str = "startup") -> dict:
+    normalized_type = normalize_project_type(project_type)
+    user_label = "User" if normalized_type == "networking" else "Founder"
+    transcript = "\n\n".join([f"{'AI' if msg['role'] == 'assistant' else user_label}: {msg['content']}" for msg in messages])
     state_snapshot = json.dumps(
         {
             "ideaSummary": state.get("ideaSummary"),
@@ -348,8 +370,26 @@ async def generate_foundation(messages: list[dict], state: dict) -> dict:
         },
         indent=2,
     )
+    if normalized_type == "networking":
+        task = "Generate a Project Foundation document for a networking outreach campaign based on the onboarding conversation and collected state.\n\n"
+        extra_rules = (
+            "- summary should describe the outreach campaign context and goal.\n"
+            "- targetUser should describe the recipients, not product users.\n"
+            "- painPoint should capture the timely reason, shared context, or relevance hook for outreach.\n"
+            "- valueProp should capture the core message, ask, or desired next step.\n"
+            "- differentiation should capture the sender's credibility hook or personal angle.\n"
+            "- biggestUnknown should name the message or targeting detail most likely to affect response quality.\n"
+            "- nextResearchAction should be one concrete recipient-sourcing or personalization action.\n"
+        )
+    else:
+        task = "Generate a Project Foundation document for a startup based on the onboarding conversation and collected state.\n\n"
+        extra_rules = (
+            "- biggestUnknown should name the highest-value assumption the founder still needs to test.\n"
+            "- nextResearchAction should be one concrete people-research action that would test that unknown."
+        )
     prompt = (
-        "Generate a Project Foundation document for a startup based on the onboarding conversation and collected state.\n\n"
+        task
+        +
         f"Collected state:\n{state_snapshot}\n\n"
         f"Full onboarding transcript:\n{transcript}\n\n"
         "Rules:\n"
@@ -357,8 +397,7 @@ async def generate_foundation(messages: list[dict], state: dict) -> dict:
         "- summary should read as a neutral, polished description - not first-person\n"
         "- Keep all fields concise and specific\n"
         "- If differentiation or disqualifiers were not discussed, omit or set to null/empty\n"
-        "- biggestUnknown should name the highest-value assumption the founder still needs to test.\n"
-        "- nextResearchAction should be one concrete people-research action that would test that unknown."
+        f"{extra_rules}"
     )
     raw = await _generate_json(
         [{"role": "user", "content": prompt}],
@@ -377,18 +416,32 @@ async def generate_call_brief(person: dict, project_context: dict) -> dict:
     disqualifiers = project_context.get("disqualifiers") or []
     key_assumptions = project_context.get("key_assumptions") or []
 
+    is_networking = project_context.get("project_type") == "networking"
+    target_label = "Target recipients" if is_networking else "Target customer"
+    pain_label = "Reason/context" if is_networking else "Pain point"
+    value_label = "Core message/ask" if is_networking else "Value proposition"
+    assumptions_label = "Message context" if is_networking else "Assumptions to validate"
     prompt = (
-        "You are helping a first-time founder prepare for a customer discovery call. "
-        "This is not sales enablement. The goal is founder learning: sharper hypotheses, "
-        "better market judgment, and clearer next steps.\n\n"
+        (
+            "You are helping someone prepare for a networking conversation. "
+            "The goal is a focused, respectful conversation grounded in the outreach project context.\n\n"
+        )
+        if is_networking
+        else
+        (
+            "You are helping a first-time founder prepare for a customer discovery call. "
+            "This is not sales enablement. The goal is founder learning: sharper hypotheses, "
+            "better market judgment, and clearer next steps.\n\n"
+        )
+    ) + (
         "FOUNDATION CONTEXT:\n"
         f"{project_context.get('idea_summary') or 'Not specified'}\n\n"
-        f"Target customer: {project_context.get('target_customer') or 'Not specified'}\n"
-        f"Pain point: {project_context.get('pain_point') or 'Not specified'}\n"
-        f"Value proposition: {project_context.get('value_prop') or 'Not specified'}\n"
+        f"{target_label}: {project_context.get('target_customer') or 'Not specified'}\n"
+        f"{pain_label}: {project_context.get('pain_point') or 'Not specified'}\n"
+        f"{value_label}: {project_context.get('value_prop') or 'Not specified'}\n"
         f"Ideal people to talk to: {_join_prompt_list(ideal_people)}\n"
         f"People to avoid: {_join_prompt_list(disqualifiers)}\n"
-        f"Assumptions to validate: {_join_prompt_list(key_assumptions)}\n\n"
+        f"{assumptions_label}: {_join_prompt_list(key_assumptions)}\n\n"
         "PERSON THEY ARE CALLING:\n"
         f"Name: {person.get('name') or 'Unknown'}\n"
         f"Title: {person.get('title') or 'Unknown'}\n"
@@ -399,11 +452,11 @@ async def generate_call_brief(person: dict, project_context: dict) -> dict:
         f"Key insights: {_join_prompt_list(key_insights)}\n\n"
         "Generate a focused call prep brief. Be specific to this person and this foundation.\n\n"
         "Output rules:\n"
-        "- objective: exactly one sharp sentence naming what the founder should learn.\n"
-        "- goals: 3-5 founder-learning outcomes. Phrase each as what to validate, falsify, or learn. "
+        f"- objective: exactly one sharp sentence naming what the {'sender should accomplish or learn' if is_networking else 'founder should learn'}.\n"
+        f"- goals: 3-5 {'conversation outcomes tied to the outreach goal' if is_networking else 'founder-learning outcomes'}. Phrase each as what to validate, falsify, or learn. "
         "Avoid vague sales tasks like 'ask about budget'.\n"
-        "- questions: 5-7 conversational discovery questions the founder could actually ask. "
-        "Make them specific to this person's background and the founder's assumptions. Keep them brief and direct.\n"
+        f"- questions: 5-7 conversational questions the {'sender' if is_networking else 'founder'} could actually ask. "
+        f"Make them specific to this person's background and the {'outreach context' if is_networking else 'founder assumptions'}. Keep them brief and direct.\n"
         "- signals: 3-5 fit or weak-fit signals to use later during transcript/notes analysis. "
         "These are not checklist questions.\n"
         "- closing: one concise referral or follow-up ask.\n"
@@ -421,6 +474,36 @@ async def generate_outreach_message(person: dict, project_context: dict) -> dict
     ideal_people = project_context.get("ideal_people_types") or []
     disqualifiers = project_context.get("disqualifiers") or []
     key_assumptions = project_context.get("key_assumptions") or []
+
+    if project_context.get("project_type") == "networking":
+        prompt = (
+            "Generate a short LinkedIn outreach message, less than 300 characters. "
+            "Use the outreach campaign context and the recipient's background to make the note specific, warm, and concise. "
+            "Mention shared context, event context, a credibility hook, or an in-person meeting intent only when provided in the project context. "
+            "Do not invent facts. Do not frame this as customer discovery, startup validation, or a 20 minute call unless the project context explicitly asks for that.\n\n"
+            "OUTREACH PROJECT CONTEXT:\n"
+            f"Campaign: {project_context.get('idea_summary') or 'Not specified'}\n"
+            f"Target recipients: {project_context.get('target_customer') or 'Not specified'}\n"
+            f"Reason/context: {project_context.get('pain_point') or 'Not specified'}\n"
+            f"Core message or ask: {project_context.get('value_prop') or 'Not specified'}\n"
+            f"Ideal people to contact: {_join_prompt_list(ideal_people)}\n"
+            f"Personal angle/credibility hook: {project_context.get('differentiation') or 'Not specified'}\n\n"
+            "RECIPIENT CONTEXT:\n"
+            f"Name: {person.get('name') or 'Unknown'}\n"
+            f"Title: {person.get('title') or 'Unknown'}\n"
+            f"Company: {person.get('company') or 'Unknown'}\n"
+            f"Persona type: {person.get('persona_type') or 'Unknown'}\n"
+            f"Background: {analysis.get('summary') or 'Not specified'}\n"
+            f"Why they matter: {analysis.get('why_they_matter') or 'Not specified'}\n"
+            f"Key insights: {_join_prompt_list(key_insights)}\n\n"
+            "The body must be at most 300 characters total, including the greeting, spaces, and punctuation. "
+            "Count characters, not words. Keep the subject separate from that body limit.\n\n"
+            'Return only valid JSON with this schema: {"subject":"string","body":"string"}'
+        )
+        return await _generate_json(
+            [{"role": "user", "content": prompt}],
+            '{"subject":"string","body":"string"}',
+        )
 
     prompt = (
         "I want you to generate a short outreach message, less than 300 letters. "

@@ -85,7 +85,7 @@ async def refresh_call_brief(user_id: str, person_id: str):
             code=FOUNDATION_REQUIRED,
         )
 
-    project_context = foundation_to_project_context(foundation)
+    project_context = foundation_to_project_context(foundation, person["project_type"])
     content = normalize_call_brief_content(
         await generate_call_brief(_person_payload(person), project_context)
     )

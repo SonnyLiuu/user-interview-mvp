@@ -39,7 +39,7 @@ export default async function ProjectPage({
     >
       <div className={styles.layout}>
         <div className={styles.briefPane}>
-          <FoundationView projectId={project.id} initialFoundation={foundation} />
+          <FoundationView projectId={project.id} initialFoundation={foundation} projectType={project.project_type} />
         </div>
         <div className={styles.chatPane}>
           <ProjectChat

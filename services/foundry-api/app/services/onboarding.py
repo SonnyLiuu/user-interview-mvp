@@ -14,6 +14,7 @@ from ..onboarding_engine import (
     normalize_onboarding_state,
     validate_choices,
 )
+from ..project_modes import get_kickoff_question, normalize_project_type
 from ..repositories import onboarding as onboarding_repo
 from ..repositories import projects as project_repo
 
@@ -52,22 +53,22 @@ async def _get_context(user_id: str, project_id: str):
     return project, session, state, chat_history, last_turn
 
 
-async def _generate_turn(state: dict, chat_history: list[dict]) -> dict:
+async def _generate_turn(state: dict, chat_history: list[dict], project_type: str) -> dict:
     next_slot = choose_next_slot(state)
     if not next_slot:
         raise BadRequestError("No next slot")
     message_pairs = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history]
     try:
-        result = await generate_next_question(next_slot, message_pairs, state)
+        result = await generate_next_question(next_slot, message_pairs, state, project_type)
         valid, _reason = validate_choices(result["choices"], next_slot)
         if not valid:
-            result = await generate_next_question(next_slot, message_pairs, state)
+            result = await generate_next_question(next_slot, message_pairs, state, project_type)
             valid, _reason = validate_choices(result["choices"], next_slot)
             if not valid:
-                fallback = get_fallback_choices(next_slot)
+                fallback = get_fallback_choices(next_slot, project_type)
                 result = {"targetSlot": next_slot, **fallback}
     except Exception:
-        fallback = get_fallback_choices(next_slot)
+        fallback = get_fallback_choices(next_slot, project_type)
         result = {"targetSlot": next_slot, **fallback}
     return result
 
@@ -110,13 +111,14 @@ def _format_answer_message(last_turn: dict, selected_choices: list[dict], custom
 
 
 async def process_onboarding_request(user_id: str, project_id: str, body: dict):
-    _project, session, state, chat_history, last_turn = await _get_context(user_id, project_id)
+    project, session, state, chat_history, last_turn = await _get_context(user_id, project_id)
+    project_type = normalize_project_type(dict(project).get("project_type"))
     request_type = body.get("type")
     pool = get_pool()
 
     if request_type == "__init__":
         if len(chat_history) == 0:
-            kickoff_question = "What are you building? Tell me about your idea - what it does, who it's for, and what problem it solves."
+            kickoff_question = get_kickoff_question(project_type)
             async with pool.acquire() as conn:
                 await onboarding_repo.save_message(conn, session["id"], project_id, "assistant", kickoff_question, "question")
             chat_history.append({"role": "assistant", "content": kickoff_question, "messageType": "question"})
@@ -124,7 +126,7 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
         current_turn = last_turn
         finishable = is_onboarding_finishable(state)
         if not current_turn and not finishable and len(chat_history) > 1:
-            current_turn = await _generate_turn(state, chat_history)
+            current_turn = await _generate_turn(state, chat_history, project_type)
             async with pool.acquire() as conn:
                 await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, "active")
         elif finishable:
@@ -142,7 +144,7 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
         if not is_onboarding_finishable(state):
             raise BadRequestError("Not finishable yet")
         message_pairs = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history]
-        foundation_payload = await generate_foundation(message_pairs, state)
+        foundation_payload = await generate_foundation(message_pairs, state, project_type)
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await onboarding_repo.insert_foundation(conn, project_id, foundation_payload["foundation"])
@@ -162,10 +164,10 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
         async with pool.acquire() as conn:
             await onboarding_repo.save_message(conn, session["id"], project_id, "user", message, "custom_answer")
         chat_history.append({"role": "user", "content": message, "messageType": "custom_answer"})
-        extracted = await extract_kickoff_idea(message)
+        extracted = await extract_kickoff_idea(message, project_type)
         next_state = merge_kickoff_context(state, extracted)
         finishable = is_onboarding_finishable(next_state)
-        current_turn = None if finishable else await _generate_turn(next_state, chat_history)
+        current_turn = None if finishable else await _generate_turn(next_state, chat_history, project_type)
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await onboarding_repo.save_state(conn, project_id, next_state)
@@ -203,6 +205,7 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
                 recent,
                 last_turn.get("choices") or [],
                 selected_choices,
+                project_type,
             )
             next_state = merge_slot_patch(state, last_turn["targetSlot"], extracted["value"], extracted["quality"])
         else:
@@ -221,7 +224,7 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
                 "sessionStatus": "ready",
             }
 
-        current_turn = await _generate_turn(next_state, chat_history)
+        current_turn = await _generate_turn(next_state, chat_history, project_type)
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await onboarding_repo.save_state(conn, project_id, next_state)
@@ -260,7 +263,7 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
                 "sessionStatus": "ready",
             }
 
-        current_turn = await _generate_turn(next_state, chat_history)
+        current_turn = await _generate_turn(next_state, chat_history, project_type)
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await onboarding_repo.save_state(conn, project_id, next_state)
@@ -289,6 +292,8 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
             custom_text,
             recent,
             last_turn.get("choices") or [],
+            None,
+            project_type,
         )
         next_state = merge_slot_patch(state, last_turn["targetSlot"], extracted["value"], extracted["quality"])
         if is_onboarding_finishable(next_state):
@@ -303,7 +308,7 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
                 "sessionStatus": "ready",
             }
 
-        current_turn = await _generate_turn(next_state, chat_history)
+        current_turn = await _generate_turn(next_state, chat_history, project_type)
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await onboarding_repo.save_state(conn, project_id, next_state)

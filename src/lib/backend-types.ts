@@ -2,12 +2,16 @@ export type ProjectNavItem = {
   id: string;
   name: string;
   slug: string | null;
+  project_type: ProjectType;
 };
+
+export type ProjectType = 'startup' | 'networking';
 
 type ProjectRecord = {
   id: string;
   name: string;
   slug: string | null;
+  project_type: ProjectType;
   intake_status: string | null;
   is_archived?: boolean | null;
 };

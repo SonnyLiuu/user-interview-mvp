@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { useFoundation } from './FoundationContext';
-import type { Foundation } from '@/lib/backend-types';
+import type { Foundation, ProjectType } from '@/lib/backend-types';
 import styles from './BriefView.module.css';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -67,14 +67,60 @@ function AutoTextarea({
 export default function FoundationView({
   projectId,
   initialFoundation,
+  projectType = 'startup',
 }: {
   projectId: string;
   initialFoundation: Foundation;
+  projectType?: ProjectType;
 }) {
   const ctx = useFoundation();
   if (!ctx) return null;
 
   const { foundation, saveStatus, canUndo, canRedo, handleChange, handleBlur, commitNow, undo, redo } = ctx;
+  const isNetworking = projectType === 'networking';
+  const labels = isNetworking
+    ? {
+        researchCue: 'Outreach Cue',
+        biggestUnknown: 'What targeting or message detail is still uncertain?',
+        nextResearchAction: 'What sourcing or personalization action comes next?',
+        summary: 'Campaign Context',
+        summaryPlaceholder: 'Describe the outreach campaign and goal...',
+        targetUser: 'Target Recipients',
+        targetUserPlaceholder: 'Who are you trying to reach?',
+        painPoint: 'Reason for Outreach',
+        painPointPlaceholder: 'What makes the message timely or relevant?',
+        valueProp: 'Core Message',
+        valuePropPlaceholder: 'What should each message communicate or ask for?',
+        idealPeopleTypes: 'Ideal People',
+        idealPeoplePlaceholder: 'Describe this recipient type...',
+        addPersonType: '+ Add recipient type',
+        differentiation: 'Credibility Hook',
+        differentiationPlaceholder: 'What personal angle or credibility should the message include?',
+        disqualifiers: 'Exclude',
+        disqualifierPlaceholder: 'Who should not be included?',
+        addDisqualifier: '+ Add exclusion',
+      }
+    : {
+        researchCue: 'Research Cue',
+        biggestUnknown: 'What is the biggest unknown to test next?',
+        nextResearchAction: 'What people research action would test it?',
+        summary: 'Summary',
+        summaryPlaceholder: "Describe what you're building...",
+        targetUser: 'Target User',
+        targetUserPlaceholder: 'Who is the primary person experiencing the problem?',
+        painPoint: 'Core Problem',
+        painPointPlaceholder: 'What pain does this solve?',
+        valueProp: 'Value Proposition',
+        valuePropPlaceholder: 'What specific value do you deliver?',
+        idealPeopleTypes: 'Ideal People to Talk To',
+        idealPeoplePlaceholder: 'Describe this person type...',
+        addPersonType: '+ Add person type',
+        differentiation: 'Differentiation',
+        differentiationPlaceholder: 'What makes this different from existing solutions?',
+        disqualifiers: 'Disqualifiers',
+        disqualifierPlaceholder: 'Who is not a good fit?',
+        addDisqualifier: '+ Add disqualifier',
+      };
 
   function updateListItem(field: 'idealPeopleTypes' | 'disqualifiers', idx: number, value: string) {
     const list = [...(foundation[field] ?? [])];
@@ -128,69 +174,69 @@ export default function FoundationView({
       {/* Document */}
       <div className={styles.editableContent}>
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Research Cue</h2>
+          <h2 className={styles.sectionTitle}>{labels.researchCue}</h2>
           <AutoTextarea
             className={styles.editableField}
             value={foundation.biggestUnknown ?? ''}
             onChange={(v) => handleChange({ ...foundation, biggestUnknown: v })}
             onBlur={handleBlur}
-            placeholder="What is the biggest unknown to test next?"
+            placeholder={labels.biggestUnknown}
           />
           <AutoTextarea
             className={styles.editableField}
             value={foundation.nextResearchAction ?? ''}
             onChange={(v) => handleChange({ ...foundation, nextResearchAction: v })}
             onBlur={handleBlur}
-            placeholder="What people research action would test it?"
+            placeholder={labels.nextResearchAction}
           />
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Summary</h2>
+          <h2 className={styles.sectionTitle}>{labels.summary}</h2>
           <AutoTextarea
             className={styles.editableField}
             value={foundation.summary ?? ''}
             onChange={(v) => handleChange({ ...foundation, summary: v })}
             onBlur={handleBlur}
-            placeholder="Describe what you're building…"
+            placeholder={labels.summaryPlaceholder}
           />
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Target User</h2>
+          <h2 className={styles.sectionTitle}>{labels.targetUser}</h2>
           <AutoTextarea
             className={styles.editableField}
             value={foundation.targetUser ?? ''}
             onChange={(v) => handleChange({ ...foundation, targetUser: v })}
             onBlur={handleBlur}
-            placeholder="Who is the primary person experiencing the problem?"
+            placeholder={labels.targetUserPlaceholder}
           />
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Core Problem</h2>
+          <h2 className={styles.sectionTitle}>{labels.painPoint}</h2>
           <AutoTextarea
             className={styles.editableField}
             value={foundation.painPoint ?? ''}
             onChange={(v) => handleChange({ ...foundation, painPoint: v })}
             onBlur={handleBlur}
-            placeholder="What pain does this solve?"
+            placeholder={labels.painPointPlaceholder}
           />
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Value Proposition</h2>
+          <h2 className={styles.sectionTitle}>{labels.valueProp}</h2>
           <AutoTextarea
             className={styles.editableField}
             value={foundation.valueProp ?? ''}
             onChange={(v) => handleChange({ ...foundation, valueProp: v })}
             onBlur={handleBlur}
-            placeholder="What specific value do you deliver?"
+            placeholder={labels.valuePropPlaceholder}
           />
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Ideal People to Talk To</h2>
+          <h2 className={styles.sectionTitle}>{labels.idealPeopleTypes}</h2>
           <ul className={styles.list}>
             {(foundation.idealPeopleTypes ?? []).map((item, i) => (
               <li key={i} className={styles.editableListRow}>
@@ -200,7 +246,7 @@ export default function FoundationView({
                   value={item}
                   onChange={(v) => updateListItem('idealPeopleTypes', i, v)}
                   onBlur={handleBlur}
-                  placeholder="Describe this person type…"
+                  placeholder={labels.idealPeoplePlaceholder}
                 />
                 <button
                   type="button"
@@ -214,23 +260,23 @@ export default function FoundationView({
             ))}
           </ul>
           <button type="button" className={styles.addItemBtn} onClick={() => addListItem('idealPeopleTypes')}>
-            + Add person type
+            {labels.addPersonType}
           </button>
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Differentiation</h2>
+          <h2 className={styles.sectionTitle}>{labels.differentiation}</h2>
           <AutoTextarea
             className={styles.editableField}
             value={foundation.differentiation ?? ''}
             onChange={(v) => handleChange({ ...foundation, differentiation: v })}
             onBlur={handleBlur}
-            placeholder="What makes this different from existing solutions?"
+            placeholder={labels.differentiationPlaceholder}
           />
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Disqualifiers</h2>
+          <h2 className={styles.sectionTitle}>{labels.disqualifiers}</h2>
           <ul className={styles.list}>
             {(foundation.disqualifiers ?? []).map((item, i) => (
               <li key={i} className={styles.editableListRow}>
@@ -240,7 +286,7 @@ export default function FoundationView({
                   value={item}
                   onChange={(v) => updateListItem('disqualifiers', i, v)}
                   onBlur={handleBlur}
-                  placeholder="Who is not a good fit?"
+                  placeholder={labels.disqualifierPlaceholder}
                 />
                 <button
                   type="button"
@@ -254,7 +300,7 @@ export default function FoundationView({
             ))}
           </ul>
           <button type="button" className={styles.addItemBtn} onClick={() => addListItem('disqualifiers')}>
-            + Add disqualifier
+            {labels.addDisqualifier}
           </button>
         </section>
       </div>

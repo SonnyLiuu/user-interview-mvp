@@ -6,7 +6,8 @@ async def get_owned_person(conn, user_id: str, person_id: str):
         """
         select
             people.*,
-            projects.id as project_id
+            projects.id as project_id,
+            projects.project_type as project_type
         from people
         inner join projects on people.project_id = projects.id
         where people.id = $1

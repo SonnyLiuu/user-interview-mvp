@@ -16,6 +16,7 @@ const pastedProfileTextSchema = z.string().max(50_000, 'Pasted text must be 50,0
 export const createProjectSchema = z.object({
   name: nonEmptyString,
   slug: z.string().optional(),
+  project_type: z.enum(['startup', 'networking']).optional().default('startup'),
 });
 
 // Person-related schemas

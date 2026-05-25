@@ -277,6 +277,7 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
         id: projectId,
         name: projectName ?? 'Untitled project',
         slug,
+        project_type: 'startup' as const,
       }
     : null;
   const displayName = resolvedCurrentProject?.name ?? projectName ?? 'Select project';

@@ -27,6 +27,7 @@ export default async function ProjectOnboardingPage({
     <SetupPageClient
       projectId={project.id}
       projectSlug={pathSegment}
+      projectType={project.project_type}
     />
   );
 }

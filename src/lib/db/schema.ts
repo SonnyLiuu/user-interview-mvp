@@ -95,6 +95,7 @@ export const projects = pgTable('projects', {
   user_id: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   slug: text('slug'),
+  project_type: text('project_type').notNull().default('startup'),
   intake_status: text('intake_status').default('not_started'),
   is_archived: boolean('is_archived').default(false),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { backendClientFetch } from '@/lib/backend-client';
+import type { ProjectType } from '@/lib/backend-types';
 import styles from './onboarding.module.css';
 
 function normalizeProjectName(value: string) {
@@ -15,6 +16,7 @@ export default function OnboardingForm({
   existingProjectNames: string[];
 }) {
   const [name, setName] = useState('');
+  const [projectType, setProjectType] = useState<ProjectType>('startup');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
@@ -42,7 +44,7 @@ export default function OnboardingForm({
       const res = await backendClientFetch('/v1/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName }),
+        body: JSON.stringify({ name: trimmedName, project_type: projectType }),
       });
       if (res.status === 409) {
         const { error: msg } = await res.json() as { error: string };
@@ -61,10 +63,32 @@ export default function OnboardingForm({
 
   return (
     <form onSubmit={handleSubmit} className={styles.form}>
+      <div className={styles.modeGrid} role="radiogroup" aria-label="Project type">
+        <button
+          type="button"
+          className={[styles.modeBtn, projectType === 'startup' && styles.modeBtnSelected].filter(Boolean).join(' ')}
+          onClick={() => setProjectType('startup')}
+          role="radio"
+          aria-checked={projectType === 'startup'}
+        >
+          <span className={styles.modeTitle}>Startup discovery</span>
+          <span className={styles.modeText}>Validate an idea, find the right people, and prep learning calls.</span>
+        </button>
+        <button
+          type="button"
+          className={[styles.modeBtn, projectType === 'networking' && styles.modeBtnSelected].filter(Boolean).join(' ')}
+          onClick={() => setProjectType('networking')}
+          role="radio"
+          aria-checked={projectType === 'networking'}
+        >
+          <span className={styles.modeTitle}>Networking outreach</span>
+          <span className={styles.modeText}>Draft personalized outreach for events, advisors, collaborators, or intros.</span>
+        </button>
+      </div>
       <input
         className={styles.input}
         type="text"
-        placeholder="e.g. Smart Toaster"
+        placeholder={projectType === 'networking' ? 'e.g. CAIS Agent Skills outreach' : 'e.g. Smart Toaster'}
         value={name}
         onChange={(e) => {
           setName(e.target.value);

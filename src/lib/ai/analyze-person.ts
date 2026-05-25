@@ -2,6 +2,7 @@ import { generateObject } from './provider';
 import type { PersonAnalysis } from '@/lib/db/schema';
 
 type ProjectContext = {
+  project_type?: 'startup' | 'networking';
   idea_summary?: string | null;
   target_customer?: string | null;
   key_assumptions?: string[] | null;
@@ -22,7 +23,32 @@ export async function analyzePerson(
   projectContext: ProjectContext
 ): Promise<PersonAnalysis> {
   const analysisContent = limitSourceMaterial(crawledContent);
-  const prompt = `You are an expert at helping early-stage founders identify the most valuable people to learn from during customer discovery.
+  const isNetworking = projectContext.project_type === 'networking';
+  const prompt = isNetworking ? `You are an expert at helping people prioritize and personalize professional networking outreach.
+
+OUTREACH PROJECT CONTEXT:
+Campaign: ${projectContext.idea_summary ?? 'Not specified'}
+Target recipients: ${projectContext.target_customer ?? 'Not specified'}
+Message context / ask: ${projectContext.key_assumptions?.join('; ') ?? 'Not specified'}
+Most promising recipient types: ${projectContext.most_promising_avenues?.join('; ') ?? 'Not specified'}
+
+SOURCE MATERIAL ABOUT THIS PERSON:
+${analysisContent}
+
+Analyze this person's relevance to the outreach campaign. Be honest and specific - do not inflate relevance. If this person is genuinely a weak match, say so.
+
+For recommended_questions: write questions or conversation openers the sender could use with this specific person. Make them conversational, concrete, and grounded in the recipient's background.
+
+For contact_info: extract any email, Twitter/X handle, LinkedIn URL, or personal website found in the source material. Only include what is actually present.
+
+The source material may include user-pasted profile text, crawled web sources, or both. Treat user-pasted profile text as valid source material, especially for LinkedIn profiles that cannot be crawled.
+
+For relevance_rank: score against recipient fit, shared context, and likely usefulness for the outreach goal.
+- high: directly connected to the event, community, topic, organization, or target group; likely worth a personalized note.
+- medium: useful adjacent fit; their role or background overlaps with the campaign but the shared context is weaker.
+- low: weak fit; little visible overlap with the outreach goal, shared context, or target recipient group.
+
+Important: Do not assign high relevance just because someone is generally impressive. Ground the score in this outreach project's context.` : `You are an expert at helping early-stage founders identify the most valuable people to learn from during customer discovery.
 
 FOUNDER'S PROJECT CONTEXT:
 Idea: ${projectContext.idea_summary ?? 'Not specified'}
@@ -48,7 +74,13 @@ For relevance_rank: score against the founder's specific hypothesis, customer ty
 
 Important: Do not assign low relevance solely because the person is not the exact target customer. If the person is a founder, former founder, startup operator, technical builder, accelerator participant, or works closely with early-stage founders, they should usually be medium unless their background has almost no connection to startup formation, customer discovery, or founder workflows.`;
 
-  const personaTypeDescription = `The persona type that best describes this person relative to the founder's startup:
+  const personaTypeDescription = isNetworking ? `The persona type that best describes this person relative to the outreach project:
+- potential_user: a target recipient with direct relevance to the campaign.
+- buyer: a decision maker, organizer, sponsor, or senior stakeholder.
+- operator: an experienced builder or practitioner with relevant execution experience.
+- domain_expert: an expert with deep knowledge of the event topic, community, workflow, or domain.
+- skeptic: a critical voice likely to challenge weak assumptions or positioning.
+- connector: an introducer who can connect the sender to better recipients.` : `The persona type that best describes this person relative to the founder's startup:
 - potential_user: a target user who may directly use the product or feel the pain.
 - buyer: a decision maker who can decide, approve, or block adoption.
 - operator: an experienced builder with relevant startup, product, or company-building experience.
@@ -84,11 +116,11 @@ Important: Do not assign low relevance solely because the person is not the exac
       relevance_rank: {
         type: 'string',
         enum: ['low', 'medium', 'high'],
-        description: 'How relevant this person is to the founder\'s current hypothesis.',
+        description: isNetworking ? 'How relevant this person is to the outreach project.' : 'How relevant this person is to the founder\'s current hypothesis.',
       },
       why_they_matter: {
         type: 'string',
-        description: 'One sentence explaining why the founder should talk to this person, grounded in the project hypothesis.',
+        description: isNetworking ? 'One sentence explaining why this person is worth contacting, grounded in the outreach project.' : 'One sentence explaining why the founder should talk to this person, grounded in the project hypothesis.',
       },
       key_insights: {
         type: 'array',
@@ -98,7 +130,7 @@ Important: Do not assign low relevance solely because the person is not the exac
       recommended_questions: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Specific questions to ask this person to validate key project assumptions.',
+        description: isNetworking ? 'Specific questions or openers to use with this person.' : 'Specific questions to ask this person to validate key project assumptions.',
       },
       risk_factors: {
         type: 'array',

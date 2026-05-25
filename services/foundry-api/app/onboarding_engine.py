@@ -96,6 +96,79 @@ FALLBACKS = {
     },
 }
 
+NETWORKING_FALLBACKS = {
+    "ideaSummary": {
+        "question": "What is this outreach project about?",
+        "choices": [
+            {"id": "a", "label": "A conference or workshop networking campaign tied to an upcoming in-person event", "normalizedValue": "A conference or workshop networking campaign tied to an upcoming in-person event"},
+            {"id": "b", "label": "A warm intro campaign to meet advisors, collaborators, or potential partners", "normalizedValue": "A warm intro campaign to meet advisors, collaborators, or potential partners"},
+            {"id": "c", "label": "A targeted LinkedIn outreach list for people with a shared professional context", "normalizedValue": "A targeted LinkedIn outreach list for people with a shared professional context"},
+            {"id": "d", "label": "A recruiting or talent networking campaign for a specific role or community", "normalizedValue": "A recruiting or talent networking campaign for a specific role or community"},
+        ],
+        "customPlaceholder": "Describe the outreach project and goal...",
+    },
+    "targetUser": {
+        "question": "Who are you trying to reach?",
+        "choices": [
+            {"id": "a", "label": "Invited speakers, organizers, or panelists connected to a specific event", "normalizedValue": "Invited speakers, organizers, or panelists connected to a specific event"},
+            {"id": "b", "label": "Senior operators or domain experts whose work overlaps with the project context", "normalizedValue": "Senior operators or domain experts whose work overlaps with the project context"},
+            {"id": "c", "label": "Potential collaborators who share the same research, product, or community interests", "normalizedValue": "Potential collaborators who share the same research, product, or community interests"},
+            {"id": "d", "label": "People who can make useful introductions to the right community", "normalizedValue": "People who can make useful introductions to the right community"},
+        ],
+        "customPlaceholder": "Describe the recipients you want to contact...",
+    },
+    "painPoint": {
+        "question": "What context should make the message feel timely and relevant?",
+        "choices": [
+            {"id": "a", "label": "We will be at the same event soon and have a natural reason to meet in person", "normalizedValue": "The sender and recipient will be at the same event soon and have a natural reason to meet in person"},
+            {"id": "b", "label": "The recipient's work overlaps with a paper, talk, product, or project I am presenting", "normalizedValue": "The recipient's work overlaps with something the sender is presenting"},
+            {"id": "c", "label": "There is a shared community, organization, school, investor, or mutual connection", "normalizedValue": "There is a shared community, organization, school, investor, or mutual connection"},
+            {"id": "d", "label": "The recipient has specific experience that makes a short conversation useful", "normalizedValue": "The recipient has specific experience that makes a short conversation useful"},
+        ],
+        "customPlaceholder": "Describe the timely context or shared connection...",
+    },
+    "valueProp": {
+        "question": "What should the outreach ask for?",
+        "choices": [
+            {"id": "a", "label": "A brief in-person hello during the event", "normalizedValue": "A brief in-person hello during the event"},
+            {"id": "b", "label": "A short conversation to exchange ideas around the shared topic", "normalizedValue": "A short conversation to exchange ideas around the shared topic"},
+            {"id": "c", "label": "Permission to follow up after the event with a more specific question", "normalizedValue": "Permission to follow up after the event with a more specific question"},
+            {"id": "d", "label": "A lightweight introduction to someone else in their network", "normalizedValue": "A lightweight introduction to someone else in their network"},
+        ],
+        "customPlaceholder": "Describe the ask or desired next step...",
+    },
+    "idealPeopleTypes": {
+        "question": "Which people should be prioritized first?",
+        "choices": [
+            {"id": "a", "label": "People with direct leadership or organizer roles in the event or community", "normalizedValue": "People with direct leadership or organizer roles in the event or community"},
+            {"id": "b", "label": "Speakers whose work directly overlaps with the sender's topic", "normalizedValue": "Speakers whose work directly overlaps with the sender's topic"},
+            {"id": "c", "label": "Researchers, builders, or operators who are likely to attend in person", "normalizedValue": "Researchers, builders, or operators who are likely to attend in person"},
+            {"id": "d", "label": "Connectors who can introduce the sender to other relevant attendees", "normalizedValue": "Connectors who can introduce the sender to other relevant attendees"},
+        ],
+        "customPlaceholder": "Describe the people who matter most...",
+    },
+    "differentiation": {
+        "question": "What credibility hook should every message know about?",
+        "choices": [
+            {"id": "a", "label": "I am presenting at the same event", "normalizedValue": "The sender is presenting at the same event"},
+            {"id": "b", "label": "Our paper, project, or talk was selected through a competitive process", "normalizedValue": "The sender's work was selected through a competitive process"},
+            {"id": "c", "label": "I have a specific overlap with the recipient's work", "normalizedValue": "The sender has a specific overlap with the recipient's work"},
+            {"id": "d", "label": "A mutual connection or shared community makes the message warmer", "normalizedValue": "A mutual connection or shared community makes the message warmer"},
+        ],
+        "customPlaceholder": "Describe the credibility hook or personal angle...",
+    },
+    "disqualifiers": {
+        "question": "Who should be excluded from this outreach?",
+        "choices": [
+            {"id": "a", "label": "People with no visible connection to the event, topic, or community", "normalizedValue": "People with no visible connection to the event, topic, or community"},
+            {"id": "b", "label": "People whose profiles suggest they are unlikely to attend in person", "normalizedValue": "People whose profiles suggest they are unlikely to attend in person"},
+            {"id": "c", "label": "People where the message would feel like a cold sales pitch", "normalizedValue": "People where the message would feel like a cold sales pitch"},
+            {"id": "d", "label": "People who are too far outside the topic to justify a personalized note", "normalizedValue": "People who are too far outside the topic to justify a personalized note"},
+        ],
+        "customPlaceholder": "Describe who should not be included...",
+    },
+}
+
 
 def empty_onboarding_state() -> dict:
     completeness = {key: "missing" for key in SLOT_KEYS}
@@ -204,8 +277,9 @@ def validate_choices(choices: list[dict], target_slot: str) -> tuple[bool, str |
     return True, None
 
 
-def get_fallback_choices(slot_key: str) -> dict:
-    fallback = FALLBACKS[slot_key]
+def get_fallback_choices(slot_key: str, project_type: str = "startup") -> dict:
+    fallbacks = NETWORKING_FALLBACKS if project_type == "networking" else FALLBACKS
+    fallback = fallbacks[slot_key]
     return {
         "question": fallback["question"],
         "choices": [{**choice, "slotKey": slot_key} for choice in fallback["choices"]],

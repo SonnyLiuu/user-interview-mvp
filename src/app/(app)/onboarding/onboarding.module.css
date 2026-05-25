@@ -43,6 +43,49 @@
   gap: 12px;
 }
 
+.modeGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.modeBtn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: #2e2115;
+  background: #fffdf8;
+  border: 1px solid #dacbb4;
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+
+.modeBtn:hover {
+  border-color: #c08a63;
+}
+
+.modeBtnSelected {
+  border-color: #a4532b;
+  background: #fff7ef;
+}
+
+.modeTitle {
+  font-size: 15px;
+  font-weight: 560;
+}
+
+.modeText {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #7c6854;
+}
+
 .input {
   width: 100%;
   font-size: 16px;
