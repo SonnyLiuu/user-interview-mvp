@@ -61,24 +61,40 @@ def get_foundation_advisor_prompt(foundation: dict, project_type: str = "startup
         "",
         "Current foundation document:",
     ]
-    if foundation.get("summary"):
-        lines.append(f"  Summary: {foundation['summary']}")
-    if foundation.get("targetUser"):
-        lines.append(f"  {'Target Recipients' if is_networking else 'Target User'}: {foundation['targetUser']}")
-    if foundation.get("painPoint"):
-        lines.append(f"  {'Reason/Context' if is_networking else 'Core Problem'}: {foundation['painPoint']}")
-    if foundation.get("valueProp"):
-        lines.append(f"  {'Core Message/Ask' if is_networking else 'Value Proposition'}: {foundation['valueProp']}")
-    if foundation.get("idealPeopleTypes"):
-        lines.append(f"  Ideal People to Talk To: {', '.join(foundation['idealPeopleTypes'])}")
-    if foundation.get("differentiation"):
-        lines.append(f"  {'Credibility Hook' if is_networking else 'Differentiation'}: {foundation['differentiation']}")
-    if foundation.get("disqualifiers"):
-        lines.append(f"  Disqualifiers: {', '.join(foundation['disqualifiers'])}")
-    if foundation.get("biggestUnknown"):
-        lines.append(f"  Biggest Unknown: {foundation['biggestUnknown']}")
-    if foundation.get("nextResearchAction"):
-        lines.append(f"  Next Research Action: {foundation['nextResearchAction']}")
+    if is_networking:
+        labels = {
+            "outreachGoal": "Outreach Goal",
+            "recipients": "Recipients",
+            "senderContext": "Sender Context",
+            "sharedContext": "Shared Context",
+            "desiredOutcome": "Desired Outcome",
+            "requiredMentions": "Required Mentions",
+            "optionalMentions": "Optional Mentions",
+            "personalizationStrategy": "Personalization Strategy",
+            "tone": "Tone",
+            "channelFormat": "Channel Format",
+            "messageBoundaries": "Message Boundaries",
+            "nextSourcingStep": "Next Sourcing Step",
+            "priorityRecipientTypes": "Priority Recipient Types",
+            "matchRubric": "Match Rubric",
+            "lowFitSignals": "Low Fit Signals",
+        }
+    else:
+        labels = {
+            "summary": "Summary",
+            "targetUser": "Target User",
+            "painPoint": "Core Problem",
+            "valueProp": "Value Proposition",
+            "idealPeopleTypes": "Ideal People to Talk To",
+            "differentiation": "Differentiation",
+            "biggestUnknown": "Biggest Unknown",
+        }
+    for key, label in labels.items():
+        value = foundation.get(key)
+        if isinstance(value, list) and value:
+            lines.append(f"  {label}: {', '.join(str(item) for item in value)}")
+        elif value:
+            lines.append(f"  {label}: {value}")
     lines += [
         "",
         "How to behave:",
@@ -94,7 +110,12 @@ def get_foundation_advisor_prompt(foundation: dict, project_type: str = "startup
         "Editing the document:",
         "When you want to make a concrete change to the foundation document, end your response with this exact JSON block on its own line:",
         '{"foundation_patch": {"fieldName": "updated value"}}',
-        "Available fields: summary, targetUser, painPoint, valueProp, idealPeopleTypes (array of strings), differentiation, disqualifiers (array of strings), biggestUnknown, nextResearchAction.",
+        (
+            "Available fields for networking: outreachGoal, recipients, senderContext, sharedContext, desiredOutcome, requiredMentions (array of strings), optionalMentions (array of strings), personalizationStrategy, tone, channelFormat, messageBoundaries (array of strings), nextSourcingStep, priorityRecipientTypes (array of strings), matchRubric, lowFitSignals (array of strings)."
+            if is_networking
+            else
+            "Available fields: summary, targetUser, painPoint, valueProp, idealPeopleTypes (array of strings), differentiation, biggestUnknown."
+        ),
         "Only include fields you are actually changing. Only emit the patch block when making a real edit, not for discussion.",
         'Do not output {"intake_complete": true}. Do not restart the intake flow.',
     ]

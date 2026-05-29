@@ -7,6 +7,12 @@ type CrawlResult = {
 
 export type CrawlDepth = 'quick' | 'deep';
 
+export type CrawlUrlOutcome = {
+  url: string;
+  status: 'included' | 'failed';
+  error?: string;
+};
+
 class FirecrawlError extends Error {
   constructor(message: string, public readonly url: string) {
     super(message);
@@ -65,6 +71,12 @@ function selectRelevantLinks(links: string[], origin: string, maxLinks: number):
   return [...new Set([...preferred, ...rest])].slice(0, maxLinks);
 }
 
+function formatCrawlResults(results: CrawlResult[]) {
+  return results
+    .map(r => `## ${r.title ?? r.url}\nSource: ${r.url}\n\n${r.content}`)
+    .join('\n\n---\n\n');
+}
+
 /**
  * Crawl one or more URLs for a person.
  *
@@ -104,7 +116,56 @@ export async function crawlUrls(urls: string[], depth: CrawlDepth = 'deep'): Pro
   }
 
   // Consolidate all pages into a single text block for the AI
-  return results
-    .map(r => `## ${r.title ?? r.url}\nSource: ${r.url}\n\n${r.content}`)
-    .join('\n\n---\n\n');
+  return formatCrawlResults(results);
+}
+
+export async function crawlUrlsBestEffort(
+  urls: string[],
+  depth: CrawlDepth = 'deep',
+  shouldCancel: () => boolean = () => false,
+): Promise<{ content: string; outcomes: CrawlUrlOutcome[] }> {
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) throw new Error('FIRECRAWL_API_KEY is not set');
+
+  const results: CrawlResult[] = [];
+  const outcomes: CrawlUrlOutcome[] = [];
+  const visited = new Set<string>();
+
+  for (const url of urls) {
+    if (shouldCancel()) break;
+    if (visited.has(url)) continue;
+    visited.add(url);
+
+    try {
+      const primary = await scrapeUrl(url, apiKey);
+      results.push(primary);
+      outcomes.push({ url, status: 'included' });
+
+      if (depth === 'deep' && primary.links?.length) {
+        const followLinks = selectRelevantLinks(primary.links, url, 2);
+        for (const link of followLinks) {
+          if (shouldCancel()) break;
+          if (visited.has(link)) continue;
+          visited.add(link);
+          try {
+            const secondary = await scrapeUrl(link, apiKey);
+            results.push(secondary);
+          } catch {
+            // Non-fatal — best effort on secondary pages
+          }
+        }
+      }
+    } catch (err) {
+      outcomes.push({
+        url,
+        status: 'failed',
+        error: err instanceof Error ? err.message : 'Unknown crawl error',
+      });
+    }
+  }
+
+  return {
+    content: formatCrawlResults(results),
+    outcomes,
+  };
 }

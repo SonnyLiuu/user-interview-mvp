@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users } from '@/lib/db/schema';
+import { people, projects, users, person_events } from '@/lib/db/schema';
+import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
 
 type Params = { params: Promise<{ personId: string }> };
 
@@ -37,6 +38,13 @@ export async function POST(_req: NextRequest, { params }: Params) {
     })
     .where(eq(people.id, personId))
     .returning();
+
+  await db.insert(person_events).values({
+    person_id: personId,
+    type: nextBoardStatus ? 'bookmarked' : 'unbookmarked',
+    metadata: matchEventMetadata(current, { to: nextBoardStatus }, nextBoardStatus ? 1 : -0.5),
+  });
+  if (current.project_id) await refreshProjectMatchProfileFromSignals(current.project_id, null);
 
   return NextResponse.json(updated);
 }

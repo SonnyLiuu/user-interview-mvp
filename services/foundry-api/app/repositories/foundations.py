@@ -17,7 +17,7 @@ async def get_latest_foundation(conn, project_id: str):
 
 
 async def update_foundation(conn, project_id: str, foundation_json: dict):
-    await conn.execute(
+    status = await conn.execute(
         """
         update project_foundations
         set foundation_json = $2, updated_at = now()
@@ -32,3 +32,4 @@ async def update_foundation(conn, project_id: str, foundation_json: dict):
         project_id,
         json.dumps(foundation_json),
     )
+    return status.endswith(" 1")

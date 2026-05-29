@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, projects, users, person_events } from '@/lib/db/schema';
+import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
 
 type Params = { params: Promise<{ personId: string }> };
 
@@ -36,8 +37,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   await db.insert(person_events).values({
     person_id: personId,
     type: 'stage_changed',
-    metadata: { to: 'scheduled', scheduled_at: scheduledAt.toISOString() },
+    metadata: matchEventMetadata(rows[0].person, { to: 'scheduled', scheduled_at: scheduledAt.toISOString() }, 3),
   });
+  if (rows[0].person.project_id) await refreshProjectMatchProfileFromSignals(rows[0].person.project_id, null);
 
   return NextResponse.json(updated);
 }

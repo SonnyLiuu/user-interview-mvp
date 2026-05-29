@@ -3,6 +3,7 @@
 import { useRef, useEffect } from 'react';
 import { useFoundation } from './FoundationContext';
 import type { Foundation, ProjectType } from '@/lib/backend-types';
+import { getProjectModeConfig } from '@/lib/project-modes';
 import styles from './BriefView.module.css';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -77,64 +78,31 @@ export default function FoundationView({
   if (!ctx) return null;
 
   const { foundation, saveStatus, canUndo, canRedo, handleChange, handleBlur, commitNow, undo, redo } = ctx;
-  const isNetworking = projectType === 'networking';
-  const labels = isNetworking
-    ? {
-        researchCue: 'Outreach Cue',
-        biggestUnknown: 'What targeting or message detail is still uncertain?',
-        nextResearchAction: 'What sourcing or personalization action comes next?',
-        summary: 'Campaign Context',
-        summaryPlaceholder: 'Describe the outreach campaign and goal...',
-        targetUser: 'Target Recipients',
-        targetUserPlaceholder: 'Who are you trying to reach?',
-        painPoint: 'Reason for Outreach',
-        painPointPlaceholder: 'What makes the message timely or relevant?',
-        valueProp: 'Core Message',
-        valuePropPlaceholder: 'What should each message communicate or ask for?',
-        idealPeopleTypes: 'Ideal People',
-        idealPeoplePlaceholder: 'Describe this recipient type...',
-        addPersonType: '+ Add recipient type',
-        differentiation: 'Credibility Hook',
-        differentiationPlaceholder: 'What personal angle or credibility should the message include?',
-        disqualifiers: 'Exclude',
-        disqualifierPlaceholder: 'Who should not be included?',
-        addDisqualifier: '+ Add exclusion',
-      }
-    : {
-        researchCue: 'Research Cue',
-        biggestUnknown: 'What is the biggest unknown to test next?',
-        nextResearchAction: 'What people research action would test it?',
-        summary: 'Summary',
-        summaryPlaceholder: "Describe what you're building...",
-        targetUser: 'Target User',
-        targetUserPlaceholder: 'Who is the primary person experiencing the problem?',
-        painPoint: 'Core Problem',
-        painPointPlaceholder: 'What pain does this solve?',
-        valueProp: 'Value Proposition',
-        valuePropPlaceholder: 'What specific value do you deliver?',
-        idealPeopleTypes: 'Ideal People to Talk To',
-        idealPeoplePlaceholder: 'Describe this person type...',
-        addPersonType: '+ Add person type',
-        differentiation: 'Differentiation',
-        differentiationPlaceholder: 'What makes this different from existing solutions?',
-        disqualifiers: 'Disqualifiers',
-        disqualifierPlaceholder: 'Who is not a good fit?',
-        addDisqualifier: '+ Add disqualifier',
-      };
+  const modeConfig = getProjectModeConfig(projectType);
 
-  function updateListItem(field: 'idealPeopleTypes' | 'disqualifiers', idx: number, value: string) {
-    const list = [...(foundation[field] ?? [])];
+  function fieldText(key: string) {
+    const value = foundation[key];
+    return typeof value === 'string' ? value : '';
+  }
+
+  function fieldList(key: string) {
+    const value = foundation[key];
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  }
+
+  function updateListItem(field: string, idx: number, value: string) {
+    const list = [...fieldList(field)];
     list[idx] = value;
     handleChange({ ...foundation, [field]: list });
   }
 
-  function removeListItem(field: 'idealPeopleTypes' | 'disqualifiers', idx: number) {
-    const list = (foundation[field] ?? []).filter((_, i) => i !== idx);
+  function removeListItem(field: string, idx: number) {
+    const list = fieldList(field).filter((_, i) => i !== idx);
     commitNow({ ...foundation, [field]: list });
   }
 
-  function addListItem(field: 'idealPeopleTypes' | 'disqualifiers') {
-    const list = [...(foundation[field] ?? []), ''];
+  function addListItem(field: string) {
+    const list = [...fieldList(field), ''];
     commitNow({ ...foundation, [field]: list });
   }
 
@@ -173,136 +141,48 @@ export default function FoundationView({
 
       {/* Document */}
       <div className={styles.editableContent}>
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{labels.researchCue}</h2>
-          <AutoTextarea
-            className={styles.editableField}
-            value={foundation.biggestUnknown ?? ''}
-            onChange={(v) => handleChange({ ...foundation, biggestUnknown: v })}
-            onBlur={handleBlur}
-            placeholder={labels.biggestUnknown}
-          />
-          <AutoTextarea
-            className={styles.editableField}
-            value={foundation.nextResearchAction ?? ''}
-            onChange={(v) => handleChange({ ...foundation, nextResearchAction: v })}
-            onBlur={handleBlur}
-            placeholder={labels.nextResearchAction}
-          />
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{labels.summary}</h2>
-          <AutoTextarea
-            className={styles.editableField}
-            value={foundation.summary ?? ''}
-            onChange={(v) => handleChange({ ...foundation, summary: v })}
-            onBlur={handleBlur}
-            placeholder={labels.summaryPlaceholder}
-          />
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{labels.targetUser}</h2>
-          <AutoTextarea
-            className={styles.editableField}
-            value={foundation.targetUser ?? ''}
-            onChange={(v) => handleChange({ ...foundation, targetUser: v })}
-            onBlur={handleBlur}
-            placeholder={labels.targetUserPlaceholder}
-          />
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{labels.painPoint}</h2>
-          <AutoTextarea
-            className={styles.editableField}
-            value={foundation.painPoint ?? ''}
-            onChange={(v) => handleChange({ ...foundation, painPoint: v })}
-            onBlur={handleBlur}
-            placeholder={labels.painPointPlaceholder}
-          />
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{labels.valueProp}</h2>
-          <AutoTextarea
-            className={styles.editableField}
-            value={foundation.valueProp ?? ''}
-            onChange={(v) => handleChange({ ...foundation, valueProp: v })}
-            onBlur={handleBlur}
-            placeholder={labels.valuePropPlaceholder}
-          />
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{labels.idealPeopleTypes}</h2>
-          <ul className={styles.list}>
-            {(foundation.idealPeopleTypes ?? []).map((item, i) => (
-              <li key={i} className={styles.editableListRow}>
-                <span className={styles.listBullet}>–</span>
-                <AutoTextarea
-                  className={styles.editableFieldInline}
-                  value={item}
-                  onChange={(v) => updateListItem('idealPeopleTypes', i, v)}
-                  onBlur={handleBlur}
-                  placeholder={labels.idealPeoplePlaceholder}
-                />
-                <button
-                  type="button"
-                  className={styles.removeBtn}
-                  onClick={() => removeListItem('idealPeopleTypes', i)}
-                  aria-label="Remove"
-                >
-                  ×
+        {modeConfig.foundationFields.map((field) => (
+          <section key={field.key} className={styles.section}>
+            <h2 className={styles.sectionTitle}>{field.label}</h2>
+            {field.kind === 'list' ? (
+              <>
+                <ul className={styles.list}>
+                  {fieldList(field.key).map((item, i) => (
+                    <li key={i} className={styles.editableListRow}>
+                      <span className={styles.listBullet}>–</span>
+                      <AutoTextarea
+                        className={styles.editableFieldInline}
+                        value={item}
+                        onChange={(v) => updateListItem(field.key, i, v)}
+                        onBlur={handleBlur}
+                        placeholder={field.placeholder}
+                      />
+                      <button
+                        type="button"
+                        className={styles.removeBtn}
+                        onClick={() => removeListItem(field.key, i)}
+                        aria-label="Remove"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className={styles.addItemBtn} onClick={() => addListItem(field.key)}>
+                  {field.addLabel ?? '+ Add item'}
                 </button>
-              </li>
-            ))}
-          </ul>
-          <button type="button" className={styles.addItemBtn} onClick={() => addListItem('idealPeopleTypes')}>
-            {labels.addPersonType}
-          </button>
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{labels.differentiation}</h2>
-          <AutoTextarea
-            className={styles.editableField}
-            value={foundation.differentiation ?? ''}
-            onChange={(v) => handleChange({ ...foundation, differentiation: v })}
-            onBlur={handleBlur}
-            placeholder={labels.differentiationPlaceholder}
-          />
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{labels.disqualifiers}</h2>
-          <ul className={styles.list}>
-            {(foundation.disqualifiers ?? []).map((item, i) => (
-              <li key={i} className={styles.editableListRow}>
-                <span className={styles.listBullet}>–</span>
-                <AutoTextarea
-                  className={styles.editableFieldInline}
-                  value={item}
-                  onChange={(v) => updateListItem('disqualifiers', i, v)}
-                  onBlur={handleBlur}
-                  placeholder={labels.disqualifierPlaceholder}
-                />
-                <button
-                  type="button"
-                  className={styles.removeBtn}
-                  onClick={() => removeListItem('disqualifiers', i)}
-                  aria-label="Remove"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button type="button" className={styles.addItemBtn} onClick={() => addListItem('disqualifiers')}>
-            {labels.addDisqualifier}
-          </button>
-        </section>
+              </>
+            ) : (
+              <AutoTextarea
+                className={styles.editableField}
+                value={fieldText(field.key)}
+                onChange={(v) => handleChange({ ...foundation, [field.key]: v })}
+                onBlur={handleBlur}
+                placeholder={field.placeholder}
+              />
+            )}
+          </section>
+        ))}
       </div>
     </div>
   );

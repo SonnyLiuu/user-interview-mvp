@@ -64,17 +64,41 @@ def fallback_outreach_content(person: dict, project_context: dict) -> dict:
     role_fragment = f" as {role}" if role else ""
 
     if project_context.get("project_type") == "networking":
-        context = _clip(project_context.get("pain_point") or project_context.get("idea_summary"), 82)
-        ask = _clip(project_context.get("value_prop"), 64) or "connect"
+        context = _clip(project_context.get("shared_context") or project_context.get("pain_point") or project_context.get("idea_summary"), 92)
+        sender_context = _clip(project_context.get("sender_context"), 76)
+        ask = _clip(project_context.get("desired_outcome") or project_context.get("value_prop"), 64) or "connect"
+        required_mentions = project_context.get("required_mentions") or []
+        include_selectivity = any(
+            isinstance(item, str) and ("out of" in item.lower() or "selective" in item.lower())
+            for item in required_mentions
+        )
+        selectivity = next(
+            (
+                _clip(item, 48)
+                for item in required_mentions
+                if isinstance(item, str) and ("out of" in item.lower() or "selective" in item.lower())
+            ),
+            "",
+        )
+        event_note = _clip(context, 64) or "we share the same event context"
+        if sender_context and "oral presentation" in sender_context.lower():
+            body = f"Hi {first_name}, {event_note}. I'm giving an oral presentation there"
+            if include_selectivity and selectivity:
+                body += f" ({selectivity})"
+            body += f". Would love to {ask.lower()}."
+            return {
+                "subject": f"Quick hello, {first_name}",
+                "body": body,
+            }
         if context:
             body = (
-                f"Hi {first_name}, your work{role_fragment} stood out. "
-                f"{context}. I would love to {ask.lower()}."
+                f"Hi {first_name}, {context}. "
+                f"{sender_context + '. ' if sender_context else ''}Would love to {ask.lower()}."
             )
         else:
             body = (
-                f"Hi {first_name}, your work{role_fragment} stood out. "
-                f"I would love to {ask.lower()}."
+                f"Hi {first_name}, {sender_context + '. ' if sender_context else ''}"
+                f"Would love to {ask.lower()}."
             )
         return {
             "subject": f"Quick hello, {first_name}",

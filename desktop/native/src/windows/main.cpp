@@ -11,6 +11,7 @@
 #include <windows.h>
 #include <d3d11.h>
 #include <dxgi.h>
+#include <shellapi.h>
 #include <wrl/client.h>
 #include <objbase.h>
 #include <algorithm>
@@ -20,7 +21,9 @@
 #include <iterator>
 #include <mutex>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <atomic>
 #include <thread>
 
@@ -181,6 +184,122 @@ void writeDesktopSettings(const foundry::DesktopSettings& settings) {
 std::wstring readPersistedToken() {
     Json json = readJsonFile(foundry::windows::tokenPath());
     return foundry::json::wideValue(json, "token", L"");
+}
+
+// foundry://call/start?personId=<id>&token=<short-lived-launch-token>
+//
+// We accept only this shape for v1 — anything else returns nullopt and the
+// overlay falls back to the picker. Hosts (Windows shell, browsers) always
+// hand us one full URL as argv[1] / WM_COPYDATA payload.
+struct DeepLink {
+    std::wstring action;    // e.g. L"call/start"
+    std::wstring personId;  // empty unless present in query string
+    std::wstring token;     // short-lived web-issued launch token
+};
+
+std::wstring percentDecode(const std::wstring& input) {
+    std::wstring out;
+    out.reserve(input.size());
+    for (size_t i = 0; i < input.size(); ++i) {
+        wchar_t c = input[i];
+        if (c == L'+') {
+            out.push_back(L' ');
+        } else if (c == L'%' && i + 2 < input.size()) {
+            auto hex = [](wchar_t ch) -> int {
+                if (ch >= L'0' && ch <= L'9') return ch - L'0';
+                if (ch >= L'a' && ch <= L'f') return 10 + (ch - L'a');
+                if (ch >= L'A' && ch <= L'F') return 10 + (ch - L'A');
+                return -1;
+            };
+            int hi = hex(input[i + 1]);
+            int lo = hex(input[i + 2]);
+            if (hi >= 0 && lo >= 0) {
+                out.push_back(static_cast<wchar_t>((hi << 4) | lo));
+                i += 2;
+            } else {
+                out.push_back(c);
+            }
+        } else {
+            out.push_back(c);
+        }
+    }
+    return out;
+}
+
+std::optional<DeepLink> parseFoundryUrl(const std::wstring& raw) {
+    constexpr std::wstring_view kPrefix = L"foundry://";
+    if (raw.size() <= kPrefix.size() ||
+        raw.compare(0, kPrefix.size(), kPrefix) != 0) {
+        return std::nullopt;
+    }
+    std::wstring rest = raw.substr(kPrefix.size());
+    // Some shells append a trailing slash to a bare protocol invocation.
+    while (!rest.empty() && (rest.back() == L'/' || rest.back() == L'\\')) {
+        rest.pop_back();
+    }
+    size_t queryStart = rest.find(L'?');
+    DeepLink link;
+    link.action = queryStart == std::wstring::npos ? rest : rest.substr(0, queryStart);
+    if (queryStart == std::wstring::npos) {
+        return link;
+    }
+    std::wstring query = rest.substr(queryStart + 1);
+    size_t pos = 0;
+    while (pos < query.size()) {
+        size_t amp = query.find(L'&', pos);
+        std::wstring pair = query.substr(
+            pos, amp == std::wstring::npos ? std::wstring::npos : amp - pos);
+        size_t eq = pair.find(L'=');
+        if (eq != std::wstring::npos) {
+            std::wstring key = pair.substr(0, eq);
+            std::wstring value = percentDecode(pair.substr(eq + 1));
+            if (key == L"personId") link.personId = value;
+            if (key == L"token") link.token = value;
+        }
+        if (amp == std::wstring::npos) break;
+        pos = amp + 1;
+    }
+    return link;
+}
+
+std::wstring extractDeepLinkFromCommandLine() {
+    int wargc = 0;
+    LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+    std::wstring url;
+    if (wargv && wargc >= 2) {
+        std::wstring arg(wargv[1]);
+        if (arg.rfind(L"foundry://", 0) == 0) {
+            url = std::move(arg);
+        }
+    }
+    if (wargv) LocalFree(wargv);
+    return url;
+}
+
+void sendDeepLinkToExistingInstance(const std::wstring& url) {
+    HWND existing = nullptr;
+    for (int attempt = 0; attempt < 30 && !existing; ++attempt) {
+        existing = FindWindowW(foundry::overlay::kOverlayWindowClass, nullptr);
+        if (!existing) Sleep(100);
+    }
+    if (!existing) return;
+
+    // Let the receiver process steal foreground after we send.
+    DWORD targetPid = 0;
+    GetWindowThreadProcessId(existing, &targetPid);
+    if (targetPid != 0) AllowSetForegroundWindow(targetPid);
+
+    if (!url.empty()) {
+        COPYDATASTRUCT cds{};
+        cds.dwData = foundry::overlay::kDeepLinkCopyDataId;
+        cds.cbData = static_cast<DWORD>((url.size() + 1) * sizeof(wchar_t));
+        cds.lpData = const_cast<wchar_t*>(url.c_str());
+        SendMessageW(existing, WM_COPYDATA, 0,
+                     reinterpret_cast<LPARAM>(&cds));
+    }
+    // Best-effort focus; topmost capture-excluded windows can be stubborn.
+    ShowWindow(existing, SW_SHOWNOACTIVATE);
+    SetForegroundWindow(existing);
 }
 
 std::wstring isoNowUtc() {
@@ -381,10 +500,45 @@ void addFallbackCallBriefTopics(foundry::AppState& appState) {
 
 std::wstring startLiveSession(foundry::AppState& appState,
                               const std::wstring& personId,
-                              const std::wstring& personName) {
+                              const std::wstring& personName,
+                              const std::wstring& launchToken) {
+    std::wstring token = launchToken;
+    if (token.empty()) {
+        std::wstring tokenUrl = apiBaseNoSlash(appState) +
+                                L"/api/desktop/launch-token";
+        Json tokenPayload{{"personId", foundry::json::toUtf8(personId)}};
+        auto tokenResponse = foundry::windows::http::postJson(
+            tokenUrl, foundry::json::dumpUtf8(tokenPayload),
+            appState.authToken);
+        if (!tokenResponse.ok) {
+            std::wstring message =
+                tokenResponse.error.empty()
+                    ? foundry::json::fromUtf8(tokenResponse.body.substr(0, 300))
+                    : tokenResponse.error;
+            return foundry::json::dumpWide(Json{
+                {"type", "pickerError"},
+                {"message", foundry::json::toUtf8(message)},
+                {"status", tokenResponse.status},
+            });
+        }
+        Json tokenRoot = foundry::json::parseUtf8(
+            tokenResponse.body, Json::object());
+        token = foundry::json::wideValue(tokenRoot, "token");
+        if (token.empty()) {
+            return foundry::json::dumpWide(Json{
+                {"type", "pickerError"},
+                {"message", "Could not prepare secure launch token."},
+                {"status", 0},
+            });
+        }
+    }
+
     std::wstring url = apiBaseNoSlash(appState) +
                        L"/api/desktop/sessions/live/start";
-    Json payload{{"personId", foundry::json::toUtf8(personId)}};
+    Json payload{
+        {"personId", foundry::json::toUtf8(personId)},
+        {"launchToken", foundry::json::toUtf8(token)},
+    };
     auto response = foundry::windows::http::postJson(
         url, foundry::json::dumpUtf8(payload), appState.authToken);
     if (!response.ok) {
@@ -571,6 +725,8 @@ std::wstring endSessionJson(const foundry::AppState& appState) {
 }
 
 std::wstring buildNotesSummary(const foundry::AppState& appState);
+bool refreshLiveSessionSnapshot(foundry::AppState& appState,
+                                bool replaceTopics = false);
 
 Json endSessionPayload(const foundry::AppState& appState,
                        const std::wstring& transcriptRaw) {
@@ -623,9 +779,20 @@ std::wstring buildNotesSummary(const foundry::AppState& appState) {
 
 Json saveEndSession(foundry::AppState& appState,
                     const std::wstring& transcriptRaw) {
+    if (!appState.liveSessionId.empty()) {
+        refreshLiveSessionSnapshot(appState, true);
+        endLiveSession(appState);
+        refreshLiveSessionSnapshot(appState, true);
+    }
+
+    std::wstring finalTranscriptRaw = appState.liveTranscriptRaw.empty()
+                                          ? transcriptRaw
+                                          : appState.liveTranscriptRaw;
     std::wstring url = apiBaseNoSlash(appState) + L"/api/desktop/sessions/end";
     auto response = foundry::windows::http::postJson(
-        url, foundry::json::dumpUtf8(endSessionPayload(appState, transcriptRaw)),
+        url,
+        foundry::json::dumpUtf8(
+            endSessionPayload(appState, finalTranscriptRaw)),
         appState.authToken);
     if (!response.ok) {
         std::wstring message = response.error.empty()
@@ -637,7 +804,6 @@ Json saveEndSession(foundry::AppState& appState,
             {"message", foundry::json::toUtf8(message)},
         };
     }
-    endLiveSession(appState);
     appState.sessionStatus = foundry::SessionStatus::Idle;
     appState.selectedPersonId.clear();
     appState.selectedPersonName.clear();
@@ -686,6 +852,44 @@ foundry::overlay::TopicCategory toRenderCategory(foundry::TopicCategory c) {
     return foundry::overlay::TopicCategory::Goal;
 }
 
+struct TranscriptSummary {
+    bool hasTranscript = false;
+    unsigned int turnCount = 0;
+    std::wstring latestLine;
+};
+
+std::wstring trimTranscriptLine(const std::wstring& line) {
+    const wchar_t* whitespace = L" \t\r\n";
+    size_t first = line.find_first_not_of(whitespace);
+    if (first == std::wstring::npos) return L"";
+    size_t last = line.find_last_not_of(whitespace);
+    return line.substr(first, last - first + 1);
+}
+
+TranscriptSummary summarizeTranscript(const std::wstring& raw) {
+    TranscriptSummary summary;
+    size_t start = 0;
+    while (start <= raw.size()) {
+        size_t end = raw.find(L'\n', start);
+        std::wstring line = trimTranscriptLine(
+            raw.substr(start, end == std::wstring::npos ? std::wstring::npos
+                                                        : end - start));
+        if (!line.empty()) {
+            summary.hasTranscript = true;
+            ++summary.turnCount;
+            summary.latestLine = line;
+        }
+        if (end == std::wstring::npos) break;
+        start = end + 1;
+    }
+    constexpr size_t kMaxPreviewChars = 150;
+    if (summary.latestLine.size() > kMaxPreviewChars) {
+        summary.latestLine =
+            summary.latestLine.substr(0, kMaxPreviewChars - 3) + L"...";
+    }
+    return summary;
+}
+
 OverlayRenderState overlayRenderState(const foundry::AppState& appState,
                                       unsigned int scrollOffset,
                                       unsigned int personScrollOffset,
@@ -716,6 +920,10 @@ OverlayRenderState overlayRenderState(const foundry::AppState& appState,
     state.pickerStatus = pickerStatus;
     state.endSessionStatus = endSessionStatus;
     state.selectedPersonName = appState.selectedPersonName;
+    TranscriptSummary transcript = summarizeTranscript(appState.liveTranscriptRaw);
+    state.hasTranscript = transcript.hasTranscript;
+    state.transcriptTurnCount = transcript.turnCount;
+    state.transcriptPreview = transcript.latestLine;
     state.people = people;
     for (const auto& topic : appState.topics) {
         if (topic.category == foundry::TopicCategory::Signal) continue;
@@ -841,7 +1049,8 @@ bool applyTranscriptRaw(foundry::AppState& appState, const Json& json) {
     return true;
 }
 
-bool pollLiveSession(foundry::AppState& appState) {
+bool refreshLiveSessionSnapshot(foundry::AppState& appState,
+                                bool replaceTopics) {
     if (appState.foundryBaseUrl.empty() ||
         appState.liveSessionId.empty() ||
         appState.liveToken.empty()) {
@@ -854,9 +1063,20 @@ bool pollLiveSession(foundry::AppState& appState) {
     auto response = foundry::windows::http::get(url, appState.liveToken);
     if (!response.ok) return false;
     Json root = foundry::json::parseUtf8(response.body, Json::object());
-    bool changed = applyRealtimeTopicSnapshot(appState, root["topics"]);
+    bool changed = false;
+    if (replaceTopics && root.contains("topics")) {
+        loadTopicsFromJson(appState, root["topics"], true);
+        applyRealtimeTopicSnapshot(appState, root["topics"]);
+        changed = true;
+    } else if (root.contains("topics")) {
+        changed = applyRealtimeTopicSnapshot(appState, root["topics"]);
+    }
     changed = applyTranscriptRaw(appState, root) || changed;
     return changed;
+}
+
+bool pollLiveSession(foundry::AppState& appState) {
+    return refreshLiveSessionSnapshot(appState);
 }
 
 bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
@@ -930,11 +1150,25 @@ bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
 }  // namespace
 
 int main() {
+    // If a second instance launches with a foundry:// URL (typical when the
+    // Windows shell dispatches the protocol), forward the URL to the running
+    // overlay via WM_COPYDATA and exit. CreateMutexW returns the same handle
+    // either way; ERROR_ALREADY_EXISTS tells us another live process owns it.
+    std::wstring initialDeepLink = extractDeepLinkFromCommandLine();
+    HANDLE singleInstanceMutex =
+        CreateMutexW(nullptr, FALSE, L"Foundry.Overlay.SingleInstance");
+    if (singleInstanceMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
+        sendDeepLinkToExistingInstance(initialDeepLink);
+        CloseHandle(singleInstanceMutex);
+        return 0;
+    }
+
     enableDpiAwareness();
 
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(hr)) {
         std::cerr << "CoInitializeEx failed: 0x" << std::hex << hr << "\n";
+        if (singleInstanceMutex) CloseHandle(singleInstanceMutex);
         return 1;
     }
 
@@ -952,6 +1186,8 @@ int main() {
     bool overlayCancelEndRequested = false;
     int overlaySelectPersonRequested = -1;
     bool overlayMovedRequested = false;
+    std::wstring overlayDeepLinkRequested;
+    std::wstring pendingDeepLink;
     bool overlayDirty = true;
     bool overlaySettingsOpen = false;
     bool overlayPickerOpen = false;
@@ -1132,10 +1368,14 @@ int main() {
     overlayActions.onMoved = [&] {
         overlayMovedRequested = true;
     };
+    overlayActions.onDeepLink = [&](const std::wstring& url) {
+        overlayDeepLinkRequested = url;
+    };
 
     OverlayWindow overlay = createOverlayWindow(std::move(overlayActions));
     if (!overlay.hwnd) {
         CoUninitialize();
+        if (singleInstanceMutex) CloseHandle(singleInstanceMutex);
         return 1;
     }
     overlayHeightDip = overlay.height;
@@ -1156,6 +1396,7 @@ int main() {
     ComPtr<IDXGISwapChain>      swapChain;
     if (!createDeviceAndSwapChain(overlay, device, context, swapChain)) {
         CoUninitialize();
+        if (singleInstanceMutex) CloseHandle(singleInstanceMutex);
         return 1;
     }
 
@@ -1188,6 +1429,11 @@ int main() {
                         overlayDirty = true;
                         if (authWindow && IsWindow(authWindow->hwnd())) {
                             DestroyWindow(authWindow->hwnd());
+                        }
+                        if (!pendingDeepLink.empty()) {
+                            overlayDeepLinkRequested =
+                                std::move(pendingDeepLink);
+                            pendingDeepLink.clear();
                         }
                     }
                 } else if (type == "desktopAuthError") {
@@ -1361,6 +1607,85 @@ int main() {
         loadPeopleIntoPicker();
     };
 
+    // Apply a foundry://call/start?personId=...&token=... URL.
+    // Mirrors the picker → startLiveSession path but skips the picker UI.
+    // If auth is missing or expired, queues the URL into pendingDeepLink so
+    // the auth window's success callback can retry once the token lands.
+    auto applyDeepLink = [&](const std::wstring& url) {
+        auto link = parseFoundryUrl(url);
+        if (!link || link->action != L"call/start" ||
+            link->personId.empty() || link->token.empty()) {
+            std::wcout << L"[deeplink] ignoring malformed URL\n";
+            return;
+        }
+
+        ShowWindow(overlay.hwnd, SW_SHOWNOACTIVATE);
+        SetForegroundWindow(overlay.hwnd);
+
+        if (appState.authToken.empty()) {
+            pendingDeepLink = url;
+            overlaySettingsOpen = true;
+            overlayPickerOpen = false;
+            overlayEndOpen = false;
+            overlayPersonDropdownOpen = false;
+            overlayHoverTarget = OverlayHoverTarget::None;
+            overlayHoverIndex = -1;
+            overlaySettingsStatus = L"Sign in to start the call.";
+            overlayDirty = true;
+            openAuthWindow();
+            return;
+        }
+
+        if (appState.sessionStatus == foundry::SessionStatus::Active) {
+            std::wcout << L"[deeplink] ignoring; session already active for "
+                       << appState.selectedPersonId << L"\n";
+            return;
+        }
+
+        Json result = foundry::json::parseWide(
+            startLiveSession(appState, link->personId, L"", link->token));
+        std::string type = result.value("type", "");
+        if (type == "sessionSelected") {
+            appState.sessionStatus = foundry::SessionStatus::Active;
+            appState.sessionStartedAt = isoNowUtc();
+            nextLivePollTick = 0;
+            startLiveEvents();
+            startLiveAudio();
+            overlayPickerOpen = false;
+            overlaySettingsOpen = false;
+            overlayEndOpen = false;
+            overlayPersonDropdownOpen = false;
+            overlayGoalsCollapsed = false;
+            overlayQuestionsCollapsed = false;
+            overlayScrollOffset = 0;
+            overlayPersonScrollOffset = 0;
+            overlayHoverTarget = OverlayHoverTarget::None;
+            overlayHoverIndex = -1;
+            overlayDirty = true;
+        } else {
+            int status = result.value("status", 0);
+            std::wstring message = foundry::json::wideValue(
+                result, "message", L"Could not load brief.");
+            if (status == 401) {
+                appState.authToken.clear();
+                clearToken();
+                pendingDeepLink = url;
+                overlaySettingsOpen = true;
+                overlayPickerOpen = false;
+                overlayEndOpen = false;
+                overlaySettingsStatus = L"Auth expired. Sign in again.";
+                overlayDirty = true;
+                openAuthWindow();
+            } else {
+                overlaySettingsOpen = true;
+                overlayPickerOpen = false;
+                overlayEndOpen = false;
+                overlaySettingsStatus = message;
+                overlayDirty = true;
+            }
+        }
+    };
+
     actions.onStartSession = startSession;
     actions.onSettings = [&] { overlaySettingsRequested = true; };
     actions.onQuit = [] {
@@ -1370,10 +1695,16 @@ int main() {
     TrayIcon tray(std::move(actions));
     if (!tray.valid()) {
         CoUninitialize();
+        if (singleInstanceMutex) CloseHandle(singleInstanceMutex);
         return 1;
     }
 
     std::cout << "Tray icon active. Right-click for menu.\n";
+
+    if (!initialDeepLink.empty()) {
+        overlayDeepLinkRequested = std::move(initialDeepLink);
+        initialDeepLink.clear();
+    }
 
     MSG msg{};
     for (;;) {
@@ -1510,7 +1841,7 @@ int main() {
                 overlayDirty = true;
                 const OverlayPersonRow person = overlayPeople[index];
                 Json result = foundry::json::parseWide(
-                    startLiveSession(appState, person.id, person.name));
+                    startLiveSession(appState, person.id, person.name, L""));
                 std::string type = result.value("type", "");
                 if (type == "sessionSelected") {
                     appState.sessionStatus = foundry::SessionStatus::Active;
@@ -1605,6 +1936,12 @@ int main() {
                       << rc.top << "\n";
             overlayMovedRequested = false;
         }
+        if (!overlayDeepLinkRequested.empty()) {
+            std::wstring url = std::move(overlayDeepLinkRequested);
+            overlayDeepLinkRequested.clear();
+            std::wcout << L"[deeplink] applying URL\n";
+            applyDeepLink(url);
+        }
         if (overlayDirty) {
             renderOverlay(swapChain.Get(),
                           overlayRenderState(
@@ -1637,5 +1974,6 @@ exit:
     authWindow.reset();
     releaseRendererResources();
     CoUninitialize();
+    if (singleInstanceMutex) CloseHandle(singleInstanceMutex);
     return 0;
 }

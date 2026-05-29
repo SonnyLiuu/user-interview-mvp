@@ -5,6 +5,7 @@ import ProjectChat from '@/components/project/ProjectChat';
 import styles from './project-page.module.css';
 import { getFoundationView, getProjectBySlugOrId } from '@/lib/backend-server';
 import { getProjectPathSegment } from '@/lib/projects';
+import { adaptFoundationForMode } from '@/lib/project-modes';
 
 export default async function ProjectPage({
   params,
@@ -30,7 +31,7 @@ export default async function ProjectPage({
   if (!hasFoundation) {
     redirect(`/onboarding/${getProjectPathSegment(project)}`);
   }
-  const foundation = foundationView.foundation!;
+  const foundation = adaptFoundationForMode(foundationView.foundation!, project.project_type);
 
   return (
     <FoundationProvider

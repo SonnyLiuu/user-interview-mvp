@@ -23,13 +23,18 @@ const SORT_LABELS: Record<SortOrder, string> = {
 
 const RANK = { high: 3, medium: 2, low: 1 } as const;
 
+function matchSortValue(person: Person): number {
+  if (typeof person.match_score === 'number') return person.match_score;
+  return (RANK[(person.match_rank ?? person.relevance_rank) as keyof typeof RANK] ?? 0) * 25;
+}
+
 function sortGroup(group: Person[], order: SortOrder): Person[] {
   const sortable = group.filter((p) => p.analysis_status === 'complete');
   const rest = group.filter((p) => p.analysis_status !== 'complete');
 
   const sorted = [...sortable].sort((a, b) => {
-    if (order === 'match-desc') return (RANK[b.relevance_rank as keyof typeof RANK] ?? 0) - (RANK[a.relevance_rank as keyof typeof RANK] ?? 0);
-    if (order === 'match-asc')  return (RANK[a.relevance_rank as keyof typeof RANK] ?? 0) - (RANK[b.relevance_rank as keyof typeof RANK] ?? 0);
+    if (order === 'match-desc') return matchSortValue(b) - matchSortValue(a);
+    if (order === 'match-asc')  return matchSortValue(a) - matchSortValue(b);
     if (order === 'recent-desc') return new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime();
     return new Date(a.created_at!).getTime() - new Date(b.created_at!).getTime();
   });

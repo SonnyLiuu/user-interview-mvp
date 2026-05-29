@@ -16,17 +16,35 @@ type ProjectRecord = {
   is_archived?: boolean | null;
 };
 
-export type Foundation = {
+export type StartupFoundation = {
   summary: string;
   targetUser: string;
   painPoint: string;
   valueProp: string;
   idealPeopleTypes: string[];
   differentiation?: string | null;
-  disqualifiers?: string[];
   biggestUnknown?: string | null;
-  nextResearchAction?: string | null;
 };
+
+export type NetworkingFoundation = {
+  outreachGoal?: string | null;
+  recipients?: string | null;
+  senderContext?: string | null;
+  sharedContext?: string | null;
+  desiredOutcome?: string | null;
+  requiredMentions?: string[];
+  optionalMentions?: string[];
+  personalizationStrategy?: string | null;
+  tone?: string | null;
+  channelFormat?: string | null;
+  messageBoundaries?: string[];
+  nextSourcingStep?: string | null;
+  priorityRecipientTypes?: string[];
+  matchRubric?: string | null;
+  lowFitSignals?: string[];
+};
+
+export type Foundation = Partial<StartupFoundation & NetworkingFoundation> & Record<string, unknown>;
 
 export type LatestProjectPayload = {
   project: ProjectNavItem | null;

@@ -5,7 +5,23 @@
   overflow: hidden;
 }
 
-/* ── Empty state: center the kickoff input ───────────────────────────────── */
+/* ── Intro turn: keep the first prompt and composer grouped ──────────────── */
+.chatIntro {
+  justify-content: center;
+}
+
+.chatIntro .messages {
+  flex: 0;
+  overflow: visible;
+  padding: 0 0 12px;
+}
+
+.chatIntro .inputArea {
+  width: 100%;
+  padding-bottom: 0;
+}
+
+/* ── Empty state: legacy fallback before the first server message ────────── */
 .chatEmpty {
   justify-content: center;
 }

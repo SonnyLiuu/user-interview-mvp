@@ -62,6 +62,8 @@ struct OverlayRenderState {
     unsigned int topicCount = 0;
     unsigned int goalCount = 0;
     unsigned int checkedCount = 0;
+    bool hasTranscript = false;
+    unsigned int transcriptTurnCount = 0;
     unsigned int scrollOffset = 0;
     unsigned int personScrollOffset = 0;
     std::wstring apiBaseUrl;
@@ -69,6 +71,7 @@ struct OverlayRenderState {
     std::wstring pickerStatus;
     std::wstring endSessionStatus;
     std::wstring selectedPersonName;
+    std::wstring transcriptPreview;
     std::vector<OverlayTopicRow> topics;
     std::vector<OverlayPersonRow> people;
 };

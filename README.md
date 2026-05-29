@@ -175,6 +175,8 @@ Default URLs:
 | `GEMINI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `GEMINI_MODEL`. |
 | `FIRECRAWL_API_KEY` | Yes for person research | Used by `/api/people/[personId]/crawl`. |
 | `FOUNDRY_API_BASE_URL` | Yes | Usually `http://127.0.0.1:8001` locally. |
+| `FOUNDRY_DESKTOP_API_PUBLIC_URL` | No | Public FastAPI base URL used by the Windows overlay for live SSE/WebSocket streams; falls back to `FOUNDRY_API_BASE_URL`. |
+| `FOUNDRY_OVERLAY_INSTALLER_URL` | No | Public URL for the signed Windows installer shown on `/download` and settings. |
 | `FOUNDRY_BACKEND_SHARED_SECRET` | Yes | Shared HMAC secret for Next -> FastAPI calls. |
 
 ### `services/foundry-api/.env.local`

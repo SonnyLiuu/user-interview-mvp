@@ -590,7 +590,7 @@ void drawEndSessionPage(const OverlayRenderState& state, D2D1_SIZE_F sz) {
                                     g_textBrush.Get());
 
     const wchar_t* help =
-        L"The checked items will be saved as the call notes for this MVP.";
+        L"Checked items and captured transcript will be saved to the dashboard.";
     g_cachedRenderTarget->DrawTextW(help, static_cast<UINT32>(wcslen(help)),
                                     g_bodyFormat.Get(),
                                     D2D1::RectF(16.0f, 102.0f,
@@ -598,15 +598,20 @@ void drawEndSessionPage(const OverlayRenderState& state, D2D1_SIZE_F sz) {
                                     g_mutedBrush.Get());
 
     std::wstring summary = std::to_wstring(state.checkedCount) + L" of " +
-                           std::to_wstring(state.topicCount) + L" items checked";
+                           std::to_wstring(state.topicCount) +
+                           L" items checked | " +
+                           std::to_wstring(state.transcriptTurnCount) +
+                           (state.transcriptTurnCount == 1
+                                ? L" transcript turn captured"
+                                : L" transcript turns captured");
     g_cachedRenderTarget->DrawTextW(summary.c_str(),
                                     static_cast<UINT32>(summary.size()),
-                                    g_titleFormat.Get(),
+                                    g_bodyFormat.Get(),
                                     D2D1::RectF(16.0f, 160.0f,
-                                                sz.width - 16.0f, 186.0f),
+                                                sz.width - 16.0f, 196.0f),
                                     g_textBrush.Get());
 
-    D2D1_RECT_F box = D2D1::RectF(16.0f, 198.0f, sz.width - 16.0f,
+    D2D1_RECT_F box = D2D1::RectF(16.0f, 204.0f, sz.width - 16.0f,
                                   sz.height - 72.0f);
     g_cachedRenderTarget->FillRoundedRectangle(rounded(box, 5.0f),
                                                g_buttonBrush.Get());
@@ -620,6 +625,19 @@ void drawEndSessionPage(const OverlayRenderState& state, D2D1_SIZE_F sz) {
                                     g_bodyFormat.Get(),
                                     D2D1::RectF(box.left + 10.0f,
                                                 box.top + 10.0f,
+                                                box.right - 10.0f,
+                                                box.top + 34.0f),
+                                    g_mutedBrush.Get());
+
+    const std::wstring transcriptStatus =
+        state.hasTranscript
+            ? L"Latest transcript: " + state.transcriptPreview
+            : L"No transcript captured yet. Save will still keep checked topics.";
+    g_cachedRenderTarget->DrawTextW(transcriptStatus.c_str(),
+                                    static_cast<UINT32>(transcriptStatus.size()),
+                                    g_bodyFormat.Get(),
+                                    D2D1::RectF(box.left + 10.0f,
+                                                box.top + 42.0f,
                                                 box.right - 10.0f,
                                                 box.bottom - 10.0f),
                                     g_mutedBrush.Get());

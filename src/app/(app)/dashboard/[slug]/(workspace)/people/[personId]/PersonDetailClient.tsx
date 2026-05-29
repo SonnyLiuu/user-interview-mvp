@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import type { Person, PersonAnalysis, Transcript, CallPrepContent, OutreachContent } from '@/lib/db/schema';
+import type { Person, PersonAnalysis, Transcript, CallPrepContent, OutreachContent, DiscoveredUrl } from '@/lib/db/schema';
+import type { ProjectType } from '@/lib/backend-types';
+import { getProjectModeConfig } from '@/lib/project-modes';
 import { PersonaBubble } from '@/components/people/PersonaBubble';
 import type { PersonaType } from '@/components/people/PersonaBubble';
 import { RelevanceIndicator } from '@/components/people/RelevanceIndicator';
@@ -16,6 +18,7 @@ import styles from './PersonDetailClient.module.css';
 type Props = {
   person: Person;
   slug: string;
+  projectType: ProjectType;
   initialOutreach: { id: string; content: OutreachContent | null } | null;
   initialCallPrep: { id: string; content: CallPrepContent | null } | null;
   initialTranscripts: Transcript[];
@@ -93,6 +96,37 @@ function deriveSources(person: Person, analysis: PersonAnalysis | null): Derived
   };
 }
 
+// ── Auto-detected source labels ───────────────────────────────────────────────
+
+const DISCOVERED_KIND_LABEL: Record<DiscoveredUrl['kind'], string> = {
+  github: 'GitHub',
+  website: 'Website',
+  blog: 'Blog',
+};
+
+const MATCH_FACTOR_LABELS: Record<string, string> = {
+  recipient_fit: 'Recipient fit',
+  topic_overlap: 'Topic overlap',
+  shared_context: 'Shared context',
+  desired_response_usefulness: 'Response usefulness',
+  personalization_quality: 'Personalization',
+  evidence_confidence: 'Evidence confidence',
+};
+
+function discoveredSourceLabel(source: DiscoveredUrl): string {
+  return `Auto-detected ${DISCOVERED_KIND_LABEL[source.kind] ?? source.kind}`;
+}
+
+function normalizeUrlKey(value: string) {
+  try {
+    const parsed = new URL(value);
+    parsed.hash = '';
+    return parsed.href.replace(/\/$/, '').toLowerCase();
+  } catch {
+    return value.trim().replace(/\/$/, '').toLowerCase();
+  }
+}
+
 // ── CRM Stage Breadcrumb ──────────────────────────────────────────────────────
 
 function StageBreadcrumb({ stage }: { stage: CRMStage }) {
@@ -128,6 +162,38 @@ function StageActions({ person, stage, onUpdate }: ActionsProps) {
   const [showIneffective, setShowIneffective] = useState(false);
   const [scheduledAt, setScheduledAt] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
+  const [showDownloadHint, setShowDownloadHint] = useState(false);
+
+  async function handleStartCall() {
+    setLoading('startCall');
+    setShowDownloadHint(false);
+
+    try {
+      const res = await fetch('/api/desktop/launch-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personId: person.id }),
+      });
+      if (!res.ok) {
+        setShowDownloadHint(true);
+        return;
+      }
+
+      const payload = await res.json() as { token?: string };
+      if (!payload.token) {
+        setShowDownloadHint(true);
+        return;
+      }
+
+      const url = new URL('foundry://call/start');
+      url.searchParams.set('personId', person.id);
+      url.searchParams.set('token', payload.token);
+      window.location.href = url.toString();
+      window.setTimeout(() => setShowDownloadHint(true), 1500);
+    } finally {
+      setLoading(null);
+    }
+  }
 
   async function callApi(path: string, method: string, body?: object) {
     const res = await fetch(`/api/people/${person.id}/${path}`, {
@@ -232,9 +298,24 @@ function StageActions({ person, stage, onUpdate }: ActionsProps) {
       ? new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(person.call_scheduled_at))
       : null;
     return (
-      <div className={styles.actionNote}>
-        {scheduledDate ? <>Call scheduled for <strong>{scheduledDate}</strong>.</> : 'Call scheduled.'}
-        {' '}After the call, drag this person to <strong>Completed</strong> on the board.
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.actionBtn}
+          onClick={handleStartCall}
+          disabled={loading === 'startCall'}
+        >
+          {loading === 'startCall' ? 'Starting...' : 'Start call'}
+        </button>
+        <div className={styles.actionNote} style={{ flexBasis: '100%' }}>
+          {scheduledDate ? <>Call scheduled for <strong>{scheduledDate}</strong>.</> : 'Call scheduled.'}
+          {' '}After the call, drag this person to <strong>Completed</strong> on the board.
+        </div>
+        {showDownloadHint && (
+          <div className={styles.actionNote} style={{ flexBasis: '100%' }}>
+            Nothing happened? <Link href="/download">Download Foundry Overlay →</Link>
+          </div>
+        )}
       </div>
     );
   }
@@ -351,7 +432,7 @@ function TranscriptSection({ personId, stage, initialTranscripts }: TranscriptSe
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function PersonDetailClient({ person: initialPerson, slug, initialOutreach, initialCallPrep, initialTranscripts }: Props) {
+export function PersonDetailClient({ person: initialPerson, slug, projectType, initialOutreach, initialCallPrep, initialTranscripts }: Props) {
   const router = useRouter();
   const [person, setPerson] = useState<Person>(initialPerson);
   const [savedOutreach, setSavedOutreach] = useState(initialOutreach);
@@ -359,12 +440,29 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
   const [showContextForm, setShowContextForm] = useState(false);
   const [recrawling, setRecrawling] = useState(false);
   const [copyingOutreach, setCopyingOutreach] = useState(false);
+  const rescoreTriggered = useRef(false);
 
   const analysis = person.analysis as PersonAnalysis | null;
+  const modeConfig = getProjectModeConfig(projectType);
   const sources = deriveSources(person, analysis);
+  const knownSourceKeys = new Set(
+    [sources.linkedin, sources.twitter, sources.website, ...(person.source_urls ?? [])]
+      .filter((url): url is string => !!url)
+      .map(normalizeUrlKey),
+  );
+  const discoveredSources = (person.discovered_urls ?? []).filter((source) => !knownSourceKeys.has(normalizeUrlKey(source.url)));
   const hasAnySource =
-    !!sources.email || !!sources.linkedin || !!sources.twitter || !!sources.website || sources.linkedinPastedNoUrl;
+    !!sources.email ||
+    !!sources.linkedin ||
+    !!sources.twitter ||
+    !!sources.website ||
+    sources.linkedinPastedNoUrl ||
+    discoveredSources.length > 0;
   const stage = boardStatusToStage(person.board_status);
+  const matchRank = (person.match_rank ?? person.relevance_rank ?? analysis?.match_rank ?? analysis?.relevance_rank) as 'low' | 'medium' | 'high' | null;
+  const matchScore = typeof person.match_score === 'number' ? person.match_score : analysis?.match_score ?? null;
+  const matchFactors = person.match_factors ?? analysis?.match_factors ?? null;
+  const matchExplanation = person.match_explanation ?? analysis?.match_explanation ?? null;
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -374,6 +472,37 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
     }, 100);
     return () => clearTimeout(id);
   }, []);
+
+  useEffect(() => {
+    if (projectType !== 'networking') return;
+    if (person.match_status !== 'stale') return;
+    if (rescoreTriggered.current) return;
+    rescoreTriggered.current = true;
+
+    let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    async function rescore() {
+      const res = await fetch(`/api/people/${person.id}/rescore`, { method: 'POST' });
+      if (!res.ok || cancelled) return;
+      setPerson((current) => ({ ...current, match_status: 'pending' }));
+      interval = setInterval(async () => {
+        const latest = await fetch(`/api/people/${person.id}`);
+        if (!latest.ok || cancelled) return;
+        const updated = await latest.json() as Person;
+        setPerson(updated);
+        if (updated.match_status === 'current' || updated.match_status === 'error') {
+          if (interval) clearInterval(interval);
+        }
+      }, 2500);
+    }
+
+    void rescore();
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
+  }, [person.id, projectType]);
 
   async function handleBookmarkToggle() {
     setBookmarkLoading(true);
@@ -480,8 +609,8 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
                 {person.persona_type && (
                   <PersonaBubble type={person.persona_type as PersonaType} />
                 )}
-                {person.relevance_rank && (
-                  <RelevanceIndicator rank={person.relevance_rank as 'low' | 'medium' | 'high'} />
+                {matchRank && (
+                  <RelevanceIndicator rank={matchRank} score={matchScore} stale={person.match_status === 'stale'} />
                 )}
               </div>
             </div>
@@ -516,49 +645,99 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
           {/* ── Call Brief ───────────────────────────────────────────────── */}
           <CallBriefSection personId={person.id} slug={slug} stage={stage} initialPrep={initialCallPrep} />
 
-          {/* ── Summary ─────────────────────────────────────────────────── */}
-          {analysis?.summary && (
+          {projectType === 'networking' && (matchRank || matchExplanation || matchFactors) && (
             <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Summary</h2>
-              <p className={styles.prose}>{analysis.summary}</p>
+              <h2 className={styles.sectionTitle}>Match</h2>
+              <div className={styles.matchPanel}>
+                <div className={styles.matchSummaryRow}>
+                  {matchRank && (
+                    <RelevanceIndicator rank={matchRank} score={matchScore} stale={person.match_status === 'stale'} />
+                  )}
+                  {person.match_status === 'pending' && <span className={styles.matchStatus}>Refreshing score...</span>}
+                  {person.match_status === 'stale' && <span className={styles.matchStatus}>Based on an older rubric</span>}
+                </div>
+                {matchExplanation && <p className={styles.prose}>{matchExplanation}</p>}
+                {matchFactors && (
+                  <div className={styles.matchFactors}>
+                    {Object.entries(matchFactors).map(([key, raw]) => {
+                      if (typeof raw !== 'number') return null;
+                      const value = Math.max(0, Math.min(100, Math.round(raw)));
+                      return (
+                        <div key={key} className={styles.matchFactor}>
+                          <div className={styles.matchFactorHeader}>
+                            <span>{MATCH_FACTOR_LABELS[key] ?? key}</span>
+                            <span>{value}</span>
+                          </div>
+                          <div className={styles.matchFactorTrack} aria-hidden="true">
+                            <span className={styles.matchFactorFill} style={{ width: `${value}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
-          {/* ── Key insights ────────────────────────────────────────────── */}
-          {analysis?.key_insights?.length ? (
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Key insights</h2>
-              <ul className={styles.list}>
-                {analysis.key_insights.map((insight, i) => (
-                  <li key={i} className={styles.listItem}>{insight}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+          {analysis?.sections?.length ? (
+            analysis.sections.map((section) => (
+              <section key={section.id} className={styles.section}>
+                <h2 className={styles.sectionTitle}>{section.title}</h2>
+                {section.kind === 'text' ? (
+                  <p className={styles.prose}>{section.text}</p>
+                ) : (
+                  <ul className={styles.list}>
+                    {(section.items ?? []).map((item, i) => (
+                      <li key={i} className={styles.listItem}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ))
+          ) : (
+            <>
+              {analysis?.summary && (
+                <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>{modeConfig.personSections.summary}</h2>
+                  <p className={styles.prose}>{analysis.summary}</p>
+                </section>
+              )}
 
-          {/* ── Suggested questions ─────────────────────────────────────── */}
-          {analysis?.recommended_questions?.length ? (
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Questions to ask</h2>
-              <ol className={styles.questionList}>
-                {analysis.recommended_questions.map((q, i) => (
-                  <li key={i} className={styles.question}>{q}</li>
-                ))}
-              </ol>
-            </section>
-          ) : null}
+              {analysis?.key_insights?.length ? (
+                <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>{modeConfig.personSections.keyInsights}</h2>
+                  <ul className={styles.list}>
+                    {analysis.key_insights.map((insight, i) => (
+                      <li key={i} className={styles.listItem}>{insight}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
 
-          {/* ── Risk factors ────────────────────────────────────────────── */}
-          {analysis?.risk_factors?.length ? (
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Reasons to be cautious</h2>
-              <ul className={styles.list}>
-                {analysis.risk_factors.map((r, i) => (
-                  <li key={i} className={styles.listItem}>{r}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+              {analysis?.recommended_questions?.length ? (
+                <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>{modeConfig.personSections.recommendedQuestions}</h2>
+                  <ol className={styles.questionList}>
+                    {analysis.recommended_questions.map((q, i) => (
+                      <li key={i} className={styles.question}>{q}</li>
+                    ))}
+                  </ol>
+                </section>
+              ) : null}
+
+              {analysis?.risk_factors?.length ? (
+                <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>{modeConfig.personSections.riskFactors}</h2>
+                  <ul className={styles.list}>
+                    {analysis.risk_factors.map((r, i) => (
+                      <li key={i} className={styles.listItem}>{r}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </>
+          )}
 
           {/* ── Sources ─────────────────────────────────────────────────── */}
           <section className={styles.section}>
@@ -579,6 +758,24 @@ export function PersonDetailClient({ person: initialPerson, slug, initialOutreac
                 {sources.website && (
                   <><dt className={styles.contactKey}>Website</dt><dd className={styles.contactVal}><a href={sources.website} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.website}</a></dd></>
                 )}
+                {discoveredSources.map((source, i) => {
+                  const included = source.crawl_status === 'included';
+                  return (
+                    <Fragment key={`${source.url}-${i}`}>
+                      <dt className={styles.contactKey}>{discoveredSourceLabel(source)}</dt>
+                      <dd className={styles.contactVal}>
+                        <a href={source.url} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{source.url}</a>
+                        <span className={included ? styles.discoveredIncluded : styles.discoveredFailed}>
+                          {included ? 'Included in analysis' : 'Found, but could not be crawled'}
+                        </span>
+                        {source.evidence ? <span className={styles.discoveredEvidence}>{source.evidence}</span> : null}
+                        {!included && source.crawl_error ? (
+                          <span className={styles.discoveredError}>{source.crawl_error}</span>
+                        ) : null}
+                      </dd>
+                    </Fragment>
+                  );
+                })}
               </dl>
             ) : (
               <p className={styles.notFound}>No sources found.</p>

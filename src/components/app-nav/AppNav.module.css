@@ -402,6 +402,10 @@
   color: #8a705a;
 }
 
+.projectDeleteInputWrap {
+  position: relative;
+}
+
 .projectDeleteInput {
   width: 100%;
   border: 1px solid #d8c5ae;
@@ -409,13 +413,36 @@
   padding: 12px 14px;
   font: inherit;
   color: #2e2115;
-  background: #fff;
+  background: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 .projectDeleteInput:focus {
   outline: none;
   border-color: #b57649;
   box-shadow: 0 0 0 3px rgba(181, 118, 73, 0.14);
+}
+
+.projectDeleteGhost {
+  position: absolute;
+  inset: 0;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font: inherit;
+  white-space: pre;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.projectDeleteGhostTyped {
+  visibility: hidden;
+}
+
+.projectDeleteGhostSuffix {
+  color: #c5a882;
 }
 
 .projectDeleteError {

@@ -12,7 +12,17 @@ SlotKey = Literal[
     "valueProp",
     "idealPeopleTypes",
     "differentiation",
-    "disqualifiers",
+    "outreachGoal",
+    "recipients",
+    "senderContext",
+    "sharedContext",
+    "desiredOutcome",
+    "requiredMentions",
+    "optionalMentions",
+    "personalizationStrategy",
+    "tone",
+    "messageBoundaries",
+    "channelFormat",
 ]
 
 

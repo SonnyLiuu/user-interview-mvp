@@ -6,15 +6,17 @@ integration: the desktop app never receives an OpenAI API key.
 
 ## Runtime Flow
 
-1. Native starts a session by POSTing to
-   `/api/desktop/sessions/live/start` on the Next app.
+1. The web app mints a short-lived launch token, opens
+   `foundry://call/start?personId=...&token=...`, and native starts a session
+   by POSTing both values to `/api/desktop/sessions/live/start` on the Next app.
 2. Next authenticates the desktop user, signs a backend token, and forwards to
    FastAPI `/v1/desktop/live-sessions`.
 3. FastAPI loads the current call prep, converts goals/questions/signals into
    live topics, starts `RealtimeBridge`, and returns:
    - `sessionId`
    - `liveToken`
-   - `foundryBaseUrl`
+   - `foundryBaseUrl` from `FOUNDRY_DESKTOP_API_PUBLIC_URL` when set, otherwise
+     `FOUNDRY_API_BASE_URL`
    - initial `topics`
 4. Native opens:
    - SSE: `/v1/desktop/live-sessions/{sessionId}/events`
@@ -97,6 +99,8 @@ Realtime transcription or semantic matching quality.
 - Separate live transcription streams for founder mic and interviewee loopback.
 - Labeled transcript turns are streamed to the checklist matcher and included
   in the saved end-session transcript.
+- The native End Call view shows captured transcript count/preview and saves
+  the captured transcript automatically with the checked topics.
 - Realtime tool calling with `mark_item_covered` and bulk
   `mark_items_covered`.
 - SSE updates back to the native overlay.
@@ -110,5 +114,7 @@ Realtime transcription or semantic matching quality.
 - Realtime status is mostly visible through console logs and error events, not a
   polished overlay state.
 - The session store is in-memory. Restarting FastAPI drops active live sessions.
+- The overlay does not include a full live transcript panel or transcript editor
+  in this V1.
 - Speaker diarization is not implemented, so checks are based on whether the
   topic was clearly covered, not on a guaranteed speaker label.

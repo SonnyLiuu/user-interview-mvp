@@ -536,6 +536,20 @@ LRESULT CALLBACK overlayWndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
                     ? IDC_HAND
                     : IDC_ARROW));
             return TRUE;
+        case WM_COPYDATA: {
+            auto* cds = reinterpret_cast<COPYDATASTRUCT*>(l);
+            if (!cds || cds->dwData != kDeepLinkCopyDataId) break;
+            if (cds->cbData == 0 || cds->cbData % sizeof(wchar_t) != 0) {
+                return TRUE;
+            }
+            const auto* data = reinterpret_cast<const wchar_t*>(cds->lpData);
+            std::wstring url(data, cds->cbData / sizeof(wchar_t));
+            while (!url.empty() && url.back() == L'\0') url.pop_back();
+            if (state && state->actions.onDeepLink && !url.empty()) {
+                state->actions.onDeepLink(url);
+            }
+            return TRUE;
+        }
     }
     return DefWindowProcW(hwnd, msg, w, l);
 }
@@ -552,7 +566,7 @@ OverlayWindow createOverlayWindow(OverlayActions actions) {
     wc.lpfnWndProc = overlayWndProc;
     wc.hInstance = hinst;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wc.lpszClassName = L"FoundryOverlayClass";
+    wc.lpszClassName = kOverlayWindowClass;
 
     if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
         std::cerr << "RegisterClassExW failed: " << GetLastError() << "\n";
@@ -583,7 +597,7 @@ OverlayWindow createOverlayWindow(OverlayActions actions) {
 
     HWND hwnd = CreateWindowExW(
         WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
-        L"FoundryOverlayClass",
+        kOverlayWindowClass,
         L"Foundry Overlay",
         WS_POPUP,
         x, y, width, height,

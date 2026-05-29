@@ -29,10 +29,11 @@ const GAUGE: Record<Rank, { arcD: string; tipX: number; tipY: number; color: str
   },
 };
 
-export function RelevanceIndicator({ rank }: { rank: Rank }) {
+export function RelevanceIndicator({ rank, score, stale = false }: { rank: Rank; score?: number | null; stale?: boolean }) {
   const g = GAUGE[rank];
+  const label = typeof score === 'number' ? `${g.label} · ${score}` : g.label;
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} title={stale ? 'Based on an older match rubric' : undefined}>
       <svg viewBox="0 0 72 42" width="72" height="42" fill="none" className={styles.gauge} aria-hidden="true">
         {/* Track */}
         <path
@@ -53,7 +54,7 @@ export function RelevanceIndicator({ rank }: { rank: Rank }) {
         {/* Needle tip */}
         <circle cx={g.tipX} cy={g.tipY} r="4.5" fill={g.color} />
       </svg>
-      <span className={styles.label} style={{ color: g.color }}>{g.label}</span>
+      <span className={styles.label} style={{ color: g.color }}>{label}{stale ? ' *' : ''}</span>
     </div>
   );
 }

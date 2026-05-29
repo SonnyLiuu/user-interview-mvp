@@ -11,6 +11,83 @@ from ..repositories import intake as intake_repo
 from ..repositories import projects as project_repo
 
 
+def _clean_list(value):
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _networking_match_profile(foundation_json: dict) -> dict:
+    priority_types = _clean_list(foundation_json.get("priorityRecipientTypes"))
+    low_fit = _clean_list(foundation_json.get("lowFitSignals") or foundation_json.get("messageBoundaries"))
+    rubric = foundation_json.get("matchRubric")
+    if not isinstance(rubric, str) or not rubric.strip():
+        parts = [
+            foundation_json.get("outreachGoal"),
+            f"Prioritize recipients like: {foundation_json.get('recipients')}" if foundation_json.get("recipients") else None,
+            f"Shared context/topic: {foundation_json.get('sharedContext')}" if foundation_json.get("sharedContext") else None,
+            (
+                f"Useful if they can respond with: {foundation_json.get('desiredOutcome')}"
+                if foundation_json.get("desiredOutcome")
+                else None
+            ),
+        ]
+        rubric = "\n".join(part for part in parts if isinstance(part, str) and part.strip())
+    return {
+        "matchRubric": rubric or "",
+        "priorityRecipientTypes": priority_types,
+        "lowFitSignals": low_fit,
+        "positivePatterns": [],
+        "negativePatterns": [],
+        "calibrationNotes": ["Profile refreshed from the project Foundation."],
+    }
+
+
+async def _refresh_networking_match_profile(conn, project_id: str, foundation_json: dict):
+    latest = await conn.fetchrow(
+        """
+        select version
+        from project_match_profiles
+        where project_id = $1
+        order by version desc
+        limit 1
+        """,
+        project_id,
+    )
+    signal_count = await conn.fetchval(
+        """
+        select count(*)
+        from person_events pe
+        join people p on p.id = pe.person_id
+        where p.project_id = $1
+        and pe.metadata ? 'signalWeight'
+        """,
+        project_id,
+    )
+    next_version = (latest["version"] if latest else 0) + 1
+    await conn.execute(
+        """
+        insert into project_match_profiles
+            (project_id, version, profile_json, signal_count_at_generation)
+        values ($1, $2, $3, $4)
+        """,
+        project_id,
+        next_version,
+        json.dumps(_networking_match_profile(foundation_json)),
+        int(signal_count or 0),
+    )
+    await conn.execute(
+        """
+        update people
+        set match_status = 'stale', updated_at = now()
+        where project_id = $1
+        and analysis_status = 'complete'
+        and match_status = 'current'
+        """,
+        project_id,
+    )
+
+
 async def get_project_lookup(user_id: str, slug_or_id: str):
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -45,7 +122,9 @@ async def update_project_foundation(user_id: str, project_id: str, foundation_js
         project = await project_repo.find_owned_project(conn, user_id, project_id)
         if not project:
             raise NotFoundError("Not found")
-        await foundation_repo.update_foundation(conn, project_id, foundation_json)
+        changed = await foundation_repo.update_foundation(conn, project_id, foundation_json)
+        if changed and project["project_type"] == "networking":
+            await _refresh_networking_match_profile(conn, project_id, foundation_json)
     return {"ok": True}
 
 

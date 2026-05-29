@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { cache } from 'react';
 import { getBackendAccessToken } from '@/lib/backend-auth';
 import { ExternalServiceError } from '@/lib/errors';
 import { buildBackendUrl, createBackendHeaders } from '@/lib/backend-utils';
@@ -47,34 +48,34 @@ async function backendFetchServer<T>(path: string, init?: RequestInit, options?:
   return response.json() as Promise<T>;
 }
 
-export async function getLatestProject() {
+export const getLatestProject = cache(async function getLatestProject() {
   return backendFetchServer<LatestProjectPayload>('/v1/dashboard/latest-project');
-}
+});
 
 export async function listProjects() {
   return backendFetchServer<ProjectNavItem[]>('/v1/projects');
 }
 
-export async function getProjectBySlugOrId(slugOrId: string) {
+export const getProjectBySlugOrId = cache(async function getProjectBySlugOrId(slugOrId: string) {
   return backendFetchServer<ProjectLookupPayload | null>(
     `/v1/projects/by-slug/${encodeURIComponent(slugOrId)}`,
     undefined,
     { allowNotFound: true },
   );
-}
+});
 
-export async function getWorkspaceSummary(projectId: string) {
+export const getWorkspaceSummary = cache(async function getWorkspaceSummary(projectId: string) {
   return backendFetchServer<WorkspaceSummaryPayload | null>(
     `/v1/projects/${projectId}/workspace-summary`,
     undefined,
     { allowNotFound: true },
   );
-}
+});
 
-export async function getFoundationView(projectId: string) {
+export const getFoundationView = cache(async function getFoundationView(projectId: string) {
   return backendFetchServer<FoundationViewPayload | null>(
     `/v1/projects/${projectId}/foundation-view`,
     undefined,
     { allowNotFound: true },
   );
-}
+});

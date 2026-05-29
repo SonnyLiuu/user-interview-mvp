@@ -71,6 +71,27 @@
       "when": 1779667200000,
       "tag": "0009_project_type",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779753600000,
+      "tag": "0010_discovered_urls",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779840000000,
+      "tag": "0011_outreach_match_system",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1779926400000,
+      "tag": "0012_insight_content",
+      "breakpoints": true
     }
   ]
 }

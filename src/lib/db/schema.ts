@@ -48,6 +48,33 @@ export type ContactInfo = {
   linkedin?: string;
 };
 
+export type PersonAnalysisSection = {
+  id: string;
+  title: string;
+  kind: 'text' | 'list';
+  text?: string;
+  items?: string[];
+};
+
+export type MatchFactors = {
+  recipient_fit?: number;
+  topic_overlap?: number;
+  shared_context?: number;
+  desired_response_usefulness?: number;
+  personalization_quality?: number;
+  evidence_confidence?: number;
+};
+
+export type DiscoveredUrl = {
+  url: string;
+  kind: 'github' | 'website' | 'blog';
+  confidence: 'high' | 'medium';
+  evidence: string;
+  crawl_status: 'included' | 'failed';
+  crawl_error?: string;
+  added_at: string;
+};
+
 export type PersonAnalysis = {
   // Extracted identity — written back to dedicated columns after crawl
   name?: string;
@@ -61,8 +88,50 @@ export type PersonAnalysis = {
   risk_factors?: string[];
   confidence_score?: number;
   relevance_rank?: 'low' | 'medium' | 'high';
+  match_score?: number;
+  match_rank?: 'low' | 'medium' | 'high';
+  match_factors?: MatchFactors;
+  match_explanation?: string;
   why_they_matter?: string;
   contact_info?: ContactInfo;
+  sections?: PersonAnalysisSection[];
+};
+
+export type ProjectMatchProfileJson = {
+  matchRubric?: string | null;
+  priorityRecipientTypes?: string[];
+  lowFitSignals?: string[];
+  positivePatterns?: string[];
+  negativePatterns?: string[];
+  calibrationNotes?: string[];
+};
+
+export type InsightContent = {
+  learningSummary: {
+    headline: string;
+    summary: string;
+    callsAnalyzed: number;
+    evidenceLevel: 'thin' | 'emerging' | 'strong';
+    topTakeaway: string;
+    nextFocus: string;
+  };
+  recurringThemes: {
+    theme: string;
+    description: string;
+    callCount: number;
+    evidenceStrength: 'weak' | 'emerging' | 'strong';
+    supportingQuotes: {
+      personName: string;
+      quote: string;
+    }[];
+  }[];
+  assumptionTracker: {
+    assumption: string;
+    status: 'strengthening' | 'weakening' | 'unclear' | 'new';
+    confidence: 'low' | 'medium' | 'high';
+    evidence: string[];
+    nextQuestion: string;
+  }[];
 };
 
 export type OutreachContent = {
@@ -184,6 +253,7 @@ export const people = pgTable('people', {
   source_urls: textArray('source_urls'),
   raw_pasted_text: text('raw_pasted_text'),
   additional_context: textArray('additional_context'),
+  discovered_urls: jsonb('discovered_urls').$type<DiscoveredUrl[]>(),
 
   crawl_status: text('crawl_status').default('pending'),
   crawled_content: jsonb('crawled_content').$type<CrawledContent>(),
@@ -194,6 +264,12 @@ export const people = pgTable('people', {
   analysis_status: text('analysis_status').default('pending'),
 
   relevance_rank: text('relevance_rank'),
+  match_score: integer('match_score'),
+  match_rank: text('match_rank'),
+  match_factors: jsonb('match_factors').$type<MatchFactors>(),
+  match_explanation: text('match_explanation'),
+  match_profile_version: integer('match_profile_version'),
+  match_status: text('match_status'),
   research_depth: text('research_depth').default('deep'),
   expires_at: timestamp('expires_at', { withTimezone: true }),
 
@@ -274,6 +350,7 @@ export const insights = pgTable('insights', {
   id: uuid('id').primaryKey().defaultRandom(),
   project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
 
+  content: jsonb('content').$type<InsightContent>(),
   persona_coverage: jsonb('persona_coverage'),
   recurring_themes: text('recurring_themes').array(),
   unresolved_questions: text('unresolved_questions').array(),
@@ -328,6 +405,19 @@ export const project_foundations = pgTable('project_foundations', {
   index('project_foundations_project_generated_at_idx').on(table.project_id, table.generated_at),
 ]);
 
+// ── project_match_profiles ───────────────────────────────────────────────────
+export const project_match_profiles = pgTable('project_match_profiles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull().default(1),
+  profile_json: jsonb('profile_json').$type<ProjectMatchProfileJson>(),
+  signal_count_at_generation: integer('signal_count_at_generation').default(0),
+  generated_at: timestamp('generated_at', { withTimezone: true }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('project_match_profiles_project_version_idx').on(table.project_id, table.version),
+]);
+
 // ── transcripts ───────────────────────────────────────────────────────────────
 export const transcripts = pgTable('transcripts', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -365,5 +455,6 @@ export type OnboardingSession = typeof onboarding_sessions.$inferSelect;
 export type OnboardingMessage = typeof onboarding_messages.$inferSelect;
 export type OnboardingStateRow = typeof onboarding_state.$inferSelect;
 export type ProjectFoundation = typeof project_foundations.$inferSelect;
+export type ProjectMatchProfile = typeof project_match_profiles.$inferSelect;
 export type Transcript = typeof transcripts.$inferSelect;
 export type PersonEvent = typeof person_events.$inferSelect;

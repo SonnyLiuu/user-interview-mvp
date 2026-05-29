@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { people, projects, users, person_events } from '@/lib/db/schema';
 import { CRM_STAGE_IDS, stageToBoardStatus } from '@/lib/crm';
+import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
 
 type Params = { params: Promise<{ personId: string }> };
 const stageBodySchema = z.object({ stage: z.enum(CRM_STAGE_IDS) });
@@ -37,8 +38,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   await db.insert(person_events).values({
     person_id: personId,
     type: 'stage_changed',
-    metadata: { from: rows[0].person.board_status, to: stage },
+    metadata: matchEventMetadata(
+      rows[0].person,
+      { from: rows[0].person.board_status, to: stage },
+      stage === 'sent' ? 2 : stage === 'scheduled' ? 3 : stage === 'completed' ? 4 : 1,
+    ),
   });
+  if (rows[0].person.project_id) await refreshProjectMatchProfileFromSignals(rows[0].person.project_id, null);
 
   return NextResponse.json(updated);
 }

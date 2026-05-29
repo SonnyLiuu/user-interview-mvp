@@ -24,13 +24,14 @@ function formatDate(d: Date | null | undefined) {
 
 function CardContent({ person, stage }: { person: Person; stage: CRMStage }) {
   const scheduledDate = stage === 'scheduled' ? formatDate(person.call_scheduled_at) : null;
+  const matchRank = person.match_rank ?? person.relevance_rank;
 
   return (
     <div className={styles.cardBody}>
       <div className={styles.nameRow}>
         <span className={styles.name}>{person.name}</span>
-        {person.relevance_rank && (
-          <span className={`${styles.rankDot} ${styles[`rank_${person.relevance_rank}`]}`} title={`${person.relevance_rank} match`} />
+        {matchRank && (
+          <span className={`${styles.rankDot} ${styles[`rank_${matchRank}`]}`} title={`${matchRank} match${person.match_score === null || person.match_score === undefined ? '' : ` · ${person.match_score}`}${person.match_status === 'stale' ? ' · based on older rubric' : ''}`} />
         )}
       </div>
 

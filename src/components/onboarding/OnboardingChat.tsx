@@ -12,7 +12,17 @@ type SlotKey =
   | 'valueProp'
   | 'idealPeopleTypes'
   | 'differentiation'
-  | 'disqualifiers';
+  | 'outreachGoal'
+  | 'recipients'
+  | 'senderContext'
+  | 'sharedContext'
+  | 'desiredOutcome'
+  | 'requiredMentions'
+  | 'optionalMentions'
+  | 'personalizationStrategy'
+  | 'tone'
+  | 'messageBoundaries'
+  | 'channelFormat';
 
 type ChatMessage = {
   role: 'assistant' | 'user';
@@ -258,15 +268,14 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
     }
   }
 
-  const isEmpty = messages.length === 0 && !loading;
-  const emptyHeading = isNetworking ? "Let's frame your outreach." : "Let's get to know your idea.";
+  const isIntroTurn = phase === 'kickoff' && messages.length <= 1 && !loading;
   const kickoffPlaceholder = isNetworking
-    ? 'Describe who you want to contact, the shared context, and what you want to ask...'
+    ? 'Describe the goal, recipients, timely context, desired next step, and how the note should feel...'
     : "Describe your idea, who it's for, and what problem it solves...";
   const finishLabel = isNetworking ? 'outreach Foundation' : 'Foundation';
 
   return (
-    <div className={[styles.chat, isEmpty && styles.chatEmpty].filter(Boolean).join(' ')}>
+    <div className={[styles.chat, isIntroTurn && styles.chatIntro].filter(Boolean).join(' ')}>
       {/* Transcript */}
       <div ref={messagesRef} className={styles.messages} onScroll={syncScrollIntent}>
         {messages.map((msg, i) => (
@@ -309,9 +318,6 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
         {/* Kickoff phase — free text */}
         {phase === 'kickoff' && !loading && (
           <>
-            {isEmpty && (
-              <p className={styles.kickoffHeading}>{emptyHeading}</p>
-            )}
             <div className={styles.kickoffRow}>
               <textarea
                 className={styles.kickoffTextarea}

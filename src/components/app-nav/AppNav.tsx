@@ -420,13 +420,22 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
               <p className={styles.projectDeleteHint}>
                 Type the project name to confirm.
               </p>
-              <input
-                className={styles.projectDeleteInput}
-                value={deleteConfirm}
-                onChange={(e) => setDeleteConfirm(e.target.value)}
-                placeholder={deleteTarget.name}
-                autoFocus
-              />
+              <div className={styles.projectDeleteInputWrap}>
+                {deleteTarget.name.startsWith(deleteConfirm) && (
+                  <div className={styles.projectDeleteGhost} aria-hidden="true">
+                    <span className={styles.projectDeleteGhostTyped}>{deleteConfirm}</span>
+                    <span className={styles.projectDeleteGhostSuffix}>
+                      {deleteTarget.name.slice(deleteConfirm.length)}
+                    </span>
+                  </div>
+                )}
+                <input
+                  className={styles.projectDeleteInput}
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  autoFocus
+                />
+              </div>
               {deleteError && <p className={styles.projectDeleteError}>{deleteError}</p>}
               <div className={styles.projectDeleteActions}>
                 <button type="button" className={styles.projectDeleteCancel} onClick={cancelDelete} disabled={deleting}>

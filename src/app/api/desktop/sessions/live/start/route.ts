@@ -1,19 +1,22 @@
 import { NextResponse } from 'next/server';
 import { signBackendAccessToken } from '@/lib/backend-auth';
 import { buildBackendUrl } from '@/lib/backend-utils';
+import { verifyDesktopLaunchToken } from '@/lib/desktop-launch-token';
 import { getDesktopUser } from '@/lib/desktop-auth';
+import { normalizeFoundryBaseUrl } from '@/lib/desktop-live-session';
 import { env } from '@/lib/server-env';
 
 type StartLiveSessionInput = {
   personId?: string;
+  launchToken?: string;
 };
 
 function foundryBaseUrl() {
-  const raw = (env.FOUNDRY_API_BASE_URL || 'http://127.0.0.1:8001').trim();
-  if (/^https?:\/\//i.test(raw)) {
-    return raw;
-  }
-  return `http://${raw}`;
+  return normalizeFoundryBaseUrl(
+    env.FOUNDRY_DESKTOP_API_PUBLIC_URL ||
+    env.FOUNDRY_API_BASE_URL ||
+    'http://127.0.0.1:8001',
+  );
 }
 
 export async function POST(request: Request) {
@@ -31,6 +34,16 @@ export async function POST(request: Request) {
 
   if (!body.personId) {
     return NextResponse.json({ error: 'personId required' }, { status: 400 });
+  }
+  if (!body.launchToken) {
+    return NextResponse.json({ error: 'launchToken required' }, { status: 400 });
+  }
+  if (!verifyDesktopLaunchToken({
+    token: body.launchToken,
+    clerkUserId: user.clerkUserId,
+    personId: body.personId,
+  })) {
+    return NextResponse.json({ error: 'Invalid launch token' }, { status: 403 });
   }
 
   const token = signBackendAccessToken({

@@ -6,6 +6,8 @@ interface EnvConfig {
   CLERK_SECRET_KEY: string;
   CLERK_WEBHOOK_SECRET: string;
   FOUNDRY_API_BASE_URL?: string;
+  FOUNDRY_DESKTOP_API_PUBLIC_URL?: string;
+  FOUNDRY_OVERLAY_INSTALLER_URL?: string;
   FOUNDRY_BACKEND_SHARED_SECRET: string;
   AI_PROVIDER: 'openai' | 'anthropic' | 'gemini';
   OPENAI_API_KEY?: string;
@@ -70,6 +72,8 @@ function buildFallbackConfig(): EnvConfig {
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY || 'build-time-placeholder',
     CLERK_WEBHOOK_SECRET: process.env.CLERK_WEBHOOK_SECRET || 'build-time-placeholder',
     FOUNDRY_API_BASE_URL: process.env.FOUNDRY_API_BASE_URL,
+    FOUNDRY_DESKTOP_API_PUBLIC_URL: process.env.FOUNDRY_DESKTOP_API_PUBLIC_URL,
+    FOUNDRY_OVERLAY_INSTALLER_URL: process.env.FOUNDRY_OVERLAY_INSTALLER_URL,
     FOUNDRY_BACKEND_SHARED_SECRET: process.env.FOUNDRY_BACKEND_SHARED_SECRET || 'build-time-placeholder',
     AI_PROVIDER: aiProvider,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
@@ -110,6 +114,8 @@ function readAndValidateEnvironment(): EnvConfig {
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY!,
     CLERK_WEBHOOK_SECRET: process.env.CLERK_WEBHOOK_SECRET!,
     FOUNDRY_API_BASE_URL: process.env.FOUNDRY_API_BASE_URL,
+    FOUNDRY_DESKTOP_API_PUBLIC_URL: process.env.FOUNDRY_DESKTOP_API_PUBLIC_URL,
+    FOUNDRY_OVERLAY_INSTALLER_URL: process.env.FOUNDRY_OVERLAY_INSTALLER_URL,
     FOUNDRY_BACKEND_SHARED_SECRET: process.env.FOUNDRY_BACKEND_SHARED_SECRET!,
     AI_PROVIDER: aiProvider,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,

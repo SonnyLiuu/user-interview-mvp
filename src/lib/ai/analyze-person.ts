@@ -1,5 +1,6 @@
 import { generateObject } from './provider';
 import type { PersonAnalysis } from '@/lib/db/schema';
+import { matchRankForScore, normalizeMatchScore, scoreFromRank } from '@/lib/match-profile';
 
 type ProjectContext = {
   project_type?: 'startup' | 'networking';
@@ -7,6 +8,11 @@ type ProjectContext = {
   target_customer?: string | null;
   key_assumptions?: string[] | null;
   most_promising_avenues?: string[] | null;
+  match_rubric?: string | null;
+  low_fit_signals?: string[] | null;
+  match_profile_version?: number | null;
+  positive_patterns?: string[] | null;
+  negative_patterns?: string[] | null;
 };
 
 const MAX_CRAWLED_CONTENT_CHARS = 24_000;
@@ -31,13 +37,28 @@ Campaign: ${projectContext.idea_summary ?? 'Not specified'}
 Target recipients: ${projectContext.target_customer ?? 'Not specified'}
 Message context / ask: ${projectContext.key_assumptions?.join('; ') ?? 'Not specified'}
 Most promising recipient types: ${projectContext.most_promising_avenues?.join('; ') ?? 'Not specified'}
+Match rubric: ${projectContext.match_rubric ?? 'Not specified'}
+Low-fit signals: ${projectContext.low_fit_signals?.join('; ') ?? 'Not specified'}
+Positive calibration patterns from this project: ${projectContext.positive_patterns?.join('; ') ?? 'Not specified'}
+Negative calibration patterns from this project: ${projectContext.negative_patterns?.join('; ') ?? 'Not specified'}
 
 SOURCE MATERIAL ABOUT THIS PERSON:
 ${analysisContent}
 
 Analyze this person's relevance to the outreach campaign. Be honest and specific - do not inflate relevance. If this person is genuinely a weak match, say so.
 
-For recommended_questions: write questions or conversation openers the sender could use with this specific person. Make them conversational, concrete, and grounded in the recipient's background.
+Research only the recipient background necessary for the outreach. The sender's goals, required mentions, desired response, and composition style matter more than a full biography.
+
+For summary: write one sentence naming the outreach angle, not a career summary.
+For key_insights: write 1-3 useful personalization hooks. Prefer lightweight hooks over comprehensive background.
+For recommended_questions: write message notes or conversation openers the sender could use with this specific person. Make them brief and grounded in the outreach goal.
+For risk_factors: write details to avoid mentioning or reasons personalization may be weak.
+For sections: produce mode-specific profile sections for the UI:
+- outreach_angle: text, title "Outreach Angle"
+- useful_background: list, title "Useful Background"
+- personalization_hooks: list, title "Personalization Hooks"
+- message_notes: list, title "Message Notes"
+- avoid_mentioning: list, title "Avoid Mentioning"
 
 For contact_info: extract any email, Twitter/X handle, LinkedIn URL, or personal website found in the source material. Only include what is actually present.
 
@@ -48,7 +69,17 @@ For relevance_rank: score against recipient fit, shared context, and likely usef
 - medium: useful adjacent fit; their role or background overlaps with the campaign but the shared context is weaker.
 - low: weak fit; little visible overlap with the outreach goal, shared context, or target recipient group.
 
-Important: Do not assign high relevance just because someone is generally impressive. Ground the score in this outreach project's context.` : `You are an expert at helping early-stage founders identify the most valuable people to learn from during customer discovery.
+For match_score: return an integer from 0 to 100. Derive match_rank from the score: high >= 75, medium >= 45, low < 45.
+For match_factors: score each factor from 0 to 100:
+- recipient_fit: how well this person fits the target recipient types.
+- topic_overlap: overlap with priority topics, communities, or organizations.
+- shared_context: strength of event, relationship, community, timing, or mutual context.
+- desired_response_usefulness: likelihood this person can usefully provide the desired response.
+- personalization_quality: amount and specificity of usable personalization evidence.
+- evidence_confidence: confidence based on source quality and amount of usable evidence.
+For match_explanation: write 1-2 concise sentences explaining the score and the main limiter.
+
+Important: Do not assign a high match just because someone is generally impressive. Ground the score in this outreach project's rubric and calibration patterns.` : `You are an expert at helping early-stage founders identify the most valuable people to learn from during customer discovery.
 
 FOUNDER'S PROJECT CONTEXT:
 Idea: ${projectContext.idea_summary ?? 'Not specified'}
@@ -88,7 +119,7 @@ Important: Do not assign low relevance solely because the person is not the exac
 - skeptic: a critical voice likely to challenge weak assumptions.
 - connector: an introducer who can connect the founder to better interviewees.`;
 
-  return generateObject<PersonAnalysis>(prompt, {
+  const analysis = await generateObject<PersonAnalysis>(prompt, {
     type: 'object',
     required: ['name', 'summary', 'relevance_rank', 'why_they_matter', 'key_insights', 'recommended_questions'],
     properties: {
@@ -111,12 +142,37 @@ Important: Do not assign low relevance solely because the person is not the exac
       },
       summary: {
         type: 'string',
-        description: 'One paragraph describing who this person is and what they do.',
+        description: isNetworking ? 'One sentence describing the outreach angle, not a biography.' : 'One paragraph describing who this person is and what they do.',
       },
       relevance_rank: {
         type: 'string',
         enum: ['low', 'medium', 'high'],
         description: isNetworking ? 'How relevant this person is to the outreach project.' : 'How relevant this person is to the founder\'s current hypothesis.',
+      },
+      match_score: {
+        type: 'number',
+        description: isNetworking ? 'Outreach project match score from 0 to 100.' : 'Optional match score from 0 to 100.',
+      },
+      match_rank: {
+        type: 'string',
+        enum: ['low', 'medium', 'high'],
+        description: 'Rank derived from match_score: high >= 75, medium >= 45, low < 45.',
+      },
+      match_factors: {
+        type: 'object',
+        properties: {
+          recipient_fit: { type: 'number' },
+          topic_overlap: { type: 'number' },
+          shared_context: { type: 'number' },
+          desired_response_usefulness: { type: 'number' },
+          personalization_quality: { type: 'number' },
+          evidence_confidence: { type: 'number' },
+        },
+        description: 'Factor scores from 0 to 100 explaining the match score.',
+      },
+      match_explanation: {
+        type: 'string',
+        description: 'Concise explanation of the score and the main limiter.',
       },
       why_they_matter: {
         type: 'string',
@@ -125,7 +181,7 @@ Important: Do not assign low relevance solely because the person is not the exac
       key_insights: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Bullet points of what was learned about this person from the crawled content.',
+        description: isNetworking ? '1-3 lightweight personalization hooks useful for outreach.' : 'Bullet points of what was learned about this person from the crawled content.',
       },
       recommended_questions: {
         type: 'array',
@@ -135,7 +191,22 @@ Important: Do not assign low relevance solely because the person is not the exac
       risk_factors: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Reasons this person might not be the right conversation target.',
+        description: isNetworking ? 'Details to avoid mentioning or reasons personalization may be weak.' : 'Reasons this person might not be the right conversation target.',
+      },
+      sections: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['id', 'title', 'kind'],
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            kind: { type: 'string', enum: ['text', 'list'] },
+            text: { type: 'string' },
+            items: { type: 'array', items: { type: 'string' } },
+          },
+        },
+        description: isNetworking ? 'Mode-specific person profile sections for networking outreach.' : 'Optional mode-specific profile sections.',
       },
       confidence_score: {
         type: 'number',
@@ -153,4 +224,15 @@ Important: Do not assign low relevance solely because the person is not the exac
       },
     },
   });
+
+  if (!isNetworking) return analysis;
+
+  const score = normalizeMatchScore(analysis.match_score) ?? scoreFromRank(analysis.relevance_rank) ?? 0;
+  const rank = matchRankForScore(score);
+  return {
+    ...analysis,
+    match_score: score,
+    match_rank: rank,
+    relevance_rank: rank,
+  };
 }

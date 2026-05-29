@@ -3,16 +3,10 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { interactions, people, person_events, projects, transcripts } from '@/lib/db/schema';
 import { getDesktopUser } from '@/lib/desktop-auth';
+import { buildDesktopSessionNotesRaw, type DesktopSessionTopicInput } from '@/lib/desktop-session-summary';
+import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
 
-type TopicInput = {
-  id?: string;
-  label?: string;
-  checked?: boolean;
-  checkedBy?: string;
-  checkedAt?: string;
-  evidence?: string;
-  manualOverride?: boolean;
-};
+type TopicInput = DesktopSessionTopicInput;
 
 type EndSessionInput = {
   personId?: string;
@@ -23,19 +17,6 @@ type EndSessionInput = {
   notesRaw?: string;
   transcriptRaw?: string;
 };
-
-function topicSummary(topics: TopicInput[]) {
-  const checked = topics.filter((topic) => topic.checked);
-  const unchecked = topics.filter((topic) => !topic.checked);
-  const lines = [
-    `Checked topics (${checked.length}/${topics.length}):`,
-    ...(checked.length ? checked.map((topic) => `- ${topic.label ?? ''}`) : ['- None']),
-    '',
-    `Unchecked topics (${unchecked.length}/${topics.length}):`,
-    ...(unchecked.length ? unchecked.map((topic) => `- ${topic.label ?? ''}`) : ['- None']),
-  ];
-  return lines.join('\n');
-}
 
 export async function POST(request: Request) {
   const user = await getDesktopUser(request);
@@ -53,7 +34,7 @@ export async function POST(request: Request) {
   }
 
   const owned = await db
-    .select({ id: people.id })
+    .select({ person: people })
     .from(people)
     .innerJoin(projects, eq(people.project_id, projects.id))
     .where(and(eq(people.id, body.personId), eq(projects.user_id, user.id)))
@@ -64,9 +45,8 @@ export async function POST(request: Request) {
   const topics = Array.isArray(body.topics)
     ? body.topics.filter((topic) => typeof topic.label === 'string' && topic.label.trim())
     : [];
-  const summary = topicSummary(topics);
   const userNotes = body.notesRaw?.trim() ?? '';
-  const notesRaw = userNotes ? `${summary}\n\nNotes:\n${userNotes}` : summary;
+  const notesRaw = buildDesktopSessionNotesRaw(topics, userNotes);
   const transcriptRaw = body.transcriptRaw?.trim() ?? '';
   const completedAt = body.endedAt ? new Date(body.endedAt) : new Date();
 
@@ -125,8 +105,10 @@ export async function POST(request: Request) {
         evidence: topic.evidence ?? null,
       })),
       manual_override_count: topics.filter((topic) => topic.manualOverride).length,
+      ...matchEventMetadata(owned[0].person, {}, 4),
     },
   });
+  if (owned[0].person.project_id) await refreshProjectMatchProfileFromSignals(owned[0].person.project_id, null);
 
   return NextResponse.json({ ok: true, interaction: created }, { status: 201 });
 }

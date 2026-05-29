@@ -4,6 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, projects, users, person_events } from '@/lib/db/schema';
 import type { CRMOutcome } from '@/lib/crm';
+import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
 
 type Params = { params: Promise<{ personId: string }> };
 
@@ -39,8 +40,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   await db.insert(person_events).values({
     person_id: personId,
     type: 'stage_changed',
-    metadata: { to: 'completed', outcome: body.outcome },
+    metadata: matchEventMetadata(
+      rows[0].person,
+      { to: 'completed', outcome: body.outcome },
+      body.outcome === 'not_interested' ? -3 : -1,
+    ),
   });
+  if (rows[0].person.project_id) await refreshProjectMatchProfileFromSignals(rows[0].person.project_id, null);
 
   return NextResponse.json(updated);
 }

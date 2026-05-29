@@ -20,19 +20,45 @@ type EditorAction =
   | { type: 'redo' }
   | { type: 'applyPatch'; patch: Partial<Foundation> };
 
+function normalizeForCompare(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeForCompare);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, nested]) => [key, normalizeForCompare(nested)]),
+    );
+  }
+
+  return value;
+}
+
+function serializeFoundation(foundation: Foundation): string {
+  return JSON.stringify(normalizeForCompare(foundation));
+}
+
+function foundationsEqual(a: Foundation, b: Foundation): boolean {
+  return serializeFoundation(a) === serializeFoundation(b);
+}
+
 function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
     case 'change':
+      if (foundationsEqual(state.working, action.next)) return state;
       return { ...state, working: action.next };
 
     case 'commit': {
       const base = state.history[state.cursor];
-      if (JSON.stringify(base) === JSON.stringify(state.working)) return state;
+      if (foundationsEqual(base, state.working)) return state;
       const next = [...state.history.slice(0, state.cursor + 1), { ...state.working }];
       return { ...state, history: next, cursor: next.length - 1 };
     }
 
     case 'commitNow': {
+      if (foundationsEqual(state.working, action.next)) return state;
       const next = [...state.history.slice(0, state.cursor + 1), { ...action.next }];
       return { working: action.next, history: next, cursor: next.length - 1 };
     }
@@ -51,6 +77,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
     case 'applyPatch': {
       const next = { ...state.working, ...action.patch };
+      if (foundationsEqual(state.working, next)) return state;
       const history = [...state.history.slice(0, state.cursor + 1), next];
       return { working: next, history, cursor: history.length - 1 };
     }
@@ -101,11 +128,15 @@ export function FoundationProvider({
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const isFirstRender = useRef(true);
+  const lastSavedSnapshot = useRef(serializeFoundation(initialFoundation));
 
   const scheduleAutoSave = useCallback(
-    (data: Foundation) => {
+    (data: Foundation, snapshot: string) => {
       clearTimeout(saveTimer.current);
+      if (snapshot === lastSavedSnapshot.current) return;
+
       saveTimer.current = setTimeout(async () => {
+        if (snapshot === lastSavedSnapshot.current) return;
         setSaveStatus('saving');
         try {
           const res = await backendClientFetch(`/v1/projects/${projectId}/foundation`, {
@@ -114,6 +145,7 @@ export function FoundationProvider({
             body: JSON.stringify(data),
           });
           if (!res.ok) throw new Error();
+          lastSavedSnapshot.current = snapshot;
           setSaveStatus('saved');
           clearTimeout(savedTimer.current);
           savedTimer.current = setTimeout(() => setSaveStatus('idle'), 2000);
@@ -131,8 +163,15 @@ export function FoundationProvider({
       isFirstRender.current = false;
       return;
     }
-    scheduleAutoSave(state.working);
+    scheduleAutoSave(state.working, serializeFoundation(state.working));
   }, [state.working, scheduleAutoSave]);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(saveTimer.current);
+      clearTimeout(savedTimer.current);
+    };
+  }, []);
 
   // Keyboard shortcuts
   const undo = useCallback(() => dispatch({ type: 'undo' }), []);

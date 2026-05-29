@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import type { Person } from '@/lib/db/schema';
+import type { DiscoveredUrl, Person } from '@/lib/db/schema';
 import { PersonaBubble } from './PersonaBubble';
 import type { PersonaType } from './PersonaBubble';
 import { RelevanceIndicator } from './RelevanceIndicator';
@@ -86,7 +86,26 @@ function CardActive({
 
 // ── Loading (skeleton) ────────────────────────────────────────────────────────
 
-function CardLoading() {
+function formatDetectedSources(discovered: DiscoveredUrl[] | null | undefined): string | null {
+  if (!discovered?.length) return null;
+
+  const labels = discovered.slice(0, 2).map((source) => {
+    let host = source.url;
+    try {
+      host = new URL(source.url).hostname.replace(/^www\./, '');
+    } catch {
+      host = source.url.replace(/^https?:\/\//, '').split('/')[0] || source.url;
+    }
+    const kind = source.kind === 'github' ? 'GitHub' : source.kind === 'blog' ? 'Blog' : 'Website';
+    return `${kind}: ${host}`;
+  });
+
+  const remaining = discovered.length - labels.length;
+  return remaining > 0 ? `${labels.join(', ')} +${remaining}` : labels.join(', ');
+}
+
+function CardLoading({ discovered }: { discovered?: DiscoveredUrl[] | null }) {
+  const detectedSummary = formatDetectedSources(discovered);
   return (
     <div className={styles.loading} aria-busy="true" aria-label="Researching person">
       <div className={styles.skeletonLine} style={{ width: '60%', height: 14 }} />
@@ -95,6 +114,11 @@ function CardLoading() {
       <div className={`${styles.skeletonLine} ${styles.skeletonBubble}`} />
       <div className={styles.skeletonLine} style={{ width: '90%', height: 11, marginTop: 8 }} />
       <div className={styles.skeletonLine} style={{ width: '75%', height: 11, marginTop: 4 }} />
+      {detectedSummary && (
+        <p className={styles.loadingDetected}>
+          <span>Auto-detected</span> {detectedSummary}
+        </p>
+      )}
       <div className={styles.skeletonFooter}>
         <div className={styles.skeletonLine} style={{ width: 72, height: 44 }} />
         <div className={styles.skeletonLine} style={{ width: '40%', height: 11 }} />
@@ -155,6 +179,8 @@ function CardFilled({
   const contactLine = analysis?.contact_info
     ? Object.values(analysis.contact_info).find(Boolean) ?? null
     : null;
+  const detectedSummary = formatDetectedSources(person.discovered_urls);
+  const matchRank = (person.match_rank ?? person.relevance_rank) as 'low' | 'medium' | 'high' | null;
 
   return (
     <Link
@@ -206,10 +232,16 @@ function CardFilled({
         <p className={styles.why}>{analysis.why_they_matter}</p>
       )}
 
+      {detectedSummary && (
+        <p className={styles.detectedSources}>
+          <span>Auto-detected</span> {detectedSummary}
+        </p>
+      )}
+
       {/* Footer: gauge + contact */}
       <div className={styles.footer}>
-        {person.relevance_rank && (
-          <RelevanceIndicator rank={person.relevance_rank as 'low' | 'medium' | 'high'} />
+        {matchRank && (
+          <RelevanceIndicator rank={matchRank} score={person.match_score} stale={person.match_status === 'stale'} />
         )}
         <div className={styles.contact}>
           {contactLine ? (
@@ -309,7 +341,7 @@ export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, o
 
   return (
     <div className={styles.card}>
-      {isLoading && <CardLoading />}
+      {isLoading && <CardLoading discovered={person.discovered_urls} />}
       {isError && <CardError onRetry={handleRetry} message={person.crawl_error} />}
       {!isLoading && !isError && (
         <CardFilled

@@ -2,6 +2,14 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from .project_modes import (
+    get_array_slots,
+    get_fallback_turn,
+    get_required_slots,
+    get_slot_keys,
+    normalize_project_type,
+)
+
 SLOT_KEYS = [
     "ideaSummary",
     "targetUser",
@@ -9,7 +17,6 @@ SLOT_KEYS = [
     "valueProp",
     "idealPeopleTypes",
     "differentiation",
-    "disqualifiers",
 ]
 REQUIRED_SLOTS = [
     "ideaSummary",
@@ -19,7 +26,7 @@ REQUIRED_SLOTS = [
     "idealPeopleTypes",
 ]
 SLOT_ORDER = SLOT_KEYS[:]
-ARRAY_SLOTS = {"idealPeopleTypes", "disqualifiers"}
+ARRAY_SLOTS = {"idealPeopleTypes"}
 COMPLETENESS_LEVELS = {"missing", "weak", "solid"}
 
 FALLBACKS = {
@@ -84,16 +91,6 @@ FALLBACKS = {
         ],
         "customPlaceholder": "Describe what makes your approach different...",
     },
-    "disqualifiers": {
-        "question": "Who would NOT be a good fit?",
-        "choices": [
-            {"id": "a", "label": "Enterprise companies with strict compliance", "normalizedValue": "Enterprise companies with strict compliance requirements"},
-            {"id": "b", "label": "People who prefer fully manual processes", "normalizedValue": "People who prefer fully manual processes"},
-            {"id": "c", "label": "Teams with no budget", "normalizedValue": "Teams with no budget or buying authority"},
-            {"id": "d", "label": "Industries requiring deep domain customization", "normalizedValue": "Industries requiring heavy domain customization"},
-        ],
-        "customPlaceholder": "Describe who this is not a good fit for...",
-    },
 }
 
 NETWORKING_FALLBACKS = {
@@ -157,44 +154,33 @@ NETWORKING_FALLBACKS = {
         ],
         "customPlaceholder": "Describe the credibility hook or personal angle...",
     },
-    "disqualifiers": {
-        "question": "Who should be excluded from this outreach?",
-        "choices": [
-            {"id": "a", "label": "People with no visible connection to the event, topic, or community", "normalizedValue": "People with no visible connection to the event, topic, or community"},
-            {"id": "b", "label": "People whose profiles suggest they are unlikely to attend in person", "normalizedValue": "People whose profiles suggest they are unlikely to attend in person"},
-            {"id": "c", "label": "People where the message would feel like a cold sales pitch", "normalizedValue": "People where the message would feel like a cold sales pitch"},
-            {"id": "d", "label": "People who are too far outside the topic to justify a personalized note", "normalizedValue": "People who are too far outside the topic to justify a personalized note"},
-        ],
-        "customPlaceholder": "Describe who should not be included...",
-    },
 }
 
 
-def empty_onboarding_state() -> dict:
-    completeness = {key: "missing" for key in SLOT_KEYS}
+def empty_onboarding_state(project_type: str = "startup") -> dict:
+    project_type = normalize_project_type(project_type)
+    slot_keys = get_slot_keys(project_type)
+    array_slots = get_array_slots(project_type)
+    completeness = {key: "missing" for key in slot_keys}
     return {
-        "ideaSummary": None,
-        "targetUser": None,
-        "painPoint": None,
-        "valueProp": None,
-        "idealPeopleTypes": [],
-        "differentiation": None,
-        "disqualifiers": [],
+        **{key: ([] if key in array_slots else None) for key in slot_keys},
         "completeness": completeness,
-        "followUpCounts": {key: 0 for key in SLOT_KEYS},
+        "followUpCounts": {key: 0 for key in slot_keys},
     }
 
 
-def normalize_onboarding_state(state: dict | None) -> dict:
-    normalized = empty_onboarding_state()
+def normalize_onboarding_state(state: dict | None, project_type: str = "startup") -> dict:
+    project_type = normalize_project_type(project_type)
+    slot_keys = get_slot_keys(project_type)
+    normalized = empty_onboarding_state(project_type)
     if not isinstance(state, dict):
         return normalized
-    for key in SLOT_KEYS:
+    for key in slot_keys:
         if key in state:
             normalized[key] = state[key]
     raw_completeness = state.get("completeness") or {}
     raw_followups = state.get("followUpCounts") or {}
-    for key in SLOT_KEYS:
+    for key in slot_keys:
         if raw_completeness.get(key) in COMPLETENESS_LEVELS:
             normalized["completeness"][key] = raw_completeness[key]
         if isinstance(raw_followups.get(key), int):
@@ -202,61 +188,68 @@ def normalize_onboarding_state(state: dict | None) -> dict:
     return normalized
 
 
-def choose_next_slot(state: dict) -> str | None:
-    for key in SLOT_ORDER:
+def choose_next_slot(state: dict, project_type: str = "startup") -> str | None:
+    slot_order = get_slot_keys(project_type)
+    required_slots = set(get_required_slots(project_type))
+    for key in slot_order:
         if (
-            key in REQUIRED_SLOTS
+            key in required_slots
             and state["completeness"][key] == "weak"
             and state["followUpCounts"].get(key, 0) < 1
         ):
             return key
-    for key in SLOT_ORDER:
-        if key in REQUIRED_SLOTS and state["completeness"][key] == "missing":
+    for key in slot_order:
+        if key in required_slots and state["completeness"][key] == "missing":
             return key
-    for key in SLOT_ORDER:
-        if key not in REQUIRED_SLOTS and state["completeness"][key] == "missing":
+    for key in slot_order:
+        if key not in required_slots and state["completeness"][key] == "missing":
             return key
     return None
 
 
-def is_onboarding_finishable(state: dict) -> bool:
-    solid_count = len([key for key in REQUIRED_SLOTS if state["completeness"][key] == "solid"])
-    none_missing = all(state["completeness"][key] != "missing" for key in REQUIRED_SLOTS)
+def is_onboarding_finishable(state: dict, project_type: str = "startup") -> bool:
+    required_slots = get_required_slots(project_type)
+    solid_count = len([key for key in required_slots if state["completeness"][key] == "solid"])
+    none_missing = all(state["completeness"][key] != "missing" for key in required_slots)
     weak_slots_probed = all(
         state["completeness"][key] != "weak" or state["followUpCounts"].get(key, 0) >= 1
-        for key in REQUIRED_SLOTS
+        for key in required_slots
     )
     return none_missing and (solid_count >= 3 or weak_slots_probed)
 
 
-def merge_slot_patch(state: dict, slot_key: str, value, quality: str) -> dict:
+def merge_slot_patch(state: dict, slot_key: str, value, quality: str, project_type: str = "startup") -> dict:
     next_state = deepcopy(state)
     if next_state["completeness"].get(slot_key) == "weak":
         next_state["followUpCounts"][slot_key] = next_state["followUpCounts"].get(slot_key, 0) + 1
     next_state["completeness"][slot_key] = quality
-    if slot_key in ARRAY_SLOTS:
+    if slot_key in get_array_slots(project_type):
         next_state[slot_key] = value if isinstance(value, list) else [value]
     else:
         next_state[slot_key] = ", ".join(value) if isinstance(value, list) else value
     return next_state
 
 
-def merge_kickoff_context(state: dict, extracted: dict) -> dict:
+def merge_kickoff_context(state: dict, extracted: dict, project_type: str = "startup") -> dict:
     next_state = deepcopy(state)
-    for key in REQUIRED_SLOTS:
+    normalized_type = normalize_project_type(project_type)
+    array_slots = get_array_slots(project_type)
+    for key in get_slot_keys(project_type):
+        if normalized_type == "networking" and key == "tone":
+            continue
         patch = extracted.get(key) if isinstance(extracted, dict) else None
         if not isinstance(patch, dict):
             continue
         quality = patch.get("quality")
         if quality not in {"weak", "solid"}:
             continue
-        value = patch.get("values") if key in ARRAY_SLOTS else patch.get("value")
-        if key in ARRAY_SLOTS:
+        value = patch.get("values") if key in array_slots else patch.get("value")
+        if key in array_slots:
             if not isinstance(value, list) or not [item for item in value if isinstance(item, str) and item.strip()]:
                 continue
         elif not isinstance(value, str) or not value.strip():
             continue
-        next_state = merge_slot_patch(next_state, key, value, quality)
+        next_state = merge_slot_patch(next_state, key, value, quality, project_type)
     return next_state
 
 
@@ -278,10 +271,4 @@ def validate_choices(choices: list[dict], target_slot: str) -> tuple[bool, str |
 
 
 def get_fallback_choices(slot_key: str, project_type: str = "startup") -> dict:
-    fallbacks = NETWORKING_FALLBACKS if project_type == "networking" else FALLBACKS
-    fallback = fallbacks[slot_key]
-    return {
-        "question": fallback["question"],
-        "choices": [{**choice, "slotKey": slot_key} for choice in fallback["choices"]],
-        "customPlaceholder": fallback["customPlaceholder"],
-    }
+    return get_fallback_turn(project_type, slot_key)

@@ -1,10 +1,18 @@
 #pragma once
 #include <windows.h>
 #include <functional>
+#include <string>
 
 #include "renderer.h"
 
 namespace foundry::overlay {
+
+// WM_COPYDATA dwData magic for deep-link payloads. Picked to be distinctive
+// (vs accidental collisions with other senders) and stable across versions.
+constexpr ULONG_PTR kDeepLinkCopyDataId = 0x464F554EUL;  // 'FOUN'
+
+// Window class name used for FindWindow lookups across instances.
+constexpr wchar_t kOverlayWindowClass[] = L"FoundryOverlayClass";
 
 struct OverlayActions {
     std::function<void()> onSettings;
@@ -23,6 +31,9 @@ struct OverlayActions {
     std::function<void()> onStartSession;
     std::function<void()> onEndSession;
     std::function<void()> onMoved;
+    // Fired when a foundry:// deep-link URL arrives via WM_COPYDATA from a
+    // second launch of the exe (the protocol-handler path).
+    std::function<void(const std::wstring&)> onDeepLink;
     // Toggle a topic row by its visible-window index (0..visibleTopicCount-1).
     // The host is responsible for adding the current scroll offset to map back
     // to the underlying topic.

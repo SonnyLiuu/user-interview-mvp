@@ -85,7 +85,9 @@ Prereqs:
    `AZURE_OPENAI_REALTIME_DEPLOYMENT`. For public OpenAI, set
    `CHECKLIST_AI_PROVIDER=openai` and either `OPENAI_REALTIME_API_KEY` or
    `OPENAI_API_KEY`. The root `.env.local` must point `FOUNDRY_API_BASE_URL`
-   at this service, usually `http://127.0.0.1:8001`.
+   at this service, usually `http://127.0.0.1:8001`. In deployed
+   environments, set `FOUNDRY_DESKTOP_API_PUBLIC_URL` to the public FastAPI
+   URL that the Windows overlay can reach for SSE and WebSocket traffic.
 
 3. Build and run the signed desktop copy:
 
@@ -127,14 +129,15 @@ Gate:
    restore from `%LOCALAPPDATA%\foundry\desktop-settings.json`.
 11. Click **Reset overlay position** in Settings. The overlay should return to
    the default top-right location.
-12. Click **End** on the overlay. The end-session form opens with checked and
-   unchecked topic summaries.
-13. Paste notes or transcript text and click **Save**. Native POSTs to
-    `<base>/api/desktop/sessions/end`.
-14. On success, the form shows saved, the overlay returns to idle, and the web
+12. Click **End** on the overlay. The end-call view shows checked-topic counts
+    and whether a live transcript has been captured.
+13. Click **Save call**. Native saves checked topics plus the captured
+    transcript by POSTing to `<base>/api/desktop/sessions/end`.
+14. On success, the overlay returns to idle, and the web
     app database has:
     - an `interactions` row with `notes_raw`, `transcript_raw`, and
       `completed_at`
+    - a `transcripts` row when transcript text or notes were captured
     - a `person_events` row with type `desktop_call_session_saved`
 15. Click **Quit** in the tray menu. The app exits cleanly.
 

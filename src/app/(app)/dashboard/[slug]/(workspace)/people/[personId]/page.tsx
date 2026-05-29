@@ -67,6 +67,7 @@ export default async function PersonDetailPage({
     <PersonDetailClient
       person={person}
       slug={slug}
+      projectType={project.project_type}
       initialOutreach={initialOutreach ?? null}
       initialCallPrep={initialCallPrep ?? null}
       initialTranscripts={initialTranscripts}
