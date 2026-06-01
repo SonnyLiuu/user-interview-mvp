@@ -19,7 +19,7 @@ export default async function ProjectOnboardingPage({
     redirect(`/onboarding/${pathSegment}`);
   }
 
-  if (lookup.foundationExists) {
+  if (lookup.foundationExists && project.slug !== null) {
     redirect(`/dashboard/${pathSegment}/foundation`);
   }
 
@@ -28,6 +28,7 @@ export default async function ProjectOnboardingPage({
       projectId={project.id}
       projectSlug={pathSegment}
       projectType={project.project_type}
+      initialStage={lookup.foundationExists ? 'name' : 'chat'}
     />
   );
 }

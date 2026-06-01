@@ -79,7 +79,7 @@ void SseClient::run(std::wstring url, std::wstring bearerToken) {
         return;
     }
 
-    HINTERNET session = WinHttpOpen(L"FoundryOverlay/0.1",
+    HINTERNET session = WinHttpOpen(L"UserInterviewNotetaker/0.1",
                                     WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                     WINHTTP_NO_PROXY_NAME,
                                     WINHTTP_NO_PROXY_BYPASS, 0);
@@ -107,7 +107,9 @@ void SseClient::run(std::wstring url, std::wstring bearerToken) {
         return;
     }
 
-    DWORD timeout = 3000;
+    // Match server heartbeat interval (15 s) plus buffer so we never
+    // hit a receive-timeout gap that would tear down the connection.
+    DWORD timeout = 25000;  // 25 s
     WinHttpSetOption(req, WINHTTP_OPTION_RECEIVE_TIMEOUT,
                      &timeout, sizeof(timeout));
 
@@ -133,11 +135,14 @@ void SseClient::run(std::wstring url, std::wstring bearerToken) {
     while (running_) {
         DWORD available = 0;
         if (!WinHttpQueryDataAvailable(req, &available)) {
-            if (GetLastError() == ERROR_WINHTTP_TIMEOUT) continue;
+            if (GetLastError() == ERROR_WINHTTP_TIMEOUT) {
+                Sleep(100);
+                continue;
+            }
             break;
         }
         if (available == 0) {
-            Sleep(50);
+            Sleep(100);
             continue;
         }
         std::vector<char> chunk(available);

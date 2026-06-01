@@ -1,5 +1,5 @@
 {
-  "name": "@startup-foundry/discovery-ui",
+  "name": "@user-interview/app",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -21,7 +21,7 @@
     "@google/generative-ai": "^0.24.1",
     "@neondatabase/serverless": "^1.0.2",
     "drizzle-orm": "^0.45.2",
-    "next": "^15.4.5",
+    "next": "^16.2.6",
     "openai": "^6.34.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

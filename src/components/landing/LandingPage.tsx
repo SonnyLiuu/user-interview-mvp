@@ -132,7 +132,7 @@ export function LandingPage() {
       {/* ── Nav ──────────────────────────────────────────────────────────── */}
       <nav className={styles.nav}>
         <div className={styles.navInner}>
-          <Link href="/" className={styles.wordmark}>Startup Foundry</Link>
+          <Link href="/" className={styles.wordmark}>User Interview</Link>
           <div className={styles.navLinks}>
             <Link href="/login" className={styles.navLogin}>Log in</Link>
             <Link href="/signup" className={styles.navCta}>Get started</Link>
@@ -144,11 +144,11 @@ export function LandingPage() {
       <section className={styles.hero}>
         <div className={styles.container}>
           <h1 className={styles.heroHeadline}>
-            Your personal AI-powered startup forge.
+            Your AI-powered customer interview workspace.
           </h1>
           <p className={styles.heroSub}>
-            Forge your startup idea, find the right people to network with, reach out intelligently,
-            and consolidate insights across conversations to build a smarter, more connected founder.
+            Pressure-test your idea, find the right people to interview, reach out intelligently,
+            and synthesize insights across conversations to build a smarter, more connected founder.
           </p>
           <Link href="/signup" className={styles.ctaButton}>
             Get started for free
@@ -243,7 +243,7 @@ export function LandingPage() {
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div className={styles.footerRow1}>
-            <span className={styles.footerWordmark}>Startup Foundry</span>
+            <span className={styles.footerWordmark}>User Interview</span>
             <div className={styles.footerLinks}>
               <Link href="/privacy" className={styles.footerLink}>Privacy</Link>
               <Link href="/terms" className={styles.footerLink}>Terms</Link>
@@ -251,9 +251,9 @@ export function LandingPage() {
           </div>
           <div className={styles.footerRow2}>
             <span className={styles.footerTagline}>
-              Startup Foundry wants to help new founders get to product-market fit faster and with less wasted time and effort. <br />We are in early access and would love to hear from you: <a href="mailto:feedback@startupfoundry.app" className={styles.footerEmail}>feedback@startupfoundry.app</a>
+              User Interview helps new founders get to product-market fit faster and with less wasted time and effort. <br />We are in early access and would love to hear from you: <a href="mailto:feedback@userinterview.app" className={styles.footerEmail}>feedback@userinterview.app</a>
             </span>
-            <span className={styles.footerCopy}>&copy; 2026 Startup Foundry</span>
+            <span className={styles.footerCopy}>&copy; 2026 User Interview</span>
           </div>
         </div>
       </footer>

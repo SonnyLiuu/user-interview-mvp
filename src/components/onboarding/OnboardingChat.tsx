@@ -6,17 +6,25 @@ import type { ProjectType } from '@/lib/backend-types';
 import styles from './OnboardingChat.module.css';
 
 type SlotKey =
+  | 'startupName'
   | 'ideaSummary'
   | 'targetUser'
   | 'painPoint'
   | 'valueProp'
   | 'idealPeopleTypes'
+  | 'biggestBottleneck'
+  | 'startupStage'
+  | 'traction'
   | 'differentiation'
   | 'outreachGoal'
   | 'recipients'
   | 'senderContext'
   | 'sharedContext'
   | 'desiredOutcome'
+  | 'learningGoals'
+  | 'targetPeople'
+  | 'assumptionsToTest'
+  | 'conversationBoundaries'
   | 'requiredMentions'
   | 'optionalMentions'
   | 'personalizationStrategy'
@@ -55,6 +63,8 @@ type OnboardingChatProps = {
   projectId: string;
   projectType: ProjectType;
   onComplete: () => void;
+  endpointPath?: string;
+  variant?: 'startup' | 'networking' | 'information_discovery';
 };
 
 type Phase = 'kickoff' | 'choices' | 'finishing' | 'done';
@@ -63,9 +73,9 @@ const BOTTOM_THRESHOLD_PX = 32;
 
 const STARTUP_FINISHING_STATUSES = [
   'Re-reading your answers',
-  'Identifying the sharpest pain points',
-  'Sketching your target user',
-  'Drafting your Foundation',
+  'Identifying the current bottleneck',
+  'Sketching your startup context',
+  'Drafting your startup Foundation',
   'Polishing the details',
 ];
 
@@ -77,9 +87,23 @@ const NETWORKING_FINISHING_STATUSES = [
   'Polishing the details',
 ];
 
+const INFORMATION_DISCOVERY_FINISHING_STATUSES = [
+  'Re-reading your learning goals',
+  'Clarifying who to talk to first',
+  'Turning assumptions into interview focus',
+  'Drafting the outreach project brief',
+  'Keeping the language learning-oriented',
+];
+
 const FINISHING_STATUS_INTERVAL_MS = 2400;
 
-export default function OnboardingChat({ projectId, projectType, onComplete }: OnboardingChatProps) {
+export default function OnboardingChat({
+  projectId,
+  projectType,
+  onComplete,
+  endpointPath,
+  variant,
+}: OnboardingChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentTurn, setCurrentTurn] = useState<CurrentTurn | null>(null);
   const [isFinishable, setIsFinishable] = useState(false);
@@ -96,8 +120,15 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
   const customInputRef = useRef<HTMLTextAreaElement>(null);
   const initialized = useRef(false);
   const shouldStickToBottomRef = useRef(true);
-  const isNetworking = projectType === 'networking';
-  const finishingStatuses = isNetworking ? NETWORKING_FINISHING_STATUSES : STARTUP_FINISHING_STATUSES;
+  const chatVariant = variant ?? projectType;
+  const isNetworking = chatVariant === 'networking';
+  const isInformationDiscovery = chatVariant === 'information_discovery';
+  const finishingStatuses = isInformationDiscovery
+    ? INFORMATION_DISCOVERY_FINISHING_STATUSES
+    : isNetworking
+      ? NETWORKING_FINISHING_STATUSES
+      : STARTUP_FINISHING_STATUSES;
+  const chatEndpoint = endpointPath ?? `/v1/projects/${projectId}/onboarding/chat`;
 
   const syncScrollIntent = useCallback(() => {
     const container = messagesRef.current;
@@ -137,7 +168,7 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
     setError('');
 
     try {
-      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
+      const res = await backendClientFetch(chatEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: '__init__' }),
@@ -154,7 +185,7 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
     } finally {
       setLoading(false);
     }
-  }, [applyResponse, projectId]);
+  }, [applyResponse, chatEndpoint]);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -181,7 +212,7 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
     setError('');
 
     try {
-      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
+      const res = await backendClientFetch(chatEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'kickoff', message: text }),
@@ -219,7 +250,7 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
     setError('');
 
     try {
-      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
+      const res = await backendClientFetch(chatEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -249,7 +280,7 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
     setError('');
 
     try {
-      const res = await backendClientFetch(`/v1/projects/${projectId}/onboarding/chat`, {
+      const res = await backendClientFetch(chatEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'finish' }),
@@ -261,7 +292,9 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
 
       onComplete();
     } catch {
-      setError('We could not generate your Foundation yet. Please try again.');
+      setError(isInformationDiscovery
+        ? 'We could not generate your outreach project brief yet. Please try again.'
+        : 'We could not generate your Foundation yet. Please try again.');
       setPhase(currentTurn || isFinishable ? 'choices' : 'kickoff');
     } finally {
       setSubmitting(false);
@@ -271,11 +304,20 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
   const isIntroTurn = phase === 'kickoff' && messages.length <= 1 && !loading;
   const kickoffPlaceholder = isNetworking
     ? 'Describe the goal, recipients, timely context, desired next step, and how the note should feel...'
-    : "Describe your idea, who it's for, and what problem it solves...";
-  const finishLabel = isNetworking ? 'outreach Foundation' : 'Foundation';
+    : isInformationDiscovery
+      ? 'Describe your goals...'
+    : "";
+  const finishLabel = isInformationDiscovery ? 'outreach project brief' : isNetworking ? 'outreach Foundation' : 'Foundation';
+  const finishButtonLabel = isInformationDiscovery ? 'Generate brief ->' : 'Generate Foundation ->';
 
   return (
-    <div className={[styles.chat, isIntroTurn && styles.chatIntro].filter(Boolean).join(' ')}>
+    <div
+      className={[
+        styles.chat,
+        isIntroTurn && styles.chatIntro,
+        isInformationDiscovery && styles.chatInformationDiscovery,
+      ].filter(Boolean).join(' ')}
+    >
       {/* Transcript */}
       <div ref={messagesRef} className={styles.messages} onScroll={syncScrollIntent}>
         {messages.map((msg, i) => (
@@ -288,7 +330,7 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
         ))}
 
         {/* Typing indicator while submitting */}
-        {submitting && (
+        {submitting && phase !== 'finishing' && (
           <div className={styles.assistantMsg}>
             <div className={styles.typing}>
               <span /><span /><span />
@@ -310,7 +352,7 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
               </button>
             ) : isFinishable && !currentTurn ? (
               <button className={styles.finishBtn} onClick={() => void finish()}>
-                Generate Foundation -&gt;
+                {finishButtonLabel}
               </button>
             ) : null}
           </div>
@@ -407,7 +449,7 @@ export default function OnboardingChat({ projectId, projectType, onComplete }: O
               That&apos;s enough to build your {finishLabel}. Ready to continue?
             </p>
             <button className={styles.finishBtn} onClick={() => void finish()}>
-              Generate Foundation -&gt;
+              {finishButtonLabel}
             </button>
           </div>
         )}

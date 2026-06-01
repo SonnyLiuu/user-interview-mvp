@@ -8,7 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$certSubject = "CN=Foundry Overlay Dev"
+$certSubject = "CN=User Interview Notetaker Dev"
 $cert = Get-ChildItem Cert:\CurrentUser\My |
     Where-Object { $_.Subject -eq $certSubject -and $_.HasPrivateKey } |
     Sort-Object NotAfter -Descending |

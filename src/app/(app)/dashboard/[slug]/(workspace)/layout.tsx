@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { AppNav } from '@/components/app-nav/AppNav';
-import { getProjectBySlugOrId, getWorkspaceSummary } from '@/lib/backend-server';
+import { WorkspaceTopBar } from '@/components/workspace-top-bar/WorkspaceTopBar';
+import { getProjectBySlugOrId, getWorkspaceSummary, listOutreachProjects } from '@/lib/backend-server';
 
 export default async function ProjectWorkspaceLayout({
   children,
@@ -20,6 +21,9 @@ export default async function ProjectWorkspaceLayout({
     return redirect('/dashboard');
   }
   const { projects: initialProjects } = summary;
+  const initialOutreachProjects = project.project_type === 'startup'
+    ? await listOutreachProjects(project.id)
+    : [];
 
   return (
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: '#faf4ec' }}>
@@ -27,9 +31,18 @@ export default async function ProjectWorkspaceLayout({
         slug={slug}
         projectId={project.id}
         projectName={project.name ?? null}
+        projectType={project.project_type}
         initialProjects={initialProjects}
       />
-      <main style={{ flex: 1, overflow: 'hidden', minWidth: 0, height: '100dvh' }}>{children}</main>
+      <main style={{ flex: 1, overflow: 'hidden', minWidth: 0, height: '100dvh', display: 'flex', flexDirection: 'column' }}>
+        <WorkspaceTopBar
+          slug={slug}
+          projectId={project.id}
+          projectType={project.project_type}
+          initialOutreachProjects={initialOutreachProjects}
+        />
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>{children}</div>
+      </main>
     </div>
   );
 }

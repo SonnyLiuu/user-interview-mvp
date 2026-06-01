@@ -58,7 +58,7 @@ HttpResponse request(const wchar_t* method,
     ParsedUrl parsed;
     if (!parseUrl(url, parsed, response.error)) return response;
 
-    HINTERNET session = WinHttpOpen(L"FoundryOverlay/0.1",
+    HINTERNET session = WinHttpOpen(L"UserInterviewNotetaker/0.1",
                                     WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                     WINHTTP_NO_PROXY_NAME,
                                     WINHTTP_NO_PROXY_BYPASS, 0);

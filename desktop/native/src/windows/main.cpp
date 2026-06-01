@@ -2,7 +2,7 @@
 //
 // Single native exe managing:
 //   • Tray icon (Shell_NotifyIcon)
-//   • Overlay window (Direct2D, hidden from screen capture)
+//   • Overlay window (Direct2D, visible notepad checklist)
 //   • Settings window (WebView2)
 //
 // One thread, one COM apartment, one message pump dispatching for all windows.
@@ -195,6 +195,7 @@ struct DeepLink {
     std::wstring action;    // e.g. L"call/start"
     std::wstring personId;  // empty unless present in query string
     std::wstring token;     // short-lived web-issued launch token
+    std::wstring zoomMeetingIdentifier;
 };
 
 std::wstring percentDecode(const std::wstring& input) {
@@ -255,6 +256,7 @@ std::optional<DeepLink> parseFoundryUrl(const std::wstring& raw) {
             std::wstring value = percentDecode(pair.substr(eq + 1));
             if (key == L"personId") link.personId = value;
             if (key == L"token") link.token = value;
+            if (key == L"zoomMeetingIdentifier") link.zoomMeetingIdentifier = value;
         }
         if (amp == std::wstring::npos) break;
         pos = amp + 1;
@@ -297,7 +299,7 @@ void sendDeepLinkToExistingInstance(const std::wstring& url) {
         SendMessageW(existing, WM_COPYDATA, 0,
                      reinterpret_cast<LPARAM>(&cds));
     }
-    // Best-effort focus; topmost capture-excluded windows can be stubborn.
+    // Best-effort focus; topmost no-activate windows can be stubborn.
     ShowWindow(existing, SW_SHOWNOACTIVATE);
     SetForegroundWindow(existing);
 }
@@ -357,7 +359,7 @@ std::wstring authSelfTestJson(foundry::AppState& appState) {
 
     auto response = foundry::windows::http::get(url, appState.authToken);
     std::wstring message = response.error.empty()
-                               ? foundry::json::fromUtf8(response.body.substr(0, 300))
+                               ? foundry::json::extractErrorMessage(response.body)
                                : response.error;
     return foundry::json::dumpWide(Json{
         {"type", "authSelfTestResult"},
@@ -373,7 +375,7 @@ std::wstring peopleJson(foundry::AppState& appState) {
     auto response = foundry::windows::http::get(url, appState.authToken);
     if (!response.ok) {
         std::wstring message = response.error.empty()
-                                   ? foundry::json::fromUtf8(response.body.substr(0, 300))
+                                   ? foundry::json::extractErrorMessage(response.body)
                                    : response.error;
         return foundry::json::dumpWide(Json{
             {"type", "pickerError"},
@@ -501,19 +503,24 @@ void addFallbackCallBriefTopics(foundry::AppState& appState) {
 std::wstring startLiveSession(foundry::AppState& appState,
                               const std::wstring& personId,
                               const std::wstring& personName,
-                              const std::wstring& launchToken) {
+                              const std::wstring& launchToken,
+                              const std::wstring& zoomMeetingIdentifier) {
     std::wstring token = launchToken;
     if (token.empty()) {
         std::wstring tokenUrl = apiBaseNoSlash(appState) +
                                 L"/api/desktop/launch-token";
         Json tokenPayload{{"personId", foundry::json::toUtf8(personId)}};
+        if (!zoomMeetingIdentifier.empty()) {
+            tokenPayload["zoomMeetingIdentifier"] =
+                foundry::json::toUtf8(zoomMeetingIdentifier);
+        }
         auto tokenResponse = foundry::windows::http::postJson(
             tokenUrl, foundry::json::dumpUtf8(tokenPayload),
             appState.authToken);
         if (!tokenResponse.ok) {
             std::wstring message =
                 tokenResponse.error.empty()
-                    ? foundry::json::fromUtf8(tokenResponse.body.substr(0, 300))
+                    ? foundry::json::extractErrorMessage(tokenResponse.body)
                     : tokenResponse.error;
             return foundry::json::dumpWide(Json{
                 {"type", "pickerError"},
@@ -538,12 +545,17 @@ std::wstring startLiveSession(foundry::AppState& appState,
     Json payload{
         {"personId", foundry::json::toUtf8(personId)},
         {"launchToken", foundry::json::toUtf8(token)},
+        {"captureProvider", "desktop_audio"},
     };
+    if (!zoomMeetingIdentifier.empty()) {
+        payload["zoomMeetingIdentifier"] =
+            foundry::json::toUtf8(zoomMeetingIdentifier);
+    }
     auto response = foundry::windows::http::postJson(
         url, foundry::json::dumpUtf8(payload), appState.authToken);
     if (!response.ok) {
         std::wstring message = response.error.empty()
-                                   ? foundry::json::fromUtf8(response.body.substr(0, 300))
+                                   ? foundry::json::extractErrorMessage(response.body)
                                    : response.error;
         return foundry::json::dumpWide(Json{
             {"type", "pickerError"},
@@ -559,14 +571,22 @@ std::wstring startLiveSession(foundry::AppState& appState,
     appState.liveToken = foundry::json::wideValue(root, "liveToken");
     appState.foundryBaseUrl = httpBaseNoSlash(
         foundry::json::wideValue(root, "foundryBaseUrl"));
+    appState.captureProvider = foundry::json::wideValue(
+        root, "captureProvider", L"zoom_rtms");
+    appState.audioCaptureEnabled = root.value("audioCaptureEnabled", false);
     appState.liveTranscriptRaw.clear();
+    appState.realtimeStatus.clear();
+    appState.realtimeError.clear();
     loadTopicsFromJson(appState, root["topics"]);
     if (appState.topics.empty()) {
         addFallbackCallBriefTopics(appState);
     }
 
     std::wcout << L"[session] live session " << appState.liveSessionId
-               << L"; loaded " << appState.topics.size() << L" topics\n";
+               << L"; loaded " << appState.topics.size() << L" topics"
+               << L"; capture=" << appState.captureProvider
+               << L"; audio=" << (appState.audioCaptureEnabled ? L"on" : L"off")
+               << L"\n";
     return foundry::json::dumpWide(Json{
         {"type", "sessionSelected"},
         {"personId", foundry::json::toUtf8(personId)},
@@ -582,7 +602,7 @@ std::wstring loadCallBrief(foundry::AppState& appState,
     auto response = foundry::windows::http::get(url, appState.authToken);
     if (!response.ok) {
         std::wstring message = response.error.empty()
-                                   ? foundry::json::fromUtf8(response.body.substr(0, 300))
+                                   ? foundry::json::extractErrorMessage(response.body)
                                    : response.error;
         return foundry::json::dumpWide(Json{
             {"type", "pickerError"},
@@ -697,7 +717,7 @@ void syncLiveTopicOverride(const foundry::AppState& appState,
         if (!response.ok) {
             std::wstring message =
                 response.error.empty()
-                    ? foundry::json::fromUtf8(response.body.substr(0, 300))
+                    ? foundry::json::extractErrorMessage(response.body)
                     : response.error;
             std::wcout << L"[live] manual topic override sync failed id="
                        << topicId << L" status=" << response.status
@@ -747,6 +767,7 @@ Json endSessionPayload(const foundry::AppState& appState,
         {"startedAt", foundry::json::toUtf8(appState.sessionStartedAt)},
         {"endedAt", foundry::json::toUtf8(isoNowUtc())},
         {"liveSessionId", foundry::json::toUtf8(appState.liveSessionId)},
+        {"liveToken", foundry::json::toUtf8(appState.liveToken)},
         {"topics", topics},
         {"notesRaw", foundry::json::toUtf8(buildNotesSummary(appState))},
         {"transcriptRaw", foundry::json::toUtf8(transcriptRaw)},
@@ -796,7 +817,7 @@ Json saveEndSession(foundry::AppState& appState,
         appState.authToken);
     if (!response.ok) {
         std::wstring message = response.error.empty()
-                                   ? foundry::json::fromUtf8(response.body.substr(0, 500))
+                                   ? foundry::json::extractErrorMessage(response.body)
                                    : response.error;
         return Json{
             {"type", "saveFailed"},
@@ -811,7 +832,11 @@ Json saveEndSession(foundry::AppState& appState,
     appState.liveSessionId.clear();
     appState.liveToken.clear();
     appState.foundryBaseUrl.clear();
+    appState.captureProvider.clear();
+    appState.audioCaptureEnabled = false;
     appState.liveTranscriptRaw.clear();
+    appState.realtimeStatus.clear();
+    appState.realtimeError.clear();
     appState.topics.clear();
     return Json{{"type", "saveSucceeded"}};
 }
@@ -920,6 +945,8 @@ OverlayRenderState overlayRenderState(const foundry::AppState& appState,
     state.pickerStatus = pickerStatus;
     state.endSessionStatus = endSessionStatus;
     state.selectedPersonName = appState.selectedPersonName;
+    state.realtimeStatus = appState.realtimeStatus;
+    state.realtimeError = appState.realtimeError;
     TranscriptSummary transcript = summarizeTranscript(appState.liveTranscriptRaw);
     state.hasTranscript = transcript.hasTranscript;
     state.transcriptTurnCount = transcript.turnCount;
@@ -1092,11 +1119,13 @@ bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
         std::wstring realtimeError =
             foundry::json::wideValue(data, "realtimeError");
         if (!realtimeStatus.empty()) {
+            appState.realtimeStatus = realtimeStatus;
             std::wcout << L"[live] realtime status: "
                        << realtimeStatus << L"\n";
             g_liveRealtimeConnected.store(realtimeStatus == L"connected");
         }
         if (!realtimeError.empty()) {
+            appState.realtimeError = realtimeError;
             std::wcout << L"[live] realtime error: "
                        << realtimeError << L"\n";
         }
@@ -1127,6 +1156,7 @@ bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
     if (type == "realtime_error") {
         std::wstring message = foundry::json::wideValue(data, "message");
         if (!message.empty()) {
+            appState.realtimeError = message;
             std::wcout << L"[live] realtime error: " << message << L"\n";
         }
     }
@@ -1134,10 +1164,12 @@ bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
         std::wstring status = foundry::json::wideValue(data, "status");
         std::wstring message = foundry::json::wideValue(data, "message");
         if (!status.empty()) {
+            appState.realtimeStatus = status;
             std::wcout << L"[live] realtime status: " << status << L"\n";
             g_liveRealtimeConnected.store(status == L"connected");
         }
         if (!message.empty()) {
+            appState.realtimeError = message;
             std::wcout << L"[live] realtime error: " << message << L"\n";
         }
     }
@@ -1379,11 +1411,7 @@ int main() {
         return 1;
     }
     overlayHeightDip = overlay.height;
-    std::cout << "Overlay: "
-              << (overlay.excludedFromCapture
-                  ? "excluded from capture"
-                  : "WARNING: NOT excluded")
-              << "\n";
+    std::cout << "Overlay: visible checklist mode\n";
     if (appState.settings.hasOverlayPosition) {
         SetWindowPos(overlay.hwnd, HWND_TOPMOST,
                      appState.settings.overlayX,
@@ -1409,7 +1437,7 @@ int main() {
         if (focusIfOpen(authWindow)) return;
         authClosed = false;
         authWindow = std::make_unique<WebViewWindow>(
-            L"Foundry Sign In", 720, 760, authUrl(appState),
+            L"User Interview Sign In", 720, 760, authUrl(appState),
             [&](const std::wstring& json) {
                 Json msg = foundry::json::parseWide(json);
                 std::string type = msg.value("type", "");
@@ -1511,6 +1539,11 @@ int main() {
 
     auto startLiveAudio = [&] {
         stopLiveAudio();
+        if (!appState.audioCaptureEnabled) {
+            std::wcout << L"[live] local audio disabled for capture provider "
+                       << appState.captureProvider << L"\n";
+            return;
+        }
         if (appState.foundryBaseUrl.empty() ||
             appState.liveSessionId.empty() ||
             appState.liveToken.empty()) {
@@ -1643,7 +1676,12 @@ int main() {
         }
 
         Json result = foundry::json::parseWide(
-            startLiveSession(appState, link->personId, L"", link->token));
+            startLiveSession(
+                appState,
+                link->personId,
+                L"",
+                link->token,
+                link->zoomMeetingIdentifier));
         std::string type = result.value("type", "");
         if (type == "sessionSelected") {
             appState.sessionStatus = foundry::SessionStatus::Active;
@@ -1841,7 +1879,7 @@ int main() {
                 overlayDirty = true;
                 const OverlayPersonRow person = overlayPeople[index];
                 Json result = foundry::json::parseWide(
-                    startLiveSession(appState, person.id, person.name, L""));
+                    startLiveSession(appState, person.id, person.name, L"", L""));
                 std::string type = result.value("type", "");
                 if (type == "sessionSelected") {
                     appState.sessionStatus = foundry::SessionStatus::Active;

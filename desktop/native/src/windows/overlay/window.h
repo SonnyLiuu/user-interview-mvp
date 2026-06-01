@@ -58,13 +58,11 @@ struct OverlayWindow {
     HWND hwnd = nullptr;
     int  width = 0;
     int  height = 0;
-    bool excludedFromCapture = false;
 };
 
 // Creates a borderless, topmost notepad overlay positioned in the top-right of
-// the primary monitor. Applies WDA_EXCLUDEFROMCAPTURE so the window is omitted
-// from screen-capture APIs (Zoom share, Teams, Meet, PrintWindow, BitBlt of
-// the desktop).
+// the primary monitor. The checklist is intentionally visible in screen shares
+// so it can become part of the interview ritual instead of a hidden sidecar.
 //
 // Returns OverlayWindow with hwnd == nullptr on failure.
 OverlayWindow createOverlayWindow(OverlayActions actions = {});

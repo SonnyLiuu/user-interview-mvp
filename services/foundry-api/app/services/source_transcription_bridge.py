@@ -41,8 +41,11 @@ class TranscriptionConnectionConfig:
 
 
 def _checklist_provider() -> str:
-    provider = get_settings().checklist_ai_provider.strip().lower()
-    return provider if provider else "openai"
+    settings = get_settings()
+    provider = settings.checklist_ai_provider.strip().lower()
+    if provider:
+        return provider
+    return settings.ai_provider.strip().lower() or "openai"
 
 
 def _realtime_api_key() -> str | None:
@@ -285,7 +288,7 @@ class _SourceTranscriber:
                 "type": "server_vad",
                 "threshold": 0.5,
                 "prefix_padding_ms": 300,
-                "silence_duration_ms": 500,
+                "silence_duration_ms": 1200,
             },
         }
 

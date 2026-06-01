@@ -17,15 +17,33 @@ type Props = {
   subtitleOverride?: string;
   fullPage?: boolean;
   centerHeading?: string;
+  inputId?: string;
+  advisorIntroEventName?: string;
+  advisorAlertId?: string;
 };
 
 // ── Patch helpers ─────────────────────────────────────────────────────────────
 
-// Strips {"foundation_patch": ...} from the end of any content string.
-// Called on every render during streaming so the JSON never appears in the UI.
+// Strips {"foundation_patch": ...} (possibly wrapped in ```json fences) from the
+// end of any content string. Called on every render during streaming so the JSON
+// never appears in the UI.
 function stripFoundationPatch(content: string): string {
-  const idx = content.lastIndexOf('{"foundation_patch":');
-  return idx !== -1 ? content.slice(0, idx).trimEnd() : content;
+  const marker = '{"foundation_patch":';
+  const idx = content.lastIndexOf(marker);
+  if (idx === -1) return content;
+
+  // Walk backwards from the marker to find and strip any opening ```json fence
+  let start = idx;
+  const before = content.slice(0, idx);
+  const fenceIdx = before.lastIndexOf('```');
+  if (fenceIdx !== -1) {
+    // Make sure the fence is on its own line (only whitespace between fence and marker)
+    const between = before.slice(fenceIdx + 3, idx);
+    if (/^\s*$/.test(between)) {
+      start = fenceIdx;
+    }
+  }
+  return content.slice(0, start).trimEnd();
 }
 
 // Extracts the patch object from the completed response. Uses brace-counting
@@ -58,6 +76,12 @@ function extractFoundationPatch(content: string): Partial<Foundation> | null {
 function displayContent(content: string): string {
   return stripFoundationPatch(content)
     .replace(/\{"intake_complete":\s*true\}/g, '')
+    // Strip markdown bold (**text**) and italic (*text*)
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1')
+    // Strip any stray ```json or ``` fences left behind
+    .replace(/```json\s*/g, '')
+    .replace(/```\s*/g, '')
     .trim();
 }
 
@@ -72,6 +96,9 @@ export default function ProjectChat({
   subtitleOverride,
   fullPage,
   centerHeading,
+  inputId,
+  advisorIntroEventName,
+  advisorAlertId,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialConversation);
   const [input, setInput] = useState('');
@@ -79,6 +106,7 @@ export default function ProjectChat({
   const [intakeJustCompleted, setIntakeJustCompleted] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const advisorIntroShown = useRef(false);
 
   // Foundation context — null when ProjectChat is used outside a FoundationProvider
   const foundationCtx = useFoundation();
@@ -125,11 +153,34 @@ export default function ProjectChat({
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!advisorIntroEventName) return;
+
+    function handleAdvisorIntro() {
+      const intro = "Hi, let's sharpen your foundation further. Describe what you'd like to add or change and I can automatically apply your ideas into the foundation document. What sections need more detail?";
+      setMessages((current) => {
+        if (advisorIntroShown.current || current.some((message) => message.role === 'assistant' && message.content === intro)) {
+          return current;
+        }
+        advisorIntroShown.current = true;
+        return [...current, { role: 'assistant', content: intro }];
+      });
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+
+    window.addEventListener(advisorIntroEventName, handleAdvisorIntro);
+    return () => window.removeEventListener(advisorIntroEventName, handleAdvisorIntro);
+  }, [advisorIntroEventName]);
+
   async function sendMessage() {
     const text = input.trim();
     if (!text || streaming) return;
 
     setInput('');
+    if (hasBrief && advisorAlertId) {
+      window.localStorage.setItem(`recommendation-alert-dismissed:${advisorAlertId}`, 'true');
+      window.dispatchEvent(new CustomEvent('recommendation-alert:dismiss', { detail: { alertId: advisorAlertId } }));
+    }
     const userMsg: Message = { role: 'user', content: text };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -231,6 +282,7 @@ export default function ProjectChat({
 
       <div className={styles.inputRow}>
         <textarea
+          id={inputId}
           ref={textareaRef}
           className={styles.textarea}
           value={input}

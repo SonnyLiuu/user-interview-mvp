@@ -4,8 +4,10 @@ CLAUDE.md
 SYSTEM_DESIGN.md
 node_modules
 .next
+.next-dev-*.log
 out
 desktop/native/build/
+desktop/installer/dist/
 
 # env
 .env.local

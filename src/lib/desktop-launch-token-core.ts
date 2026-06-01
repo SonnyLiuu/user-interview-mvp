@@ -7,12 +7,14 @@ type LaunchTokenPayload = {
   typ: typeof TOKEN_TYPE;
   sub: string;
   personId: string;
+  zoomMeetingIdentifier?: string;
   exp: number;
 };
 
 type LaunchTokenInput = {
   clerkUserId: string;
   personId: string;
+  zoomMeetingIdentifier?: string | null;
 };
 
 type TokenSecret = {
@@ -53,6 +55,7 @@ function signPayload(encodedPayload: string, secret: string) {
 export function signDesktopLaunchTokenWithSecret({
   clerkUserId,
   personId,
+  zoomMeetingIdentifier,
   secret,
   now,
 }: LaunchTokenInput & TokenSecret) {
@@ -63,6 +66,9 @@ export function signDesktopLaunchTokenWithSecret({
     personId,
     exp,
   };
+  if (zoomMeetingIdentifier?.trim()) {
+    payload.zoomMeetingIdentifier = zoomMeetingIdentifier.trim();
+  }
   const encodedPayload = base64Url(JSON.stringify(payload));
   const signature = base64Url(signPayload(encodedPayload, secret));
 
@@ -76,6 +82,7 @@ export function verifyDesktopLaunchTokenWithSecret({
   token,
   clerkUserId,
   personId,
+  zoomMeetingIdentifier,
   secret,
   now,
 }: VerifyLaunchTokenInput) {
@@ -102,6 +109,7 @@ export function verifyDesktopLaunchTokenWithSecret({
   if (payload.typ !== TOKEN_TYPE) return false;
   if (payload.sub !== clerkUserId) return false;
   if (payload.personId !== personId) return false;
+  if ((payload.zoomMeetingIdentifier ?? '') !== (zoomMeetingIdentifier?.trim() ?? '')) return false;
   if (!Number.isFinite(payload.exp)) return false;
   if (payload.exp < unixSeconds(now)) return false;
 

@@ -7,9 +7,10 @@ from ..db import get_pool
 from ..error_codes import FOUNDATION_REQUIRED, GENERATION_FAILED
 from ..errors import AIServiceError, BadRequestError, NotFoundError
 from ..repositories import foundations as foundation_repo
+from ..repositories import outreach_projects as outreach_project_repo
 from ..repositories import outreach as outreach_repo
 from ..repositories import people as people_repo
-from .project_context import foundation_to_project_context, normalize_json
+from .project_context import apply_information_discovery_brief, foundation_to_project_context, normalize_json
 
 
 OUTREACH_BODY_MAX_CHARS = 300
@@ -138,6 +139,9 @@ async def refresh_outreach(user_id: str, person_id: str):
 
         foundation_row = await foundation_repo.get_latest_foundation(conn, person["project_id"])
         raw_foundation = foundation_row["foundation_json"] if foundation_row else None
+        active_outreach = None
+        if person["project_type"] == "startup":
+            active_outreach = await outreach_project_repo.find_active_information_discovery(conn, person["project_id"])
 
     foundation = normalize_json(raw_foundation)
     if not isinstance(foundation, dict):
@@ -146,7 +150,11 @@ async def refresh_outreach(user_id: str, person_id: str):
             code=FOUNDATION_REQUIRED,
         )
 
-    project_context = foundation_to_project_context(foundation, person["project_type"])
+    outreach_brief = normalize_json(active_outreach["brief_json"]) if active_outreach and active_outreach["brief_json"] else None
+    project_context = foundation_to_project_context(
+        apply_information_discovery_brief(foundation, outreach_brief if isinstance(outreach_brief, dict) else None),
+        person["project_type"],
+    )
     person_payload = _person_payload(person)
     try:
         generated = await generate_outreach_message(person_payload, project_context)

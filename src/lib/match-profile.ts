@@ -31,14 +31,24 @@ export function normalizeMatchScore(value: unknown): number | null {
 }
 
 export function foundationToMatchProfile(foundation: Foundation | null | undefined): ProjectMatchProfileJson {
-  const priorityRecipientTypes = cleanList(foundation?.priorityRecipientTypes);
+  const priorityRecipientTypes = cleanList(foundation?.priorityRecipientTypes ?? foundation?.idealPeopleTypes);
   const lowFitSignals = cleanList(foundation?.lowFitSignals ?? foundation?.messageBoundaries);
   const providedRubric = typeof foundation?.matchRubric === 'string' ? foundation.matchRubric.trim() : '';
   const matchRubric = providedRubric || [
-    foundation?.outreachGoal,
-    foundation?.recipients ? `Prioritize recipients like: ${foundation.recipients}` : null,
-    foundation?.sharedContext ? `Shared context/topic: ${foundation.sharedContext}` : null,
+    foundation?.outreachGoal ?? foundation?.summary,
+    foundation?.recipients
+      ? `Prioritize recipients like: ${foundation.recipients}`
+      : foundation?.targetUser
+        ? `Target user: ${foundation.targetUser}`
+        : null,
+    foundation?.sharedContext
+      ? `Shared context/topic: ${foundation.sharedContext}`
+      : foundation?.painPoint
+        ? `Pain point: ${foundation.painPoint}`
+        : null,
     foundation?.desiredOutcome ? `Useful if they can respond with: ${foundation.desiredOutcome}` : null,
+    foundation?.keyAssumptions?.length ? `Assumptions to test: ${foundation.keyAssumptions.join('; ')}` : null,
+    foundation?.learningGoals?.length ? `Learning goals: ${foundation.learningGoals.join('; ')}` : null,
   ].filter(Boolean).join('\n');
 
   return {

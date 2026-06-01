@@ -5,9 +5,17 @@
   overflow: hidden;
 }
 
+.chatInformationDiscovery {
+  width: 100%;
+}
+
 /* ── Intro turn: keep the first prompt and composer grouped ──────────────── */
 .chatIntro {
   justify-content: center;
+}
+
+.chatInformationDiscovery.chatIntro {
+  justify-content: flex-start;
 }
 
 .chatIntro .messages {
@@ -19,6 +27,17 @@
 .chatIntro .inputArea {
   width: 100%;
   padding-bottom: 0;
+}
+
+.chatInformationDiscovery.chatIntro .messages {
+  padding-top: 0;
+}
+
+.chatInformationDiscovery.chatIntro .assistantMsg {
+  max-width: min(100%, 560px);
+  background: #fffdf8;
+  border-color: #dfccb5;
+  box-shadow: 0 10px 26px rgba(46, 33, 21, 0.06);
 }
 
 /* ── Empty state: legacy fallback before the first server message ────────── */
@@ -35,7 +54,7 @@
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 0 8px;
+  padding: 18px 0 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -101,6 +120,10 @@
   padding-bottom: 28px;
 }
 
+.chatInformationDiscovery .inputArea {
+  padding-bottom: 0;
+}
+
 /* ── Kickoff (free text) ─────────────────────────────────────────────────── */
 .kickoffHeading {
   font-size: 20px;
@@ -121,8 +144,15 @@
   align-items: flex-end;
 }
 
+.chatInformationDiscovery .kickoffRow,
+.chatInformationDiscovery .customInputRow {
+  border-color: #d7c3aa;
+  box-shadow: 0 14px 34px rgba(46, 33, 21, 0.07);
+}
+
 .kickoffTextarea {
   flex: 1;
+  min-height: 42px;
   resize: none;
   border: none;
   background: transparent;
@@ -144,7 +174,9 @@
 
 /* ── Shared send button ──────────────────────────────────────────────────── */
 .sendBtn {
-  padding: 8px 18px;
+  min-width: 66px;
+  min-height: 34px;
+  padding: 8px 16px;
   background: #a4532b;
   color: #faf4ec;
   border: none;
@@ -251,6 +283,7 @@
 
 .customTextarea {
   flex: 1;
+  min-height: 42px;
   resize: none;
   border: none;
   background: transparent;
@@ -302,8 +335,8 @@
 .finishingArea {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
+  width: 100%;
   padding: 18px 0 8px;
   animation: finishingFadeIn 320ms ease-out;
 }
@@ -311,12 +344,15 @@
 .finishingHeader {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
+  width: 100%;
 }
 
 .finishingPulse {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
   border-radius: 50%;
   background: #a4532b;
   box-shadow: 0 0 0 0 rgba(164, 83, 43, 0.55);
@@ -324,6 +360,7 @@
 }
 
 .finishingTitle {
+  flex: 1;
   margin: 0;
   font-size: 15px;
   font-weight: 500;
@@ -360,19 +397,43 @@
 .finishingEllipsis span:nth-child(3) { animation-delay: 0.4s; }
 
 .finishingProgress {
-  width: 220px;
+  width: 100%;
   max-width: 100%;
-  height: 2px;
+  height: 3px;
   background: #ead9c0;
-  border-radius: 2px;
+  border-radius: 999px;
   overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(164, 83, 43, 0.06);
 }
 
 .finishingProgressBar {
-  width: 40%;
+  width: 32%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, #a4532b, transparent);
-  animation: finishingSlide 1.6s ease-in-out infinite;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(164, 83, 43, 0), #a4532b 45%, rgba(164, 83, 43, 0.18));
+  animation: finishingSlide 1.8s cubic-bezier(0.55, 0, 0.25, 1) infinite;
+}
+
+@media (max-width: 720px) {
+  .messages {
+    padding-top: 14px;
+  }
+
+  .assistantMsg,
+  .userMsg,
+  .chatInformationDiscovery.chatIntro .assistantMsg {
+    max-width: 100%;
+  }
+
+  .kickoffRow,
+  .customInputRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sendBtn {
+    width: 100%;
+  }
 }
 
 @keyframes finishingPulse {

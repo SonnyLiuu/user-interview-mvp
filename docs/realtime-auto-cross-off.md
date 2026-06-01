@@ -1,8 +1,13 @@
 # Realtime Auto-Cross-Off
 
 The desktop notepad can auto-check call-brief goals and questions while a live
-Zoom/Meet call is in progress. This is a V1 server-side OpenAI Realtime
-integration: the desktop app never receives an OpenAI API key.
+call is in progress. This is a V1 server-side OpenAI Realtime integration: the
+desktop app never receives an OpenAI API key.
+
+The production-facing contract is transcript-turn ingestion, not Windows audio
+capture. Local audio is one adapter into that contract; Zoom RTMS or a Meeting
+SDK bot can feed the same transcript-turn boundary later. See
+`docs/notetaker-architecture.md`.
 
 ## Runtime Flow
 
@@ -37,6 +42,9 @@ integration: the desktop app never receives an OpenAI API key.
 8. Native applies the event to the overlay. The row gets a checkmark and
    strikethrough.
 
+Future ingestion adapters can bypass steps 5 and 6 by POSTing transcript turns
+to `/v1/desktop/live-sessions/{sessionId}/transcript-turns`.
+
 ## Required OpenAI Setup
 
 Set these in `services/foundry-api/.env.local`:
@@ -56,7 +64,7 @@ Realtime, or `mock` for local no-key smoke tests.
 
 `OPENAI_REALTIME_API_KEY` is optional if `OPENAI_API_KEY` is already set; the
 Realtime bridge will fall back to `OPENAI_API_KEY`. The OpenAI key must stay on
-FastAPI. The native app uses Foundry's `liveToken`, not an OpenAI credential.
+FastAPI. The native app uses User Interview's `liveToken`, not an OpenAI credential.
 
 For Azure OpenAI / Azure AI Foundry realtime, set these instead:
 
@@ -94,6 +102,8 @@ Realtime transcription or semantic matching quality.
 ## What Is Hooked Up
 
 - Live session creation from desktop through Next to FastAPI.
+- Transcript-turn ingestion as the shared adapter boundary for local audio,
+  Zoom RTMS, or a Meeting SDK bot.
 - Server-side Realtime WebSocket to OpenAI.
 - 24 kHz mono PCM audio streaming from native to FastAPI with source tags.
 - Separate live transcription streams for founder mic and interviewee loopback.

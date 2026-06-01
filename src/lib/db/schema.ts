@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, boolean, integer, timestamp, uuid, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, integer, timestamp, uuid, jsonb, index, uniqueIndex, check } from 'drizzle-orm/pg-core';
 import { customType } from 'drizzle-orm/pg-core';
 
 // Custom type for text arrays with proper typing
@@ -147,6 +147,12 @@ export type CallPrepContent = {
   closing?: string;
 };
 
+export type OutreachProjectStatus = 'draft' | 'onboarding' | 'active' | 'paused' | 'completed' | 'archived';
+
+export type OutreachProjectBrief = Record<string, unknown>;
+
+export type OutreachProjectOnboardingState = Record<string, unknown>;
+
 // ── users ────────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -176,6 +182,43 @@ export const projects = pgTable('projects', {
   uniqueIndex('projects_active_user_slug_idx')
     .on(table.user_id, table.slug)
     .where(sql`${table.is_archived} = false and ${table.slug} is not null`),
+]);
+
+// ── outreach_projects ────────────────────────────────────────────────────────
+export const outreach_projects = pgTable('outreach_projects', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  startup_project_id: uuid('startup_project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  type: text('type').notNull(),
+  name: text('name').notNull(),
+  status: text('status').$type<OutreachProjectStatus>().notNull().default('draft'),
+  brief_json: jsonb('brief_json').$type<OutreachProjectBrief>(),
+  onboarding_state_json: jsonb('onboarding_state_json').$type<OutreachProjectOnboardingState>(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('outreach_projects_startup_created_at_idx').on(table.startup_project_id, table.created_at),
+  index('outreach_projects_startup_status_idx').on(table.startup_project_id, table.status),
+  uniqueIndex('outreach_projects_one_active_information_discovery_idx')
+    .on(table.startup_project_id, table.type)
+    .where(sql`${table.type} = 'information_discovery' and ${table.status} <> 'archived'`),
+  check('outreach_projects_type_check', sql`${table.type} in (
+    'information_discovery',
+    'customer_acquisition',
+    'beta_users',
+    'investor',
+    'partnership',
+    'recruiting',
+    'advisor',
+    'press_creator'
+  )`),
+  check('outreach_projects_status_check', sql`${table.status} in (
+    'draft',
+    'onboarding',
+    'active',
+    'paused',
+    'completed',
+    'archived'
+  )`),
 ]);
 
 // ── project_intake ────────────────────────────────────────────────────────────
@@ -317,13 +360,84 @@ export const call_prep = pgTable('call_prep', {
 export const interactions = pgTable('interactions', {
   id: uuid('id').primaryKey().defaultRandom(),
   person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
+  live_session_id: text('live_session_id'),
   type: text('type').default('call'),
   notes_raw: text('notes_raw'),
   transcript_raw: text('transcript_raw'),
   scheduled_at: timestamp('scheduled_at', { withTimezone: true }),
   completed_at: timestamp('completed_at', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  uniqueIndex('interactions_live_session_id_unique_idx')
+    .on(table.live_session_id)
+    .where(sql`${table.live_session_id} is not null`),
+]);
+
+export type LiveCallSessionTopic = {
+  id: string;
+  label: string;
+  category: string;
+  checked?: boolean;
+  checkedBy?: string | null;
+  checkedAt?: string | null;
+  evidence?: string | null;
+  manualOverride?: boolean;
+};
+
+export type LiveCallSessionMetadata = Record<string, unknown>;
+
+// ── live_call_sessions ───────────────────────────────────────────────────────
+export const live_call_sessions = pgTable('live_call_sessions', {
+  id: uuid('id').primaryKey(),
+  user_id: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }).notNull(),
+  status: text('status').notNull().default('active'),
+  capture_provider: text('capture_provider').notNull().default('zoom_rtms'),
+  zoom_meeting_identifier: text('zoom_meeting_identifier'),
+  zoom_meeting_id: text('zoom_meeting_id'),
+  zoom_meeting_uuid: text('zoom_meeting_uuid'),
+  rtms_stream_id: text('rtms_stream_id'),
+  topics_json: jsonb('topics_json').$type<LiveCallSessionTopic[]>().notNull(),
+  metadata: jsonb('metadata').$type<LiveCallSessionMetadata>(),
+  started_at: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  ended_at: timestamp('ended_at', { withTimezone: true }),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('live_call_sessions_user_status_idx').on(table.user_id, table.status),
+  index('live_call_sessions_person_started_idx').on(table.person_id, table.started_at),
+  index('live_call_sessions_zoom_meeting_id_idx').on(table.zoom_meeting_id),
+  index('live_call_sessions_zoom_meeting_uuid_idx').on(table.zoom_meeting_uuid),
+  index('live_call_sessions_rtms_stream_id_idx').on(table.rtms_stream_id),
+]);
+
+// ── live_transcript_turns ────────────────────────────────────────────────────
+export const live_transcript_turns = pgTable('live_transcript_turns', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  live_session_id: uuid('live_session_id').references(() => live_call_sessions.id, { onDelete: 'cascade' }).notNull(),
+  source: text('source').notNull(),
+  speaker: text('speaker'),
+  text: text('text').notNull(),
+  external_turn_id: text('external_turn_id'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('live_transcript_turns_session_created_idx').on(table.live_session_id, table.created_at),
+  uniqueIndex('live_transcript_turns_external_turn_unique_idx')
+    .on(table.live_session_id, table.external_turn_id)
+    .where(sql`${table.external_turn_id} is not null`),
+]);
+
+export const zoom_rtms_unbound_events = pgTable('zoom_rtms_unbound_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  event_type: text('event_type').notNull(),
+  zoom_meeting_id: text('zoom_meeting_id'),
+  zoom_meeting_uuid: text('zoom_meeting_uuid'),
+  rtms_stream_id: text('rtms_stream_id'),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('zoom_rtms_unbound_events_meeting_id_idx').on(table.zoom_meeting_id),
+  index('zoom_rtms_unbound_events_meeting_uuid_idx').on(table.zoom_meeting_uuid),
+]);
 
 // ── debriefs ──────────────────────────────────────────────────────────────────
 export const debriefs = pgTable('debriefs', {
@@ -443,12 +557,16 @@ export const person_events = pgTable('person_events', {
 // ── Inferred types ────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type Project = typeof projects.$inferSelect;
+export type OutreachProject = typeof outreach_projects.$inferSelect;
 export type ProjectIntake = typeof project_intake.$inferSelect;
 export type ProjectBrief = typeof project_briefs.$inferSelect;
 export type Person = typeof people.$inferSelect;
 export type Outreach = typeof outreach.$inferSelect;
 export type CallPrep = typeof call_prep.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;
+export type LiveCallSession = typeof live_call_sessions.$inferSelect;
+export type LiveTranscriptTurnRow = typeof live_transcript_turns.$inferSelect;
+export type ZoomRtmsUnboundEvent = typeof zoom_rtms_unbound_events.$inferSelect;
 export type Debrief = typeof debriefs.$inferSelect;
 export type Insight = typeof insights.$inferSelect;
 export type OnboardingSession = typeof onboarding_sessions.$inferSelect;

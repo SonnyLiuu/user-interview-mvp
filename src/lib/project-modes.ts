@@ -13,6 +13,8 @@ export type FoundationField = {
 type ProjectModeConfig = {
   label: string;
   description: string;
+  creatable: boolean;
+  visible: boolean;
   foundationFields: FoundationField[];
   personSections: {
     summary: string;
@@ -24,8 +26,10 @@ type ProjectModeConfig = {
 
 export const PROJECT_MODE_CONFIGS: Record<ProjectType, ProjectModeConfig> = {
   startup: {
-    label: 'Startup discovery',
-    description: 'Customer discovery and founder learning.',
+    label: 'Startup',
+    description: 'Startup workspace for founder learning and outreach.',
+    creatable: true,
+    visible: true,
     foundationFields: [
       { key: 'summary', label: 'Summary', placeholder: "Describe what you're building...", kind: 'text' },
       { key: 'painPoint', label: 'Core Problem', placeholder: 'What pain does this solve?', kind: 'text' },
@@ -33,7 +37,6 @@ export const PROJECT_MODE_CONFIGS: Record<ProjectType, ProjectModeConfig> = {
       { key: 'targetUser', label: 'Target User', placeholder: 'Who is the primary person experiencing the problem?', kind: 'text' },
       { key: 'idealPeopleTypes', label: 'Ideal People to Talk To', placeholder: 'Describe this person type...', kind: 'list', addLabel: '+ Add person type' },
       { key: 'differentiation', label: 'Differentiation', placeholder: 'What makes this different from existing solutions?', kind: 'text' },
-      { key: 'biggestUnknown', label: 'Research Cue', placeholder: 'What is the biggest unknown to test next?', kind: 'text' },
     ],
     personSections: {
       summary: 'Summary',
@@ -45,6 +48,8 @@ export const PROJECT_MODE_CONFIGS: Record<ProjectType, ProjectModeConfig> = {
   networking: {
     label: 'Networking outreach',
     description: 'Targeted outreach based on sender goals, recipient background, and composition style.',
+    creatable: false,
+    visible: false,
     foundationFields: [
       { key: 'outreachGoal', label: 'Outreach Goal', placeholder: 'What are you trying to accomplish with this outreach?', kind: 'text' },
       { key: 'recipients', label: 'Recipients', placeholder: 'Who are you reaching out to?', kind: 'text' },
@@ -70,6 +75,14 @@ export const PROJECT_MODE_CONFIGS: Record<ProjectType, ProjectModeConfig> = {
     },
   },
 };
+
+export const CREATABLE_PROJECT_TYPES = Object.entries(PROJECT_MODE_CONFIGS)
+  .filter(([, config]) => config.creatable)
+  .map(([projectType]) => projectType) as [ProjectType, ...ProjectType[]];
+
+export const VISIBLE_PROJECT_TYPES = Object.entries(PROJECT_MODE_CONFIGS)
+  .filter(([, config]) => config.visible)
+  .map(([projectType]) => projectType) as [ProjectType, ...ProjectType[]];
 
 export function getProjectModeConfig(projectType: ProjectType | string | null | undefined): ProjectModeConfig {
   return PROJECT_MODE_CONFIGS[projectType as ProjectType] ?? PROJECT_MODE_CONFIGS.startup;

@@ -10,11 +10,16 @@ import {
   project_briefs,
   project_foundations,
   project_intake,
+  outreach_projects,
   transcripts,
   type InsightContent,
 } from '@/lib/db/schema';
-import type { Foundation } from '@/lib/backend-types';
+import type { Foundation, InformationDiscoveryBrief } from '@/lib/backend-types';
 import { generateObject } from '@/lib/ai/provider';
+import {
+  applyInformationDiscoveryBrief,
+  normalizeInformationDiscoveryBrief,
+} from '@/lib/information-discovery-context-core';
 import {
   evidenceLevelForCalls,
   hasInterviewData,
@@ -75,16 +80,24 @@ type InsightDataSet = {
   records: InsightSourceRecord[];
   assumptions: string[];
   foundation: Foundation | null;
+  activeDiscoveryBrief: InformationDiscoveryBrief | null;
+  contextUpdatedAt: Date | null;
 };
 
 export type ProjectInsightsState =
-  | { kind: 'empty'; completedInteractionCount: number; transcriptCount: number }
+  | {
+      kind: 'empty';
+      completedInteractionCount: number;
+      transcriptCount: number;
+      activeDiscoveryBrief: InformationDiscoveryBrief | null;
+    }
   | {
       kind: 'ready';
       content: InsightContent;
       generatedAt: Date | null;
       callsAnalyzed: number;
       latestDataAt: Date | null;
+      activeDiscoveryBrief: InformationDiscoveryBrief | null;
     };
 
 const insightSchema = {
@@ -201,6 +214,7 @@ function dedupe(values: string[], limit = 12) {
 
 function assumptionsFromFoundation(foundation: Foundation | null): string[] {
   if (!foundation) return [];
+  const activeDiscovery = foundation.activeOutreachProject;
   return dedupe([
     cleanString(foundation.painPoint) ? `The problem is painful: ${cleanString(foundation.painPoint)}` : '',
     cleanString(foundation.targetUser) ? `The target user is correct: ${cleanString(foundation.targetUser)}` : '',
@@ -209,7 +223,12 @@ function assumptionsFromFoundation(foundation: Foundation | null): string[] {
     cleanString(foundation.outreachGoal) ? `The outreach goal is resonating: ${cleanString(foundation.outreachGoal)}` : '',
     cleanString(foundation.sharedContext) ? `Shared context is relevant: ${cleanString(foundation.sharedContext)}` : '',
     cleanString(foundation.desiredOutcome) ? `The desired outcome is useful: ${cleanString(foundation.desiredOutcome)}` : '',
+    ...cleanList(foundation.learningGoals).map((goal) => `Learning goal: ${goal}`),
+    ...cleanList(foundation.keyAssumptions).map((assumption) => `Information Discovery assumption: ${assumption}`),
+    ...(activeDiscovery ? cleanList(activeDiscovery.assumptionsToTest).map((assumption) => `Information Discovery assumption: ${assumption}`) : []),
+    ...(activeDiscovery ? cleanList(activeDiscovery.learningGoals).map((goal) => `Learning goal: ${goal}`) : []),
     ...cleanList(foundation.lowFitSignals).map((signal) => `Low-fit signal to watch: ${signal}`),
+    ...cleanList(foundation.messageBoundaries).map((boundary) => `Keep discovery grounded: ${boundary}`),
   ]);
 }
 
@@ -315,6 +334,7 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
     [brief],
     [intake],
     [foundationRow],
+    [activeDiscoveryRow],
   ] = await Promise.all([
     db
       .select({
@@ -368,6 +388,19 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
       .where(eq(project_foundations.project_id, projectId))
       .orderBy(desc(project_foundations.generated_at))
       .limit(1),
+    db
+      .select({
+        brief: outreach_projects.brief_json,
+        updatedAt: outreach_projects.updated_at,
+      })
+      .from(outreach_projects)
+      .where(and(
+        eq(outreach_projects.startup_project_id, projectId),
+        eq(outreach_projects.type, 'information_discovery'),
+        eq(outreach_projects.status, 'active'),
+      ))
+      .orderBy(desc(outreach_projects.updated_at))
+      .limit(1),
   ]);
 
   const events = eventMetadataByInteraction(eventRows);
@@ -376,7 +409,11 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
   const records = [...interactionRecords, ...transcriptOnlyRecords]
     .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0))
     .slice(0, MAX_RECORDS);
-  const foundation = foundationRow?.foundation_json as Foundation | null | undefined ?? null;
+  const baseFoundation = foundationRow?.foundation_json as Foundation | null | undefined ?? null;
+  const activeDiscoveryBrief = normalizeInformationDiscoveryBrief(activeDiscoveryRow?.brief) ?? null;
+  const foundation = activeDiscoveryBrief
+    ? applyInformationDiscoveryBrief(baseFoundation, activeDiscoveryBrief)
+    : baseFoundation;
   const briefAssumptions = Array.isArray(brief?.assumptions)
     ? brief.assumptions.map((item) => cleanString(item?.assumption)).filter(Boolean)
     : [];
@@ -397,6 +434,8 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
     records,
     assumptions,
     foundation,
+    activeDiscoveryBrief,
+    contextUpdatedAt: activeDiscoveryRow?.updatedAt ?? null,
   };
 }
 
@@ -429,6 +468,7 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
       kind: 'empty',
       completedInteractionCount: data.completedInteractionCount,
       transcriptCount: data.transcriptCount,
+      activeDiscoveryBrief: data.activeDiscoveryBrief,
     };
   }
 
@@ -441,7 +481,7 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
 
   if (current && current.content && isInsightFresh(current, {
     interviewCount: data.interviewCount,
-    latestDataAt: data.latestDataAt,
+    latestDataAt: latestDate([data.latestDataAt, data.contextUpdatedAt]),
   })) {
     return {
       kind: 'ready',
@@ -452,6 +492,7 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
       generatedAt: current.generated_at,
       callsAnalyzed: current.calls_analyzed ?? data.interviewCount,
       latestDataAt: data.latestDataAt,
+      activeDiscoveryBrief: data.activeDiscoveryBrief,
     };
   }
 
@@ -481,5 +522,6 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
     generatedAt: created.generated_at,
     callsAnalyzed: created.calls_analyzed ?? data.interviewCount,
     latestDataAt: data.latestDataAt,
+    activeDiscoveryBrief: data.activeDiscoveryBrief,
   };
 }

@@ -169,17 +169,25 @@ function StageActions({ person, stage, onUpdate }: ActionsProps) {
     setShowDownloadHint(false);
 
     try {
+      const rawZoomMeetingIdentifier = window.prompt('Paste the Zoom meeting link or meeting ID for this call.');
+      if (rawZoomMeetingIdentifier === null) return;
+      const zoomMeetingIdentifier = rawZoomMeetingIdentifier.trim();
+      if (!zoomMeetingIdentifier) {
+        setShowDownloadHint(true);
+        return;
+      }
+
       const res = await fetch('/api/desktop/launch-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personId: person.id }),
+        body: JSON.stringify({ personId: person.id, zoomMeetingIdentifier }),
       });
       if (!res.ok) {
         setShowDownloadHint(true);
         return;
       }
 
-      const payload = await res.json() as { token?: string };
+      const payload = await res.json() as { token?: string; zoomMeetingIdentifier?: string | null };
       if (!payload.token) {
         setShowDownloadHint(true);
         return;
@@ -188,6 +196,9 @@ function StageActions({ person, stage, onUpdate }: ActionsProps) {
       const url = new URL('foundry://call/start');
       url.searchParams.set('personId', person.id);
       url.searchParams.set('token', payload.token);
+      if (payload.zoomMeetingIdentifier) {
+        url.searchParams.set('zoomMeetingIdentifier', payload.zoomMeetingIdentifier);
+      }
       window.location.href = url.toString();
       window.setTimeout(() => setShowDownloadHint(true), 1500);
     } finally {
@@ -313,7 +324,7 @@ function StageActions({ person, stage, onUpdate }: ActionsProps) {
         </div>
         {showDownloadHint && (
           <div className={styles.actionNote} style={{ flexBasis: '100%' }}>
-            Nothing happened? <Link href="/download">Download Foundry Overlay →</Link>
+            Nothing happened? <Link href="/download">Download User Interview Notetaker →</Link>
           </div>
         )}
       </div>
@@ -645,9 +656,9 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, i
           {/* ── Call Brief ───────────────────────────────────────────────── */}
           <CallBriefSection personId={person.id} slug={slug} stage={stage} initialPrep={initialCallPrep} />
 
-          {projectType === 'networking' && (matchRank || matchExplanation || matchFactors) && (
+          {(projectType === 'networking' || person.match_profile_version) && (matchRank || matchExplanation || matchFactors) && (
             <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Match</h2>
+              <h2 className={styles.sectionTitle}>{projectType === 'networking' ? 'Match' : 'Discovery fit'}</h2>
               <div className={styles.matchPanel}>
                 <div className={styles.matchSummaryRow}>
                   {matchRank && (

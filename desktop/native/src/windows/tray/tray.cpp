@@ -100,7 +100,7 @@ TrayIcon::TrayIcon(TrayActions actions) : actions_(std::move(actions)) {
     ownsIcon_ = icon_ != nullptr;
     if (!icon_) icon_ = LoadIcon(nullptr, IDI_APPLICATION);
     nid_.hIcon = icon_;
-    wcscpy_s(nid_.szTip, L"Foundry Overlay");
+    wcscpy_s(nid_.szTip, L"User Interview Notetaker");
 
     if (!Shell_NotifyIconW(NIM_ADD, &nid_)) {
         std::cerr << "Tray: Shell_NotifyIcon(NIM_ADD) failed: "

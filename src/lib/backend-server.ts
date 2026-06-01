@@ -7,6 +7,7 @@ import { buildBackendUrl, createBackendHeaders } from '@/lib/backend-utils';
 import type {
   FoundationViewPayload,
   LatestProjectPayload,
+  OutreachProjectRecord,
   ProjectLookupPayload,
   ProjectNavItem,
   WorkspaceSummaryPayload,
@@ -79,3 +80,17 @@ export const getFoundationView = cache(async function getFoundationView(projectI
     { allowNotFound: true },
   );
 });
+
+export async function listOutreachProjects(startupProjectId: string) {
+  return backendFetchServer<OutreachProjectRecord[]>(
+    `/v1/projects/${startupProjectId}/outreach-projects`,
+  );
+}
+
+export async function getOutreachProject(outreachProjectId: string) {
+  return backendFetchServer<OutreachProjectRecord | null>(
+    `/v1/outreach-projects/${outreachProjectId}`,
+    undefined,
+    { allowNotFound: true },
+  );
+}

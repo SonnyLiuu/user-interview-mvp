@@ -198,12 +198,13 @@
 .projectSwitcherHeader {
   display: flex;
   align-items: stretch;
+  height: 52px;
   border-bottom: 1px solid #e8d9c4;
 }
 
 .projectSwitcherBtn {
   width: 100%;
-  height: 44px;
+  height: 100%;
   display: flex;
   align-items: center;
   gap: 8px;

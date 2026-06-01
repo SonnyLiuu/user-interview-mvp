@@ -1,12 +1,12 @@
 import Link from 'next/link';
-import { env } from '@/lib/server-env';
+import { getNotetakerDownloadHref } from '@/lib/notetaker-download';
 
 export const metadata = {
-  title: 'Download Foundry Overlay',
+  title: 'Download User Interview Notetaker',
 };
 
 export default function DownloadPage() {
-  const installerHref = env.FOUNDRY_OVERLAY_INSTALLER_URL?.trim();
+  const installerHref = getNotetakerDownloadHref();
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: '64px 24px', lineHeight: 1.6, color: '#2a1f14' }}>
@@ -15,56 +15,34 @@ export default function DownloadPage() {
       </p>
 
       <h1 style={{ fontSize: 32, fontWeight: 600, margin: '8px 0 12px' }}>
-        Foundry Overlay for Windows
+        User Interview Notetaker for Windows
       </h1>
       <p style={{ color: '#5f4a39', margin: 0, fontSize: 15 }}>
         A small companion app that runs alongside Zoom and auto-checks your
-        interview goals as you cover them. Invisible during screen shares;
-        saves the transcript back to your dashboard when the call ends.
+        interview goals as you cover them. The checklist is visible during
+        screen shares and saves the transcript back to your dashboard when the
+        call ends.
       </p>
 
       <div style={{ marginTop: 32, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        {installerHref ? (
-          <a
-            href={installerHref}
-            download
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '12px 22px',
-              fontSize: 15,
-              fontWeight: 500,
-              color: '#fff',
-              background: '#a4532b',
-              borderRadius: 10,
-              textDecoration: 'none',
-            }}
-          >
-            Download for Windows (.exe)
-          </a>
-        ) : (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '12px 22px',
-              fontSize: 15,
-              fontWeight: 500,
-              color: '#7a5a38',
-              background: '#f5ede3',
-              borderRadius: 10,
-            }}
-          >
-            Installer not published yet
-          </span>
-        )}
+        <a
+          href={installerHref}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '12px 22px',
+            fontSize: 15,
+            fontWeight: 500,
+            color: '#fff',
+            background: '#a4532b',
+            borderRadius: 10,
+            textDecoration: 'none',
+          }}
+        >
+          Download for Windows (.exe)
+        </a>
         <span style={{ color: '#8a705a', fontSize: 13 }}>v0.1.0 · 64-bit · ~3 MB</span>
       </div>
-      {!installerHref && (
-        <p style={{ marginTop: 12, color: '#8a705a', fontSize: 14 }}>
-          The Windows installer URL has not been configured for this environment.
-        </p>
-      )}
 
       <section style={{ marginTop: 48 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>How to install</h2>
@@ -77,18 +55,18 @@ export default function DownloadPage() {
             — no admin needed.
           </li>
           <li style={{ marginBottom: 8 }}>
-            Launch <strong>Foundry Overlay</strong> from the Start Menu. A small
+            Launch <strong>User Interview Notetaker</strong> from the Start Menu. A small
             notepad-style overlay appears in the top-right and a tray icon
             shows up next to the clock.
           </li>
           <li style={{ marginBottom: 8 }}>
             Click <strong>Settings</strong> on the overlay → <strong>Sign in</strong>.
-            A browser window opens; sign in with your Foundry account.
+            A browser window opens; sign in with your User Interview account.
           </li>
           <li style={{ marginBottom: 8 }}>
             Back in this dashboard, open a scheduled person and click
             <strong> Start call</strong>. The overlay loads that person's brief
-            and starts listening when you join your Zoom call.
+            and starts listening when your call starts.
           </li>
         </ol>
       </section>
@@ -119,7 +97,7 @@ export default function DownloadPage() {
           <li>
             <a href="https://developer.microsoft.com/microsoft-edge/webview2/" style={{ color: '#a4532b' }}>WebView2 Runtime</a> — preinstalled on Windows 11
           </li>
-          <li>Default speaker + microphone set to whatever you use for Zoom calls</li>
+          <li>Default speaker + microphone set to whatever you use for calls</li>
         </ul>
       </section>
     </main>

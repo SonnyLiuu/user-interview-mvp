@@ -81,7 +81,7 @@ function buildFallbackConfig(): EnvConfig {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
     ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
-    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-pro',
   };
 }
 
@@ -123,7 +123,7 @@ function readAndValidateEnvironment(): EnvConfig {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
     ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
-    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-pro',
   };
 }
 

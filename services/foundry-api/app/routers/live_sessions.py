@@ -4,7 +4,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, Header, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, Header, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import StreamingResponse
 
 from ..auth import AuthContext, get_auth_context
@@ -14,12 +14,17 @@ from ..schemas.live_sessions import (
     LiveSessionResponse,
     LiveSessionStartRequest,
     LiveSessionStateResponse,
+    LiveTranscriptTurnRequest,
+    LiveTranscriptTurnResponse,
     LiveTopicOverrideRequest,
     LiveTopicOverrideResponse,
+    TranscriptUploadResponse,
 )
 from ..services.live_sessions import (
     end_live_session,
     get_live_session,
+    ingest_live_transcript_turn,
+    ingest_transcript_upload,
     override_live_session_topic,
     start_live_session,
     stream_audio_to_live_session,
@@ -44,7 +49,13 @@ async def create_live_session(
     body: LiveSessionStartRequest,
     auth: AuthContext = Depends(get_auth_context),
 ):
-    return await start_live_session(auth.user_id, body.person_id)
+    return await start_live_session(
+        auth.user_id,
+        body.person_id,
+        capture_provider=body.capture_provider,
+        zoom_meeting_identifier=body.zoom_meeting_identifier,
+        meeting_url=body.meeting_url,
+    )
 
 
 @router.get("/{session_id}", response_model=LiveSessionStateResponse, response_model_by_alias=True)
@@ -52,7 +63,7 @@ async def read_live_session(
     session_id: str,
     authorization: str | None = Header(default=None, alias="Authorization"),
 ):
-    return get_live_session(session_id, _bearer_token(authorization))
+    return await get_live_session(session_id, _bearer_token(authorization))
 
 
 @router.post("/{session_id}/end", response_model=LiveSessionEndResponse, response_model_by_alias=True)
@@ -74,11 +85,62 @@ async def override_live_topic(
     body: LiveTopicOverrideRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
 ):
-    return override_live_session_topic(
+    return await override_live_session_topic(
         session_id,
         _bearer_token(authorization),
         topic_id,
         checked=body.checked,
+    )
+
+
+@router.post(
+    "/{session_id}/transcript-turns",
+    response_model=LiveTranscriptTurnResponse,
+    response_model_by_alias=True,
+)
+async def append_live_transcript_turn(
+    session_id: str,
+    body: LiveTranscriptTurnRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    return await ingest_live_transcript_turn(
+        session_id,
+        _bearer_token(authorization),
+        source=body.source,
+        speaker=body.speaker,
+        transcript=body.text,
+        external_turn_id=body.external_turn_id,
+    )
+
+
+@router.post(
+    "/{session_id}/transcript-upload",
+    response_model=TranscriptUploadResponse,
+    response_model_by_alias=True,
+)
+async def upload_transcript_file(
+    session_id: str,
+    file: UploadFile,
+    speaker_map: str | None = Query(default=None, alias="speakerMap"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    """Upload a transcript file (.txt, .vtt, .srt) and ingest its turns."""
+    import json as _json
+
+    speaker_map_dict: dict[str, str] | None = None
+    if speaker_map:
+        try:
+            speaker_map_dict = _json.loads(speaker_map)
+        except _json.JSONDecodeError:
+            pass
+
+    content = await file.read()
+    return await ingest_transcript_upload(
+        session_id,
+        _bearer_token(authorization),
+        content=content,
+        filename=file.filename or "transcript.txt",
+        speaker_map=speaker_map_dict,
     )
 
 

@@ -67,7 +67,7 @@ export default function DesktopAuthPage() {
       padding: 24,
     }}>
       <section style={{ width: 'min(420px, 100%)' }}>
-        <h1 style={{ fontSize: 22, margin: '0 0 8px' }}>Foundry Desktop</h1>
+        <h1 style={{ fontSize: 22, margin: '0 0 8px' }}>User Interview Desktop</h1>
         <p style={{ color: '#a1a1aa', margin: '0 0 24px', fontSize: 14 }}>{status}</p>
         {isLoaded && !isSignedIn ? (
           <SignIn routing="hash" afterSignInUrl="/desktop-auth" signUpUrl="/signup" />

@@ -1,1 +1,1 @@
-"""Startup Foundry FastAPI backend."""
+"""User Interview FastAPI backend."""

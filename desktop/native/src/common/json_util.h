@@ -20,4 +20,8 @@ std::wstring wideValue(const Json& object,
                        const char* key,
                        const std::wstring& fallback = L"");
 
+// Try to extract a user-facing error message from a JSON response body.
+// Returns the "error" field if present, otherwise the raw body.
+std::wstring extractErrorMessage(const std::string& responseBody);
+
 }  // namespace foundry::json

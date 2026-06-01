@@ -3,6 +3,7 @@
 #include "renderer.h"
 
 #include <windowsx.h>
+#include <algorithm>
 #include <iostream>
 #include <utility>
 
@@ -583,8 +584,13 @@ OverlayWindow createOverlayWindow(OverlayActions actions) {
     }
 
     const UINT dpi = GetDpiForSystem();
-    const int width  = MulDiv(340, dpi, 96);
-    const int height = MulDiv(420, dpi, 96);
+    const int workHeight = mi.rcWork.bottom - mi.rcWork.top;
+    const double monitorScale = std::clamp(
+        static_cast<double>(workHeight) / 1800.0,
+        0.90,
+        1.24);
+    const int width  = static_cast<int>(MulDiv(340, dpi, 96) * monitorScale);
+    const int height = static_cast<int>(MulDiv(420, dpi, 96) * monitorScale);
     const int margin = MulDiv(24, dpi, 96);
 
     // Position top-right of the primary monitor work area, so taskbars and
@@ -598,7 +604,7 @@ OverlayWindow createOverlayWindow(OverlayActions actions) {
     HWND hwnd = CreateWindowExW(
         WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
         kOverlayWindowClass,
-        L"Foundry Overlay",
+        L"User Interview Notetaker",
         WS_POPUP,
         x, y, width, height,
         nullptr, nullptr, hinst, state);
@@ -607,16 +613,6 @@ OverlayWindow createOverlayWindow(OverlayActions actions) {
         std::cerr << "CreateWindowExW failed: " << GetLastError() << "\n";
         delete state;
         return result;
-    }
-
-    // Core of the pivot: tell DWM to omit this window from screen capture.
-    // Requires Windows 10 version 2004 (build 19041) or newer.
-    if (SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)) {
-        result.excludedFromCapture = true;
-    } else {
-        std::cerr << "SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE) failed: "
-                  << GetLastError()
-                  << " — overlay will be visible in screen shares.\n";
     }
 
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);

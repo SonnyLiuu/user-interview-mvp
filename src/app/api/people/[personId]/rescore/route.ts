@@ -4,6 +4,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, project_foundations, projects, users, type CrawledContent, type ProjectMatchProfileJson } from '@/lib/db/schema';
 import { analyzePerson } from '@/lib/ai/analyze-person';
+import { applyInformationDiscoveryBrief, getActiveInformationDiscoveryBrief } from '@/lib/information-discovery-context';
 import { ensureProjectMatchProfile, matchRankForScore, normalizeMatchScore, scoreFromRank } from '@/lib/match-profile';
 import type { Foundation, ProjectType } from '@/lib/backend-types';
 
@@ -14,17 +15,33 @@ function foundationToAnalysisContext(
   projectType: ProjectType,
   matchProfile?: { version: number; profile_json: ProjectMatchProfileJson | null } | null,
 ) {
+  const profile = matchProfile?.profile_json;
   if (projectType !== 'networking') {
     return {
       project_type: projectType,
-      idea_summary: foundation?.summary ?? null,
+      idea_summary: [
+        foundation?.summary,
+        foundation?.desiredOutcome ? `Information Discovery outcome: ${foundation.desiredOutcome}` : null,
+        foundation?.learningGoals?.length ? `Learning goals: ${foundation.learningGoals.join('; ')}` : null,
+        foundation?.messageBoundaries?.length ? `Conversation boundaries: ${foundation.messageBoundaries.join('; ')}` : null,
+      ].filter(Boolean).join('\n') || null,
       target_customer: foundation?.targetUser ?? null,
-      key_assumptions: [foundation?.painPoint, foundation?.valueProp, foundation?.targetUser].filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
+      key_assumptions: [
+        ...(Array.isArray(foundation?.keyAssumptions) ? foundation.keyAssumptions : []),
+        foundation?.painPoint,
+        foundation?.valueProp,
+        foundation?.targetUser,
+        foundation?.desiredOutcome,
+      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
       most_promising_avenues: foundation?.idealPeopleTypes ?? null,
+      match_rubric: profile?.matchRubric ?? foundation?.matchRubric ?? null,
+      low_fit_signals: profile?.lowFitSignals ?? (Array.isArray(foundation?.messageBoundaries) ? foundation.messageBoundaries : []),
+      match_profile_version: matchProfile?.version ?? null,
+      positive_patterns: profile?.positivePatterns ?? [],
+      negative_patterns: profile?.negativePatterns ?? [],
     };
   }
 
-  const profile = matchProfile?.profile_json;
   const priorityRecipientTypes = Array.isArray(foundation?.priorityRecipientTypes)
     ? foundation.priorityRecipientTypes.filter((item): item is string => typeof item === 'string')
     : profile?.priorityRecipientTypes ?? foundation?.idealPeopleTypes ?? null;
@@ -84,7 +101,12 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const row = rows[0];
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const projectType = (row.projectType ?? 'startup') as ProjectType;
-  if (projectType !== 'networking') return NextResponse.json({ error: 'Only networking people can be rescored' }, { status: 400 });
+  const activeDiscoveryBrief = projectType === 'startup'
+    ? await getActiveInformationDiscoveryBrief(row.person.project_id!)
+    : null;
+  if (projectType !== 'networking' && !activeDiscoveryBrief) {
+    return NextResponse.json({ error: 'Only people with an active outreach match profile can be rescored' }, { status: 400 });
+  }
   const sourceText = contentText(row.person.crawled_content as CrawledContent | null);
   if (!sourceText) return NextResponse.json({ error: 'No stored source material to rescore' }, { status: 400 });
 
@@ -102,8 +124,11 @@ export async function POST(_req: NextRequest, { params }: Params) {
         .orderBy(desc(project_foundations.generated_at))
         .limit(1);
       const foundation = foundationRow?.foundation_json as Foundation | null | undefined;
-      const matchProfile = await ensureProjectMatchProfile(row.person.project_id!, foundation);
-      const analysis = await analyzePerson(sourceText, foundationToAnalysisContext(foundation ?? null, projectType, matchProfile));
+      const contextualFoundation = activeDiscoveryBrief
+        ? applyInformationDiscoveryBrief(foundation, activeDiscoveryBrief)
+        : foundation;
+      const matchProfile = await ensureProjectMatchProfile(row.person.project_id!, contextualFoundation);
+      const analysis = await analyzePerson(sourceText, foundationToAnalysisContext(contextualFoundation ?? null, projectType, matchProfile));
       const matchScore = normalizeMatchScore(analysis.match_score) ?? scoreFromRank(analysis.relevance_rank) ?? null;
       const matchRank = matchScore === null ? analysis.relevance_rank ?? null : matchRankForScore(matchScore);
 

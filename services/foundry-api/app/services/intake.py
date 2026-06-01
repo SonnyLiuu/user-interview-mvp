@@ -24,7 +24,9 @@ Cover these 5 areas progressively:
 
 Ask 1-2 questions at a time. Probe vague answers. Don't rush through topics.
 
-When you have enough information across all 5 areas, end your message with this exact JSON block on its own line:
+Important: Write in plain conversational text. Do NOT use markdown formatting (no **bold**, no *italic*, no ``` code fences, no bullet lists with - or * prefixes). Just natural paragraphs.
+
+When you have enough information across all 5 areas, end your message with this exact JSON block on its own line — NOT wrapped in ``` fences:
 {"intake_complete": true}
 
 If the project already has a brief (you'll be told), act as an ongoing advisor - help the founder refine thinking, explore new angles, challenge weak assumptions. Do not re-run the intake flow."""
@@ -50,7 +52,7 @@ def get_foundation_advisor_prompt(foundation: dict, project_type: str = "startup
             "You are a strategic advisor and editor for this networking outreach foundation document."
             if is_networking
             else
-            "You are a strategic advisor and editor for this founder's project foundation document."
+            "You are a strategic advisor and editor for this founder's startup foundation document."
         ),
         (
             "Your role is to help them sharpen targeting, message context, and outreach asks - not to re-run intake."
@@ -81,13 +83,15 @@ def get_foundation_advisor_prompt(foundation: dict, project_type: str = "startup
         }
     else:
         labels = {
+            "startupName": "Startup Name",
             "summary": "Summary",
             "targetUser": "Target User",
             "painPoint": "Core Problem",
             "valueProp": "Value Proposition",
             "idealPeopleTypes": "Ideal People to Talk To",
+            "startupStage": "Startup Stage",
+            "traction": "Traction",
             "differentiation": "Differentiation",
-            "biggestUnknown": "Biggest Unknown",
         }
     for key, label in labels.items():
         value = foundation.get(key)
@@ -107,14 +111,19 @@ def get_foundation_advisor_prompt(foundation: dict, project_type: str = "startup
         "- If the founder wants to update or add a section, help them get to a sharper version.",
         "- Keep responses focused. One thread at a time.",
         "",
+        "Formatting:",
+        "Write in plain conversational text — like you're talking to a founder in a coffee shop.",
+        "Do NOT use markdown formatting: no **bold**, no *italic*, no ``` code fences, no bullet lists with - or * prefixes.",
+        "Just write natural paragraphs. List items should be plain numbered sentences (1. 2. 3.) if needed.",
+        "",
         "Editing the document:",
-        "When you want to make a concrete change to the foundation document, end your response with this exact JSON block on its own line:",
+        "When you want to make a concrete change to the foundation document, end your response with this exact JSON block on its own line — NOT wrapped in ``` fences:",
         '{"foundation_patch": {"fieldName": "updated value"}}',
         (
             "Available fields for networking: outreachGoal, recipients, senderContext, sharedContext, desiredOutcome, requiredMentions (array of strings), optionalMentions (array of strings), personalizationStrategy, tone, channelFormat, messageBoundaries (array of strings), nextSourcingStep, priorityRecipientTypes (array of strings), matchRubric, lowFitSignals (array of strings)."
             if is_networking
             else
-            "Available fields: summary, targetUser, painPoint, valueProp, idealPeopleTypes (array of strings), differentiation, biggestUnknown."
+            "Available fields: startupName, summary, targetUser, painPoint, valueProp, idealPeopleTypes (array of strings), startupStage, traction (array of strings), differentiation."
         ),
         "Only include fields you are actually changing. Only emit the patch block when making a real edit, not for discussion.",
         'Do not output {"intake_complete": true}. Do not restart the intake flow.',

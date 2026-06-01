@@ -22,6 +22,22 @@ RealtimeToolHandler = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 RealtimeStatusHandler = Callable[[str, str | None], None]
 
 
+@dataclass
+class NormalizedTurn:
+    """Provider-agnostic transcript turn passed to the checklist bridge.
+
+    The bridge only looks at *speaker_label* and *text* — never at the raw
+    source string.  *provider* is informational for logging.
+    """
+    provider: str       # "desktop_audio" | "zoom_rtms"
+    speaker_label: str  # "Founder" | "Interviewee" | participant name
+    text: str
+    timestamp_ms: int = 0
+
+    def to_labeled_line(self) -> str:
+        return f"{self.speaker_label}: {self.text}"
+
+
 @dataclass(frozen=True)
 class RealtimeConnectionConfig:
     url: str
@@ -52,9 +68,10 @@ def _instructions(session: LiveSessionState) -> str:
         "- Do not speak to the meeting participants.\n"
         "- Do not create, edit, save, or delete checklist items.\n"
         "- Only call mark_item_covered or mark_items_covered for existing item IDs listed below.\n"
-        "- Transcript turns are labeled exactly as Founder: ... or Interviewee: ... .\n"
+        "- Transcript turns are labeled as Founder: ..., Interviewee: ..., Speaker: ..., or a participant name.\n"
         "- Questions should normally be marked only from Founder: turns.\n"
         "- Goals should normally be marked only from Interviewee: turns.\n"
+        "- If the label is a participant name or Speaker, use the content of the exchange rather than the label alone.\n"
         "- Do not mark a goal from Founder: restating a hoped-for answer unless "
         "an Interviewee: turn confirms it.\n"
         "- Call the tool only when the founder clearly asked the question, or "
@@ -148,8 +165,12 @@ def _safety_identifier(session: LiveSessionState) -> str:
 
 
 def _checklist_provider() -> str:
-    provider = get_settings().checklist_ai_provider.strip().lower()
-    return provider if provider else "openai"
+    settings = get_settings()
+    provider = settings.checklist_ai_provider.strip().lower()
+    if provider:
+        return provider
+    # Fall back to the main AI_PROVIDER if CHECKLIST_AI_PROVIDER is not set
+    return settings.ai_provider.strip().lower() or "openai"
 
 
 def _realtime_api_key() -> str | None:
@@ -213,12 +234,14 @@ class RealtimeBridge:
         self._ws = None
         self._handled_call_ids: set[str] = set()
         self._mock_checked_ids: set[str] = set()
-        self._turn_queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
+        self._turn_queue: asyncio.Queue[NormalizedTurn] = asyncio.Queue()
         self._response_done = asyncio.Event()
         self._response_done.set()
         self._connection_provider = ""
         self._turns_sent = 0
         self._seen_event_types: set[str] = set()
+        self._pending_turn: NormalizedTurn | None = None
+        self._pending_flush_task: asyncio.Task | None = None
 
     def start(self) -> None:
         if self._task and not self._task.done():
@@ -229,6 +252,16 @@ class RealtimeBridge:
         self._stop.set()
         if self._ws is not None:
             await self._ws.close()
+        if self._pending_flush_task and not self._pending_flush_task.done():
+            self._pending_flush_task.cancel()
+            try:
+                await self._pending_flush_task
+            except asyncio.CancelledError:
+                pass
+        # Flush any pending coalesced turn before stopping the worker
+        if self._pending_turn is not None:
+            self._turn_queue.put_nowait(self._pending_turn)
+            self._pending_turn = None
         if self._turn_task and not self._turn_task.done():
             self._turn_task.cancel()
             try:
@@ -427,23 +460,59 @@ class RealtimeBridge:
         async with self._send_lock:
             await self._ws.send(json.dumps(event, separators=(",", ":")))
 
-    async def send_labeled_turn(self, source: str, transcript: str) -> bool:
-        text = " ".join(transcript.strip().split())
+    async def send_labeled_turn(self, turn: NormalizedTurn) -> bool:
+        text = " ".join(turn.text.strip().split())
         if not text:
             return False
         if _checklist_provider() == "mock":
-            return await self._send_mock_turn(source, text)
-        await self._turn_queue.put((source, text))
+            return await self._send_mock_turn_for_turn(turn)
+
+        # Coalesce consecutive same-speaker turns within a short window so that
+        # VAD-split utterances arrive at the model as a single coherent turn.
+        if self._pending_turn is not None and self._pending_turn.speaker_label == turn.speaker_label:
+            merged_text = f"{self._pending_turn.text} {text}"
+            self._pending_turn = NormalizedTurn(
+                provider=turn.provider,
+                speaker_label=turn.speaker_label,
+                text=merged_text,
+                timestamp_ms=turn.timestamp_ms,
+            )
+            # Reset the flush timer
+            if self._pending_flush_task and not self._pending_flush_task.done():
+                self._pending_flush_task.cancel()
+            self._pending_flush_task = asyncio.create_task(self._flush_pending_after_delay())
+            return True
+
+        # Different speaker (or first turn) — flush any pending turn first
+        if self._pending_turn is not None:
+            await self._turn_queue.put(self._pending_turn)
+            if self._pending_flush_task and not self._pending_flush_task.done():
+                self._pending_flush_task.cancel()
+
+        self._pending_turn = NormalizedTurn(
+            provider=turn.provider,
+            speaker_label=turn.speaker_label,
+            text=text,
+            timestamp_ms=turn.timestamp_ms,
+        )
+        self._pending_flush_task = asyncio.create_task(self._flush_pending_after_delay())
         return True
+
+    async def _flush_pending_after_delay(self) -> None:
+        """Flush the pending coalesced turn into the worker queue after a short delay."""
+        await asyncio.sleep(0.8)
+        if self._pending_turn is not None:
+            turn = self._pending_turn
+            self._pending_turn = None
+            await self._turn_queue.put(turn)
 
     async def _turn_worker(self) -> None:
         while not self._stop.is_set():
-            source, text = await self._turn_queue.get()
+            turn: NormalizedTurn = await self._turn_queue.get()
             try:
                 await self._response_done.wait()
                 self._response_done.clear()
-                speaker = _speaker_for_source(source)
-                labeled_text = f"{speaker}: {text}"
+                labeled_text = turn.to_labeled_line()
                 await self._send(
                     {
                         "type": "conversation.item.create",
@@ -470,9 +539,9 @@ class RealtimeBridge:
                 self._turns_sent += 1
                 if self._turns_sent in {1, 5, 25} or self._turns_sent % 100 == 0:
                     logger.warning(
-                        "Sent labeled transcript turn session=%s source=%s turns=%s",
+                        "Sent labeled transcript turn session=%s provider=%s turns=%s",
                         self.session.session_id,
-                        source,
+                        turn.provider,
                         self._turns_sent,
                     )
             except asyncio.CancelledError:
@@ -483,24 +552,25 @@ class RealtimeBridge:
             finally:
                 self._turn_queue.task_done()
 
-    async def _send_mock_turn(self, source: str, transcript: str) -> bool:
-        if not transcript:
+    async def _send_mock_turn_for_turn(self, turn: NormalizedTurn) -> bool:
+        if not turn.text:
             return False
+        is_founder = turn.speaker_label == "Founder"
         for topic in self.session.topics:
             if topic.category not in {"goal", "question"}:
                 continue
             if topic.checked or topic.manual_override or topic.id in self._mock_checked_ids:
                 continue
-            if topic.category == "question" and source != "mic":
+            if topic.category == "question" and not is_founder:
                 continue
-            if topic.category == "goal" and source != "loopback":
+            if topic.category == "goal" and is_founder:
                 continue
             self._mock_checked_ids.add(topic.id)
             await self._on_tool_call(
                 "mark_item_covered",
                 {
                     "item_id": topic.id,
-                    "evidence": f"{_speaker_for_source(source)} said: {transcript[:160]}",
+                    "evidence": f"{turn.speaker_label} said: {turn.text[:160]}",
                     "reason": "question_asked" if topic.category == "question" else "goal_covered",
                 },
             )
@@ -513,4 +583,330 @@ def _speaker_for_source(source: str) -> str:
         return "Founder"
     if source == "loopback":
         return "Interviewee"
+    if source in {"rtms", "meeting_sdk", "external"}:
+        return "Speaker"
     return "Unknown"
+
+
+# ---------------------------------------------------------------------------
+# REST-based checklist bridge (for Gemini, Anthropic, and non-OpenAI providers)
+# ---------------------------------------------------------------------------
+
+_REST_FLUSH_INTERVAL_SECONDS = 4.0
+_REST_MAX_TURNS_PER_FLUSH = 8
+
+
+def _rest_tool_declarations() -> list[dict]:
+    return [
+        {
+            "name": "mark_item_covered",
+            "description": "Mark one existing interview checklist item as covered.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_id": {"type": "string", "description": "The exact checklist item id to mark covered."},
+                    "evidence": {"type": "string", "description": "One short sentence explaining what was heard."},
+                    "reason": {"type": "string", "enum": ["question_asked", "goal_covered"]},
+                },
+                "required": ["item_id", "evidence", "reason"],
+            },
+        },
+        {
+            "name": "mark_items_covered",
+            "description": "Mark several existing interview checklist items as covered from the same exchange.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "item_id": {"type": "string", "description": "The exact checklist item id to mark covered."},
+                                "evidence": {"type": "string", "description": "One short sentence explaining what was heard."},
+                                "reason": {"type": "string", "enum": ["question_asked", "goal_covered"]},
+                            },
+                            "required": ["item_id", "evidence", "reason"],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        },
+    ]
+
+
+def _rest_tool_declarations_openai() -> list[dict]:
+    """OpenAI REST format: type: function + function: {name, description, parameters}."""
+    result = []
+    for decl in _rest_tool_declarations():
+        result.append({"type": "function", "function": decl})
+    return result
+
+
+class RestChecklistBridge:
+    """Checklist matcher that uses REST API calls instead of a persistent WebSocket.
+
+    Transcript turns are buffered and flushed periodically (every ~4 s or after
+    8 turns).  On each flush the accumulated turns are sent to the AI provider
+    with function-calling tool definitions.  Any tool calls returned by the AI
+    are forwarded to the same ``on_tool_call`` handler used by the realtime
+    bridge.
+    """
+
+    def __init__(
+        self,
+        session: LiveSessionState,
+        *,
+        on_tool_call: RealtimeToolHandler,
+        on_status: RealtimeStatusHandler,
+    ) -> None:
+        self._session = session
+        self._on_tool_call = on_tool_call
+        self._on_status = on_status
+        self._task: asyncio.Task | None = None
+        self._stop = asyncio.Event()
+        self._provider = _checklist_provider()
+        self._buffer: list[dict[str, str]] = []  # [{speaker, text}, ...]
+        self._buffer_event = asyncio.Event()
+
+    def start(self) -> None:
+        if self._task and not self._task.done():
+            return
+        self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        self._stop.set()
+        self._buffer_event.set()  # wake the worker
+        if self._task and not self._task.done():
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+    async def send_labeled_turn(self, turn: NormalizedTurn) -> bool:
+        text = " ".join(turn.text.strip().split())
+        if not text:
+            return False
+        self._buffer.append({"speaker": turn.speaker_label, "text": text})
+        if len(self._buffer) >= _REST_MAX_TURNS_PER_FLUSH:
+            self._buffer_event.set()
+        return True
+
+    async def _run(self) -> None:
+        logger.warning(
+            "Starting REST checklist bridge session=%s provider=%s",
+            self._session.session_id,
+            self._provider,
+        )
+        self._on_status("connected", None)
+        try:
+            while not self._stop.is_set():
+                try:
+                    await asyncio.wait_for(
+                        self._buffer_event.wait(),
+                        timeout=_REST_FLUSH_INTERVAL_SECONDS,
+                    )
+                except TimeoutError:
+                    pass  # periodic flush
+                self._buffer_event.clear()
+                if self._buffer:
+                    await self._flush()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception(
+                "REST checklist bridge failed for session %s",
+                self._session.session_id,
+            )
+            self._on_status("error", str(exc))
+        finally:
+            if (
+                self._session.status == "active"
+                and self._session.realtime_status != "error"
+            ):
+                self._on_status("closed", None)
+
+    async def _flush(self) -> None:
+        if not self._buffer or self._session.status != "active":
+            self._buffer.clear()
+            return
+
+        turns = self._buffer[:]
+        self._buffer.clear()
+
+        labeled = "\n".join(
+            f"{turn['speaker']}: {turn['text']}" for turn in turns
+        )
+        prompt = (
+            "Recent transcript turns (labeled by speaker source):\n\n"
+            f"{labeled}\n\n"
+            "Call mark_item_covered or mark_items_covered for any checklist items "
+            "that have clearly been covered in these turns.  If nothing is clearly "
+            "covered, respond with a single 'no_op' text."
+        )
+
+        try:
+            tool_calls = await self._call_ai(prompt)
+            for name, args in tool_calls:
+                if name in {"mark_item_covered", "mark_items_covered"}:
+                    result = await self._on_tool_call(name, args)
+                    logger.warning(
+                        "REST tool result session=%s name=%s accepted=%s",
+                        self._session.session_id,
+                        name,
+                        result.get("accepted") if isinstance(result, dict) else None,
+                    )
+        except Exception:
+            logger.exception("REST flush failed session=%s", self._session.session_id)
+
+    async def _call_ai(self, prompt: str) -> list[tuple[str, dict]]:
+        settings = get_settings()
+        instructions = _instructions(self._session)
+
+        if self._provider == "gemini":
+            return await self._call_gemini(settings, instructions, prompt)
+        if self._provider == "openai":
+            return await self._call_openai_rest(settings, instructions, prompt)
+        if self._provider == "anthropic":
+            return await self._call_anthropic(settings, instructions, prompt)
+        # Fallback: try OpenAI REST if key is available, else no-op
+        if settings.openai_api_key:
+            return await self._call_openai_rest(settings, instructions, prompt)
+        logger.warning(
+            "REST bridge: unsupported provider %s, no API key available",
+            self._provider,
+        )
+        return []
+
+    async def _call_gemini(
+        self, settings, instructions: str, prompt: str
+    ) -> list[tuple[str, dict]]:
+        if not settings.gemini_api_key:
+            self._on_status("error", "GEMINI_API_KEY is not configured")
+            return []
+
+        import google.generativeai as genai
+
+        genai.configure(api_key=settings.gemini_api_key)
+        # Gemini expects tools wrapped in {"function_declarations": [...]}
+        gemini_tools = [{"function_declarations": _rest_tool_declarations()}]
+        model = genai.GenerativeModel(
+            model_name=settings.gemini_model,
+            system_instruction=instructions,
+            tools=gemini_tools,
+        )
+        tool_config = {"function_calling_config": {"mode": "auto"}}
+
+        try:
+            response = await asyncio.wait_for(
+                model.generate_content_async(
+                    prompt,
+                    tools=gemini_tools,
+                    tool_config=tool_config,
+                    request_options={"timeout": int(settings.ai_request_timeout_seconds)},
+                ),
+                timeout=settings.ai_request_timeout_seconds + 10,
+            )
+        except Exception as exc:
+            self._on_status("error", f"Gemini REST call failed: {exc}")
+            return []
+
+        return _extract_gemini_tool_calls(response)
+
+    async def _call_openai_rest(
+        self, settings, instructions: str, prompt: str
+    ) -> list[tuple[str, dict]]:
+        api_key = settings.openai_api_key
+        if not api_key:
+            self._on_status("error", "OPENAI_API_KEY is not configured")
+            return []
+
+        import httpx
+
+        url = "https://api.openai.com/v1/chat/completions"
+        body = {
+            "model": settings.openai_model,
+            "messages": [
+                {"role": "system", "content": instructions},
+                {"role": "user", "content": prompt},
+            ],
+            "tools": _rest_tool_declarations_openai(),
+            "tool_choice": "auto",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=settings.ai_request_timeout_seconds + 10) as client:
+                response = await client.post(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=body,
+                )
+            if response.status_code >= 400:
+                self._on_status(
+                    "error",
+                    f"OpenAI REST call failed with HTTP {response.status_code}",
+                )
+                return []
+            payload = response.json()
+        except Exception as exc:
+            self._on_status("error", f"OpenAI REST call failed: {exc}")
+            return []
+
+        return _extract_openai_tool_calls(payload)
+
+    async def _call_anthropic(
+        self, settings, instructions: str, prompt: str
+    ) -> list[tuple[str, dict]]:
+        if not settings.anthropic_api_key:
+            self._on_status("error", "ANTHROPIC_API_KEY is not configured")
+            return []
+
+        # Anthropic has its own tool-use format. For now, skip.
+        logger.warning("REST bridge: Anthropic tool use not implemented yet")
+        return []
+
+
+def _extract_gemini_tool_calls(response) -> list[tuple[str, dict]]:
+    """Extract function-call results from a Gemini GenerateContentResponse."""
+    results: list[tuple[str, dict]] = []
+    try:
+        for candidate in getattr(response, "candidates", []) or []:
+            for part in getattr(candidate, "content", None).parts if candidate.content else []:
+                fn = getattr(part, "function_call", None)
+                if fn is None:
+                    continue
+                name = getattr(fn, "name", "") or ""
+                args = getattr(fn, "args", {}) or {}
+                if name in {"mark_item_covered", "mark_items_covered"}:
+                    results.append((name, args if isinstance(args, dict) else {}))
+    except Exception:
+        logger.exception("Failed to extract Gemini tool calls")
+    return results
+
+
+def _extract_openai_tool_calls(payload: dict) -> list[tuple[str, dict]]:
+    """Extract function-call results from an OpenAI chat completion response."""
+    results: list[tuple[str, dict]] = []
+    try:
+        choices = payload.get("choices") or []
+        for choice in choices:
+            message = choice.get("message") or {}
+            tool_calls = message.get("tool_calls") or []
+            for tc in tool_calls:
+                fn = tc.get("function") or {}
+                name = fn.get("name", "")
+                raw_args = fn.get("arguments", "{}")
+                try:
+                    args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                except json.JSONDecodeError:
+                    args = {}
+                if name in {"mark_item_covered", "mark_items_covered"}:
+                    results.append((name, args if isinstance(args, dict) else {}))
+    except Exception:
+        logger.exception("Failed to extract OpenAI tool calls")
+    return results

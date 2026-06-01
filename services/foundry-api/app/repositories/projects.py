@@ -65,7 +65,7 @@ async def find_latest_project(conn, user_id: str):
     )
 
 
-async def create_project(conn, user_id: str, name: str, slug: str, project_type: str):
+async def create_project(conn, user_id: str, name: str, slug: str | None, project_type: str):
     return await conn.fetchrow(
         """
         insert into projects (user_id, name, slug, project_type)

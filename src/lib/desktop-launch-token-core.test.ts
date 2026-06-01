@@ -13,6 +13,7 @@ test('desktop launch token round-trips for the intended user and person', () => 
   const signed = signDesktopLaunchTokenWithSecret({
     clerkUserId: 'user_123',
     personId: 'person_456',
+    zoomMeetingIdentifier: '1234567890',
     secret,
     now,
   });
@@ -23,10 +24,43 @@ test('desktop launch token round-trips for the intended user and person', () => 
       token: signed.token,
       clerkUserId: 'user_123',
       personId: 'person_456',
+      zoomMeetingIdentifier: '1234567890',
       secret,
       now,
     }),
     true,
+  );
+});
+
+test('desktop launch token binds optional Zoom meeting identifier', () => {
+  const signed = signDesktopLaunchTokenWithSecret({
+    clerkUserId: 'user_123',
+    personId: 'person_456',
+    zoomMeetingIdentifier: '987654321',
+    secret,
+    now,
+  });
+
+  assert.equal(
+    verifyDesktopLaunchTokenWithSecret({
+      token: signed.token,
+      clerkUserId: 'user_123',
+      personId: 'person_456',
+      zoomMeetingIdentifier: '111222333',
+      secret,
+      now,
+    }),
+    false,
+  );
+  assert.equal(
+    verifyDesktopLaunchTokenWithSecret({
+      token: signed.token,
+      clerkUserId: 'user_123',
+      personId: 'person_456',
+      secret,
+      now,
+    }),
+    false,
   );
 });
 

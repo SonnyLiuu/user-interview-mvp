@@ -1,9 +1,9 @@
-# Desktop Overlay (Windows-first)
+# User Interview Notetaker (Windows-first)
 
-Single native exe (`foundry_overlay.exe`) that manages:
+Single native exe (`foundry_overlay.exe`) for the User Interview Notetaker that manages:
 
-- **Overlay window** — draggable topmost Direct2D notepad checklist, hidden from
-  screen capture via `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`.
+- **Overlay window** — draggable topmost Direct2D notepad checklist. The
+  checklist is intentionally visible during screen shares.
 - **Tray icon** — start/settings/quit menu via `Shell_NotifyIcon`.
 - **WebView2 windows** — auth, session picker, settings, and end-session form.
 - **Native API calls** — WinHTTP calls the Next.js desktop endpoints with the
@@ -26,7 +26,7 @@ Outputs:
 Requires:
 - Visual Studio 2022 Build Tools, C++ Desktop workload
 - CMake 3.20+
-- Windows SDK 10.0.19041+ (for `WDA_EXCLUDEFROMCAPTURE`)
+- Windows SDK 10.0.19041+
 - WebView2 Runtime — preinstalled on Windows 11; on older Windows install
   from <https://developer.microsoft.com/microsoft-edge/webview2/>
 
@@ -46,7 +46,7 @@ cd $env:LOCALAPPDATA\foundry-dev
 ```
 
 The script creates/reuses a CurrentUser code-signing cert named
-`Foundry Overlay Dev`, trusts it for CurrentUser TrustedPublisher and
+`User Interview Notetaker Dev`, trusts it for CurrentUser TrustedPublisher and
 TrustedPeople, signs the Release exe, verifies the signature, and copies it to
 `%LOCALAPPDATA%\foundry-dev`.
 
@@ -185,7 +185,7 @@ desktop/native/
     ├── main.cpp                   ← entry, COM init, message loop
     ├── app_paths.{h,cpp}          ← app data paths
     ├── http/                      ← WinHTTP helper for API calls
-    ├── overlay/                   ← Direct2D capture-excluded notepad
+    ├── overlay/                   ← Direct2D visible notepad
     │   ├── window.{h,cpp}
     │   └── renderer.{h,cpp}
     ├── tray/

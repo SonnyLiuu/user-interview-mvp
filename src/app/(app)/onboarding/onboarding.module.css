@@ -10,6 +10,11 @@
 .card {
   width: 100%;
   max-width: 480px;
+  padding: 32px;
+  border: 1px solid #e8d9c4;
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 18px 48px rgba(46, 33, 21, 0.08);
 }
 
 .eyebrow {
@@ -126,3 +131,19 @@
 
 .button:hover:not(:disabled) { background: #853f1d; }
 .button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 540px) {
+  .page {
+    padding: 16px;
+    align-items: stretch;
+  }
+
+  .card {
+    padding: 24px;
+    margin: auto 0;
+  }
+
+  .button {
+    width: 100%;
+  }
+}

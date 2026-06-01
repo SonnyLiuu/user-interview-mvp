@@ -25,7 +25,7 @@ export default function SettingsPage() {
           Desktop companion
         </h2>
         <p style={{ margin: '0 0 14px', color: '#5f4a39', fontSize: 14.5 }}>
-          Foundry Overlay runs alongside Zoom and auto-checks your interview
+          User Interview Notetaker runs alongside Zoom and auto-checks your interview
           goals as you cover them. Install once, sign in, and use{' '}
           <strong>Start call</strong> from any scheduled person to launch it.
         </p>

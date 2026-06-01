@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useUser, useClerk } from '@clerk/nextjs';
 import styles from './AppNav.module.css';
 import { backendClientFetch } from '@/lib/backend-client';
-import type { ProjectNavItem } from '@/lib/backend-types';
+import type { ProjectNavItem, ProjectType } from '@/lib/backend-types';
 import { getProjectPathSegment } from '@/lib/projects';
 
 const STORAGE_KEY = 'startup-foundry:nav-expanded';
@@ -272,6 +272,7 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
   const currentProjectFromList = projectId
     ? projects.find((project) => project.id === projectId) ?? null
     : null;
+  const startupProjects = projects.filter((project) => project.project_type === 'startup');
   const resolvedCurrentProject = projectId
     ? currentProjectFromList ?? {
         id: projectId,
@@ -303,7 +304,7 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
             type="button"
             className={styles.projectSwitcherBtn}
             onClick={() => setOpen((v) => !v)}
-            title={!expanded ? displayName : undefined}
+            title={displayName}
           >
             {expanded ? (
               <>
@@ -318,7 +319,7 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
 
         {open && expanded && (
           <div className={styles.projectDropdown}>
-            {projects.map((p: ProjectNavItem) => (
+            {startupProjects.map((p: ProjectNavItem) => (
               <div
                 key={p.id}
                 className={`${styles.projectDropdownRow} ${getProjectPathSegment(p) === slug ? styles.projectDropdownItemActive : ''}`}
@@ -327,6 +328,7 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
                   type="button"
                   className={styles.projectDropdownItem}
                   onClick={() => select(p)}
+                  title={p.name}
                 >
                   {p.name}
                 </button>
@@ -341,13 +343,13 @@ function ProjectSwitcher({ slug, projectId, projectName, expanded, initialProjec
                 </button>
               </div>
             ))}
-            {projects.length > 0 && <div className={styles.projectDropdownDivider} />}
+            {startupProjects.length > 0 && <div className={styles.projectDropdownDivider} />}
             <Link
               href="/onboarding"
               className={`${styles.projectDropdownItem} ${styles.projectDropdownAdd}`}
               onClick={() => setOpen(false)}
             >
-              + New project
+              + New startup
             </Link>
           </div>
         )}
@@ -476,10 +478,11 @@ function NavItem({ href, label, icon, active, expanded }: {
 
 // ── AppNav ────────────────────────────────────────────────────────────────────
 
-export function AppNav({ slug, projectId, projectName, initialProjects }: {
+export function AppNav({ slug, projectId, projectName, projectType, initialProjects }: {
   slug?: string | null;
   projectId?: string | null;
   projectName?: string | null;
+  projectType?: ProjectType | null;
   initialProjects?: ProjectNavItem[];
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -525,7 +528,7 @@ export function AppNav({ slug, projectId, projectName, initialProjects }: {
 
   return (
     <aside className={`${styles.nav} ${cls}`}>
-      {/* Project switcher */}
+      {/* Startup switcher */}
       <ProjectSwitcher
         slug={slug ?? null}
         projectId={projectId ?? null}
@@ -557,7 +560,7 @@ export function AppNav({ slug, projectId, projectName, initialProjects }: {
               <Link href="/settings" className={styles.profileMenuItem} onClick={() => setMenuOpen(false)}>
                 Account settings
               </Link>
-              <a href="mailto:feedback@startupfoundry.app" className={styles.profileMenuItem}>
+              <a href="mailto:feedback@userinterview.app" className={styles.profileMenuItem}>
                 Send feedback
               </a>
               <div className={styles.profileMenuDivider} />

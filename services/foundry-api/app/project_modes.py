@@ -4,16 +4,106 @@ PROJECT_TYPE_STARTUP = "startup"
 PROJECT_TYPE_NETWORKING = "networking"
 PROJECT_TYPES = {PROJECT_TYPE_STARTUP, PROJECT_TYPE_NETWORKING}
 
+OUTREACH_TYPE_INFORMATION_DISCOVERY = "information_discovery"
+OUTREACH_TYPE_CUSTOMER_ACQUISITION = "customer_acquisition"
+OUTREACH_TYPE_BETA_USERS = "beta_users"
+OUTREACH_TYPE_INVESTOR = "investor"
+OUTREACH_TYPE_PARTNERSHIP = "partnership"
+OUTREACH_TYPE_RECRUITING = "recruiting"
+OUTREACH_TYPE_ADVISOR = "advisor"
+OUTREACH_TYPE_PRESS_CREATOR = "press_creator"
+
+OUTREACH_PROJECT_AVAILABILITY_ACTIVE = "active"
+OUTREACH_PROJECT_AVAILABILITY_COMING_SOON = "coming_soon"
+OUTREACH_PROJECT_AVAILABILITY_HIDDEN = "hidden"
+
+OUTREACH_PROJECT_TYPE_CONFIGS = {
+    OUTREACH_TYPE_INFORMATION_DISCOVERY: {
+        "label": "Information Discovery",
+        "description": "Learn from target users, customers, buyers, or market experts before selling.",
+        "purpose": "Learn, not sell.",
+        "iconKey": "search",
+        "availability": OUTREACH_PROJECT_AVAILABILITY_ACTIVE,
+    },
+    OUTREACH_TYPE_CUSTOMER_ACQUISITION: {
+        "label": "Customer Acquisition",
+        "description": "Book qualified demos or sales calls.",
+        "purpose": "Turn qualified prospects into sales conversations.",
+        "iconKey": "target",
+        "availability": OUTREACH_PROJECT_AVAILABILITY_COMING_SOON,
+    },
+    OUTREACH_TYPE_BETA_USERS: {
+        "label": "Finding Beta Users",
+        "description": "Find early users or design partners who will shape the product.",
+        "purpose": "Recruit early users who actively help shape the product.",
+        "iconKey": "users",
+        "availability": OUTREACH_PROJECT_AVAILABILITY_COMING_SOON,
+    },
+    OUTREACH_TYPE_INVESTOR: {
+        "label": "Investor Outreach",
+        "description": "Get meetings with relevant investors.",
+        "purpose": "Reach investors who fit the startup's stage, market, and raise.",
+        "iconKey": "briefcase",
+        "availability": OUTREACH_PROJECT_AVAILABILITY_COMING_SOON,
+    },
+    OUTREACH_TYPE_PARTNERSHIP: {
+        "label": "Partnership Outreach",
+        "description": "Create mutual value with another company.",
+        "purpose": "Start business development conversations with clear mutual value.",
+        "iconKey": "handshake",
+        "availability": OUTREACH_PROJECT_AVAILABILITY_COMING_SOON,
+    },
+    OUTREACH_TYPE_RECRUITING: {
+        "label": "Recruiting Outreach",
+        "description": "Find candidates, collaborators, or founding team members.",
+        "purpose": "Reach people who could join or meaningfully contribute.",
+        "iconKey": "user-plus",
+        "availability": OUTREACH_PROJECT_AVAILABILITY_COMING_SOON,
+    },
+    OUTREACH_TYPE_ADVISOR: {
+        "label": "Advisor Outreach",
+        "description": "Get advice, credibility, or strategic support.",
+        "purpose": "Reach advisors who can improve judgment, credibility, or access.",
+        "iconKey": "sparkles",
+        "availability": OUTREACH_PROJECT_AVAILABILITY_COMING_SOON,
+    },
+    OUTREACH_TYPE_PRESS_CREATOR: {
+        "label": "Press / Creator Outreach",
+        "description": "Get coverage, distribution, or attention.",
+        "purpose": "Reach press, creators, or influencers for distribution.",
+        "iconKey": "megaphone",
+        "availability": OUTREACH_PROJECT_AVAILABILITY_COMING_SOON,
+    },
+}
+
+OUTREACH_PROJECT_TYPES = set(OUTREACH_PROJECT_TYPE_CONFIGS)
+
 
 STARTUP_SLOTS = [
     {
+        "key": "startupName",
+        "label": "Startup Name",
+        "context": "the name of the startup, product, company, or working project",
+        "required": True,
+        "array": False,
+        "fallback": {
+            "question": "What should we call this startup or product for now?",
+            "choices": [
+                {"id": "a", "label": "Use the product name I mentioned earlier", "normalizedValue": "Use the product name already mentioned"},
+                {"id": "b", "label": "Use the company name I mentioned earlier", "normalizedValue": "Use the company name already mentioned"},
+                {"id": "c", "label": "It's still unnamed; use a short descriptive working name", "normalizedValue": "Use a short descriptive working name for the startup"},
+            ],
+            "customPlaceholder": "Enter the startup, product, or working name...",
+        },
+    },
+    {
         "key": "ideaSummary",
-        "label": "Summary",
+        "label": "Startup Summary",
         "context": "what the founder is building and for whom",
         "required": True,
         "array": False,
         "fallback": {
-            "question": "What are you building?",
+            "question": "What are you building, and who is it for?",
             "choices": [
                 {"id": "a", "label": "A focused SaaS tool that helps a specific business team finish a painful workflow faster", "normalizedValue": "A focused SaaS tool for a specific business workflow"},
                 {"id": "b", "label": "A consumer product that changes how an individual handles a repeated personal problem", "normalizedValue": "A consumer product for a repeated personal problem"},
@@ -77,7 +167,7 @@ STARTUP_SLOTS = [
     },
     {
         "key": "idealPeopleTypes",
-        "label": "Ideal People to Talk To",
+        "label": "Ideal People to Talk To First",
         "context": "the types of people who would be ideal early users or customers",
         "required": True,
         "array": True,
@@ -90,6 +180,58 @@ STARTUP_SLOTS = [
                 {"id": "d", "label": "Decision makers or power users who know why current tools get adopted or rejected", "normalizedValue": "Decision makers or power users who know why current tools win or fail"},
             ],
             "customPlaceholder": "Describe your ideal early user...",
+        },
+    },
+    {
+        "key": "biggestBottleneck",
+        "label": "Biggest Bottleneck",
+        "context": "the founder's current blocker, uncertainty, or constraint that makes outreach valuable now",
+        "required": True,
+        "array": False,
+        "fallback": {
+            "question": "What's the biggest bottleneck or uncertainty for the startup right now?",
+            "choices": [
+                {"id": "a", "label": "I need to validate whether the problem is painful enough", "normalizedValue": "Needs to validate whether the problem is painful enough"},
+                {"id": "b", "label": "I am not sure which customer segment feels the urgency most", "normalizedValue": "Needs to identify which customer segment has the strongest urgency"},
+                {"id": "c", "label": "I need to understand current workarounds before building more", "normalizedValue": "Needs to understand current workarounds before building more"},
+                {"id": "d", "label": "I have traction but need to understand adoption or buying friction", "normalizedValue": "Has traction but needs to understand adoption or buying friction"},
+            ],
+            "customPlaceholder": "Describe the blocker, unknown, or decision you need help with...",
+        },
+    },
+    {
+        "key": "startupStage",
+        "label": "Startup Stage",
+        "context": "current company stage: idea, prototype, MVP, launched, revenue, or scaling",
+        "required": False,
+        "array": False,
+        "fallback": {
+            "question": "What stage is the startup in right now?",
+            "choices": [
+                {"id": "a", "label": "Idea: still validating the problem and customer", "normalizedValue": "idea"},
+                {"id": "b", "label": "Prototype: something exists but is not a real MVP yet", "normalizedValue": "prototype"},
+                {"id": "c", "label": "MVP: early usable product with limited users", "normalizedValue": "mvp"},
+                {"id": "d", "label": "Launched or revenue: real users, customers, or revenue exist", "normalizedValue": "launched or revenue"},
+                {"id": "e", "label": "Scaling: repeatable motion is starting to matter", "normalizedValue": "scaling"},
+            ],
+            "customPlaceholder": "Describe the current stage...",
+        },
+    },
+    {
+        "key": "traction",
+        "label": "Traction",
+        "context": "evidence of progress such as users, revenue, pilots, waitlist, LOIs, notable customers, or design partners",
+        "required": False,
+        "array": True,
+        "fallback": {
+            "question": "What traction or proof points do you already have, if any?",
+            "choices": [
+                {"id": "a", "label": "Users, waitlist, or engaged prospects", "normalizedValue": "Users, waitlist, or engaged prospects"},
+                {"id": "b", "label": "Pilots, LOIs, design partners, or beta users", "normalizedValue": "Pilots, LOIs, design partners, or beta users"},
+                {"id": "c", "label": "Revenue, paid customers, or notable customer conversations", "normalizedValue": "Revenue, paid customers, or notable customer conversations"},
+                {"id": "d", "label": "No traction yet; still validating the idea", "normalizedValue": "No traction yet; still validating the idea"},
+            ],
+            "customPlaceholder": "List users, revenue, pilots, waitlist, LOIs, notable customers, or say none yet...",
         },
     },
     {
@@ -255,6 +397,7 @@ NETWORKING_SLOTS = [
         "context": "how the user wants the outreach messages to sound",
         "required": True,
         "array": False,
+        "extractFromKickoff": False,
         "fallback": {
             "question": "What tone do you want for these outreach messages?",
             "choices": [
@@ -305,14 +448,18 @@ NETWORKING_SLOTS = [
 
 MODE_CONFIGS = {
     PROJECT_TYPE_STARTUP: {
-        "label": "Startup discovery",
-        "description": "Customer discovery and founder learning.",
-        "kickoff": "What are you building? Tell me about your idea - what it does, who it's for, and what problem it solves.",
+        "label": "Startup",
+        "description": "Startup workspace for founder learning and outreach.",
+        "creatable": True,
+        "visible": True,
+        "kickoff": "What are you building, and what is the biggest thing you're trying to figure out right now?",
         "slots": STARTUP_SLOTS,
     },
     PROJECT_TYPE_NETWORKING: {
         "label": "Networking outreach",
         "description": "Compose targeted outreach based on sender goals, recipient background, and message style.",
+        "creatable": False,
+        "visible": False,
         "kickoff": "What is this outreach for, and what is your goal?",
         "slots": NETWORKING_SLOTS,
     },
@@ -328,12 +475,58 @@ def is_valid_project_type(value: str | None) -> bool:
     return (value or PROJECT_TYPE_STARTUP).strip().lower() in PROJECT_TYPES
 
 
+def is_creatable_project_type(value: str | None) -> bool:
+    if not is_valid_project_type(value):
+        return False
+    return bool(get_mode_config(normalize_project_type(value)).get("creatable"))
+
+
+def is_visible_project_type(value: str | None) -> bool:
+    if not is_valid_project_type(value):
+        return False
+    return bool(get_mode_config(normalize_project_type(value)).get("visible"))
+
+
+def normalize_outreach_project_type(value: str | None) -> str:
+    outreach_type = (value or OUTREACH_TYPE_INFORMATION_DISCOVERY).strip().lower()
+    return outreach_type if outreach_type in OUTREACH_PROJECT_TYPES else OUTREACH_TYPE_INFORMATION_DISCOVERY
+
+
+def is_valid_outreach_project_type(value: str | None) -> bool:
+    return (value or OUTREACH_TYPE_INFORMATION_DISCOVERY).strip().lower() in OUTREACH_PROJECT_TYPES
+
+
+def get_outreach_project_type_config(value: str | None) -> dict:
+    return OUTREACH_PROJECT_TYPE_CONFIGS[normalize_outreach_project_type(value)]
+
+
+def get_outreach_project_type_configs(include_hidden: bool = False) -> list[dict]:
+    configs = []
+    for key, config in OUTREACH_PROJECT_TYPE_CONFIGS.items():
+        if not include_hidden and config["availability"] == OUTREACH_PROJECT_AVAILABILITY_HIDDEN:
+            continue
+        configs.append({"type": key, **config})
+    return configs
+
+
+def is_visible_outreach_project_type(value: str | None) -> bool:
+    if not is_valid_outreach_project_type(value):
+        return False
+    return get_outreach_project_type_config(value)["availability"] != OUTREACH_PROJECT_AVAILABILITY_HIDDEN
+
+
+def is_creatable_outreach_project_type(value: str | None) -> bool:
+    if not is_valid_outreach_project_type(value):
+        return False
+    return get_outreach_project_type_config(value)["availability"] == OUTREACH_PROJECT_AVAILABILITY_ACTIVE
+
+
 def project_actor(project_type: str) -> str:
     return "user" if normalize_project_type(project_type) == PROJECT_TYPE_NETWORKING else "founder"
 
 
 def project_kind_label(project_type: str) -> str:
-    return "networking outreach project" if normalize_project_type(project_type) == PROJECT_TYPE_NETWORKING else "startup idea"
+    return "networking outreach project" if normalize_project_type(project_type) == PROJECT_TYPE_NETWORKING else "startup"
 
 
 def get_kickoff_question(project_type: str) -> str:
@@ -366,6 +559,11 @@ def get_array_slots(project_type: str) -> set[str]:
 
 def get_slot(project_type: str, slot_key: str) -> dict | None:
     return next((slot for slot in get_mode_slots(project_type) if slot["key"] == slot_key), None)
+
+
+def should_extract_slot_from_kickoff(project_type: str, slot_key: str) -> bool:
+    slot = get_slot(project_type, slot_key)
+    return bool(slot and slot.get("extractFromKickoff", True))
 
 
 def get_fallback_turn(project_type: str, slot_key: str) -> dict:

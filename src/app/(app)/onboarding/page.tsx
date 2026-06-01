@@ -1,18 +1,14 @@
-import { listProjects } from '@/lib/backend-server';
 import OnboardingForm from './OnboardingForm';
 import styles from './onboarding.module.css';
 
-export default async function OnboardingPage() {
-  const projects = await listProjects();
-  const existingProjectNames = projects.map((project) => project.name);
-
+export default function OnboardingPage() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <p className={styles.eyebrow}>New project</p>
-        <h1 className={styles.heading}>What are you working on?</h1>
-        <p className={styles.sub}>Choose a project type and give it a name. You can always change the name later.</p>
-        <OnboardingForm existingProjectNames={existingProjectNames} />
+        <p className={styles.eyebrow}>Startup onboarding</p>
+        <h1 className={styles.heading}>Let&apos;s understand the startup first.</h1>
+        <p className={styles.sub}>Answer a few focused questions so we can shape your startup foundation and recommend the right first outreach project.</p>
+        <OnboardingForm />
       </div>
     </div>
   );

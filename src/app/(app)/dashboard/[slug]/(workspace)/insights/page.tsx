@@ -1,9 +1,12 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { env } from '@/lib/server-env';
+import Link from 'next/link';
 import { getProjectBySlugOrId } from '@/lib/backend-server';
 import { getProjectInsightsState } from '@/lib/ai/synthesize-insights';
+import { getOutreachStats } from '@/lib/outreach-insights';
+import { getNotetakerDownloadHref } from '@/lib/notetaker-download';
 import type { InsightContent } from '@/lib/db/schema';
+import type { InformationDiscoveryBrief } from '@/lib/backend-types';
+import { OutreachInsightsEmpty, OutreachInsightsData } from './OutreachInsights';
 import styles from './InsightsPage.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +24,10 @@ const statusLabels: Record<InsightContent['assumptionTracker'][number]['status']
   new: 'New',
 };
 
+function firstItems(items: string[] | null | undefined, limit = 3) {
+  return Array.isArray(items) ? items.filter(Boolean).slice(0, limit) : [];
+}
+
 function formatDate(value: Date | null) {
   if (!value) return 'Not generated yet';
   return new Intl.DateTimeFormat('en', {
@@ -30,51 +37,102 @@ function formatDate(value: Date | null) {
   }).format(value);
 }
 
-function EmptyInsights({ installerHref }: { installerHref: string | undefined }) {
+function DiscoveryContextPanel({
+  brief,
+  startupPath,
+}: {
+  brief: InformationDiscoveryBrief | null;
+  startupPath: string | null;
+}) {
+  if (!startupPath) return null;
+
+  const assumptions = firstItems(brief?.assumptionsToTest);
+  const targets = firstItems(brief?.targetPeople);
+
+  return (
+    <section className={styles.discoveryPanel}>
+      <div className={styles.discoveryHeader}>
+        <div>
+          <p className={styles.eyebrow}>Information Discovery</p>
+          <h2 className={styles.discoveryTitle}>
+            {brief ? 'Insights will track this learning plan' : 'Set the learning plan before interviews'}
+          </h2>
+        </div>
+      </div>
+      {brief ? (
+        <div className={styles.discoveryGrid}>
+          <div>
+            <span className={styles.discoveryLabel}>Outcome</span>
+            <p className={styles.discoveryText}>
+              {brief.desiredOutcome || 'Clarify the most important market unknown before selling.'}
+            </p>
+          </div>
+          <div>
+            <span className={styles.discoveryLabel}>People to learn from</span>
+            <p className={styles.discoveryText}>
+              {targets.length ? targets.join(', ') : 'Target users, buyers, or experts who can explain the problem.'}
+            </p>
+          </div>
+          <div className={styles.discoveryWide}>
+            <span className={styles.discoveryLabel}>Assumptions to watch</span>
+            <p className={styles.discoveryText}>
+              {assumptions.length ? assumptions.join('; ') : 'The next interviews should clarify the riskiest startup assumptions.'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className={styles.discoveryText}>
+          Insights become sharper when the notetaker knows which assumptions and learning goals the current outreach project is testing.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function EmptyInsights({
+  installerHref,
+  activeDiscoveryBrief,
+  startupPath,
+}: {
+  installerHref: string;
+  activeDiscoveryBrief: InformationDiscoveryBrief | null;
+  startupPath: string | null;
+}) {
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
         <section className={styles.intro}>
           <p className={styles.eyebrow}>Insights</p>
           <h1 className={styles.title}>
-            Learn what your calls are really telling you.
+            Turn discovery calls into startup evidence.
           </h1>
           <p className={styles.description}>
-            Insights will synthesize your interview notes and transcripts into
-            recurring themes, assumption updates, and the next conversations
-            that would reduce uncertainty fastest.
+            This page synthesizes interview notes and transcripts against your
+            Information Discovery plan, so the recurring themes and assumption
+            updates stay tied to the current bottleneck.
           </p>
         </section>
+
+        <DiscoveryContextPanel brief={activeDiscoveryBrief} startupPath={startupPath} />
 
         <section className={styles.unlockGrid}>
           <div className={styles.primaryPanel}>
             <h2 className={styles.panelTitle}>
-              Gather real insights from your interviews
+              Gather AI insights from your interviews
             </h2>
             <p className={styles.panelBody}>
-              Foundry Overlay sits beside Zoom, keeps your call brief visible,
-              auto-checks questions as they are covered, and saves notes back to
-              this dashboard when the call ends.
+              User Interview Notetaker keeps a visible checklist beside calls to
+              automatically check questions as they are covered, and saves your call transcript
+              back to this dashboard when the call ends. Get learning summaries of
+              what happened during your calls as well as track vital assumptions
+              for your startup.
             </p>
-            {installerHref ? (
-              <a
-                href={installerHref}
-                download
-                className={styles.downloadButton}
-              >
-                Download Windows notetaker
-              </a>
-            ) : (
-              <Link
-                href="/download"
-                className={styles.fallbackButton}
-              >
-                View download page
-              </Link>
-            )}
-            <span className={styles.note}>
-              Requires a Foundry account. Windows only for now.
-            </span>
+            <a
+              href={installerHref}
+              className={styles.downloadButton}
+            >
+              Download for Windows
+            </a>
           </div>
 
           <div className={styles.sidePanel}>
@@ -104,10 +162,14 @@ function DataInsights({
   content,
   generatedAt,
   installerHref,
+  activeDiscoveryBrief,
+  startupPath,
 }: {
   content: InsightContent;
   generatedAt: Date | null;
-  installerHref: string | undefined;
+  installerHref: string;
+  activeDiscoveryBrief: InformationDiscoveryBrief | null;
+  startupPath: string | null;
 }) {
   const { learningSummary, recurringThemes, assumptionTracker } = content;
 
@@ -137,6 +199,8 @@ function DataInsights({
             </div>
           </div>
         </section>
+
+        <DiscoveryContextPanel brief={activeDiscoveryBrief} startupPath={startupPath} />
 
         <section className={styles.summaryGrid}>
           <article className={styles.summaryPanel}>
@@ -194,15 +258,12 @@ function DataInsights({
               <p className={styles.eyebrow}>Assumption tracker</p>
               <h2 className={styles.sectionHeading}>What is getting stronger or weaker</h2>
             </div>
-            {installerHref && (
-              <a
-                href={installerHref}
-                download
-                className={styles.secondaryDownload}
-              >
-                Download notetaker
-              </a>
-            )}
+            <a
+              href={installerHref}
+              className={styles.secondaryDownload}
+            >
+              Download notetaker
+            </a>
           </div>
           <div className={styles.assumptionList}>
             {assumptionTracker.map((item) => (
@@ -237,29 +298,89 @@ function DataInsights({
   );
 }
 
+// ── Tab bar ────────────────────────────────────────────────────────────────────
+
+function TabBar({ active, slug }: { active: 'interview' | 'outreach'; slug: string }) {
+  const tabs = [
+    { key: 'interview' as const, label: 'Interview Insights' },
+    { key: 'outreach' as const, label: 'Outreach Insights' },
+  ];
+
+  return (
+    <nav className={styles.tabBar}>
+      {tabs.map((tab) => (
+        <Link
+          key={tab.key}
+          href={`/dashboard/${slug}/insights${tab.key === 'outreach' ? '?tab=outreach' : ''}`}
+          className={`${styles.tabPill} ${active === tab.key ? styles.tabPillActive : ''}`}
+        >
+          {tab.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 export default async function InsightsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { slug } = await params;
-  const installerHref = env.FOUNDRY_OVERLAY_INSTALLER_URL?.trim();
+  const { tab } = await searchParams;
+  const activeTab = tab === 'outreach' ? 'outreach' : 'interview';
+
+  const installerHref = getNotetakerDownloadHref();
   const lookup = await getProjectBySlugOrId(slug);
   const project = lookup?.project;
 
   if (!project) redirect('/dashboard');
 
-  const state = await getProjectInsightsState(project.id);
+  const startupPath = project.project_type === 'startup' ? slug : null;
 
-  if (state.kind === 'empty') {
-    return <EmptyInsights installerHref={installerHref} />;
+  // Fetch both data sets — cheap queries, fine to run in parallel
+  const [state, outreachStats] = await Promise.all([
+    getProjectInsightsState(project.id),
+    getOutreachStats(project.id),
+  ]);
+
+  // ── Interview tab ──────────────────────────────────────────────────────
+
+  if (activeTab === 'interview') {
+    return (
+      <>
+        <TabBar active="interview" slug={slug} />
+        {state.kind === 'empty' ? (
+          <EmptyInsights
+            installerHref={installerHref}
+            activeDiscoveryBrief={state.activeDiscoveryBrief}
+            startupPath={startupPath}
+          />
+        ) : (
+          <DataInsights
+            content={state.content}
+            generatedAt={state.generatedAt}
+            installerHref={installerHref}
+            activeDiscoveryBrief={state.activeDiscoveryBrief}
+            startupPath={startupPath}
+          />
+        )}
+      </>
+    );
   }
 
+  // ── Outreach tab ───────────────────────────────────────────────────────
+
   return (
-    <DataInsights
-      content={state.content}
-      generatedAt={state.generatedAt}
-      installerHref={installerHref}
-    />
+    <>
+      <TabBar active="outreach" slug={slug} />
+      {outreachStats.totalContacted === 0 ? (
+        <OutreachInsightsEmpty slug={slug} />
+      ) : (
+        <OutreachInsightsData stats={outreachStats} slug={slug} />
+      )}
+    </>
   );
 }

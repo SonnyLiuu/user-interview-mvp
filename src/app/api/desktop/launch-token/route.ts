@@ -5,9 +5,11 @@ import { db } from '@/lib/db';
 import { people, projects, users } from '@/lib/db/schema';
 import { getDesktopUser } from '@/lib/desktop-auth';
 import { signDesktopLaunchToken } from '@/lib/desktop-launch-token';
+import { normalizeZoomMeetingIdentifier } from '@/lib/zoom-meeting';
 
 type LaunchTokenInput = {
   personId?: string;
+  zoomMeetingIdentifier?: string;
 };
 
 async function getAuthenticatedClerkUserId(request: Request) {
@@ -51,7 +53,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return NextResponse.json(
-    signDesktopLaunchToken({ clerkUserId, personId: body.personId }),
-  );
+  const zoomMeetingIdentifier = normalizeZoomMeetingIdentifier(body.zoomMeetingIdentifier);
+
+  return NextResponse.json({
+    ...signDesktopLaunchToken({ clerkUserId, personId: body.personId, zoomMeetingIdentifier }),
+    zoomMeetingIdentifier,
+  });
 }

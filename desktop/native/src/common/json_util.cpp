@@ -60,4 +60,20 @@ std::wstring wideValue(const Json& object,
     return fromUtf8(object.at(key).get<std::string>());
 }
 
+std::wstring extractErrorMessage(const std::string& responseBody) {
+    if (responseBody.empty()) return L"Empty response from server.";
+    try {
+        Json body = parseUtf8(responseBody);
+        std::wstring error = wideValue(body, "error");
+        if (!error.empty()) return error;
+        std::wstring detail = wideValue(body, "detail");
+        if (!detail.empty()) return detail;
+        std::wstring message = wideValue(body, "message");
+        if (!message.empty()) return message;
+    } catch (...) {
+        // Not valid JSON, fall through to raw display
+    }
+    return fromUtf8(responseBody.substr(0, 300));
+}
+
 }  // namespace foundry::json

@@ -7,6 +7,65 @@ export type ProjectNavItem = {
 
 export type ProjectType = 'startup' | 'networking';
 
+export type OutreachProjectType =
+  | 'information_discovery'
+  | 'customer_acquisition'
+  | 'beta_users'
+  | 'investor'
+  | 'partnership'
+  | 'recruiting'
+  | 'advisor'
+  | 'press_creator';
+
+export type OutreachProjectAvailability = 'active' | 'coming_soon' | 'hidden';
+
+export type OutreachProjectTypeConfig = {
+  type: OutreachProjectType;
+  label: string;
+  description: string;
+  purpose: string;
+  iconKey: string;
+  availability: OutreachProjectAvailability;
+};
+
+export type OutreachProjectStatus = 'draft' | 'onboarding' | 'active' | 'paused' | 'completed' | 'archived';
+
+export type InformationDiscoveryBrief = {
+  type?: 'information_discovery';
+  label?: string;
+  desiredOutcome?: string | null;
+  learningGoals?: string[];
+  targetPeople?: string[];
+  assumptionsToTest?: string[];
+  conversationBoundaries?: string[];
+  outreachGuidance?: string | null;
+  starterAsk?: string | null;
+};
+
+export type OutreachProjectRecord = {
+  id: string;
+  startup_project_id: string;
+  type: OutreachProjectType;
+  name: string;
+  status: OutreachProjectStatus;
+  brief_json?: InformationDiscoveryBrief | Record<string, unknown> | null;
+  onboarding_state_json?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type CreateOutreachProjectPayload = {
+  type?: OutreachProjectType;
+  name?: string | null;
+};
+
+export type UpdateOutreachProjectPayload = {
+  name?: string | null;
+  status?: OutreachProjectStatus;
+  brief_json?: Record<string, unknown> | null;
+  onboarding_state_json?: Record<string, unknown> | null;
+};
+
 type ProjectRecord = {
   id: string;
   name: string;
@@ -17,13 +76,28 @@ type ProjectRecord = {
 };
 
 export type StartupFoundation = {
+  startupName: string;
   summary: string;
   targetUser: string;
   painPoint: string;
   valueProp: string;
   idealPeopleTypes: string[];
+  startupStage?: string | null;
+  traction?: string[];
   differentiation?: string | null;
   biggestUnknown?: string | null;
+  recommendedOutreachProject?: {
+    type: 'information_discovery';
+    label: 'Information Discovery';
+    reason: string;
+  } | null;
+  activeOutreachProject?: InformationDiscoveryBrief | null;
+  desiredOutcome?: string | null;
+  learningGoals?: string[];
+  keyAssumptions?: string[];
+  messageBoundaries?: string[];
+  outreachGuidance?: string | null;
+  starterAsk?: string | null;
 };
 
 export type NetworkingFoundation = {

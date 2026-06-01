@@ -7,16 +7,16 @@ from ..db import get_pool
 from ..errors import BadRequestError, NotFoundError
 from ..onboarding_engine import (
     choose_next_slot,
-    get_fallback_choices,
     is_onboarding_finishable,
     merge_kickoff_context,
     merge_slot_patch,
     normalize_onboarding_state,
     validate_choices,
 )
-from ..project_modes import get_kickoff_question, normalize_project_type
+from ..project_modes import get_fallback_turn, get_kickoff_question, normalize_project_type
 from ..repositories import onboarding as onboarding_repo
 from ..repositories import projects as project_repo
+from ..utils import slugify
 
 
 async def _get_context(user_id: str, project_id: str):
@@ -66,10 +66,10 @@ async def _generate_turn(state: dict, chat_history: list[dict], project_type: st
             result = await generate_next_question(next_slot, message_pairs, state, project_type)
             valid, _reason = validate_choices(result["choices"], next_slot)
             if not valid:
-                fallback = get_fallback_choices(next_slot, project_type)
+                fallback = get_fallback_turn(project_type, next_slot)
                 result = {"targetSlot": next_slot, **fallback}
     except Exception:
-        fallback = get_fallback_choices(next_slot, project_type)
+        fallback = get_fallback_turn(project_type, next_slot)
         result = {"targetSlot": next_slot, **fallback}
     return result
 
@@ -111,9 +111,96 @@ def _format_answer_message(last_turn: dict, selected_choices: list[dict], custom
     return selected_summary
 
 
-async def process_onboarding_request(user_id: str, project_id: str, body: dict):
+def _request_data(body) -> dict:
+    return body.model_dump(exclude_none=True) if hasattr(body, "model_dump") else body
+
+
+def _chat_response(chat_history: list[dict], current_turn: dict | None, is_finishable: bool, status: str) -> dict:
+    return {
+        "messages": chat_history,
+        "currentTurn": current_turn,
+        "isFinishable": is_finishable,
+        "sessionStatus": status,
+    }
+
+
+async def _unique_slug(conn, user_id: str, base_name: str) -> str:
+    base_slug = slugify(base_name) or "startup"
+    candidate = base_slug
+    suffix = 2
+    while await project_repo.find_duplicate_slug(conn, user_id, candidate):
+        candidate = f"{base_slug}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+async def _auto_name_draft_startup(conn, project, user_id: str, state: dict, foundation: dict):
+    if project["slug"] is not None:
+        return
+    startup_name = foundation.get("startupName") if isinstance(foundation, dict) else None
+    if not isinstance(startup_name, str) or not startup_name.strip():
+        startup_name = state.get("startupName")
+    if not isinstance(startup_name, str) or not startup_name.strip():
+        return
+    clean_name = startup_name.strip()[:120]
+    slug = await _unique_slug(conn, user_id, clean_name)
+    await project_repo.update_project(conn, project["id"], name=clean_name, slug=slug)
+
+
+def _ensure_startup_foundation_defaults(state: dict, foundation: dict, project_type: str) -> dict:
+    if project_type != "startup" or not isinstance(foundation, dict):
+        return foundation
+    next_foundation = {**foundation}
+    for key in ["startupName", "startupStage", "traction"]:
+        if next_foundation.get(key):
+            continue
+        value = state.get(key)
+        if value:
+            next_foundation[key] = value
+
+    recommendation = next_foundation.get("recommendedOutreachProject")
+    if not isinstance(recommendation, dict) or recommendation.get("type") != "information_discovery":
+        bottleneck = state.get("biggestBottleneck") or "your current startup uncertainty"
+        next_foundation["recommendedOutreachProject"] = {
+            "type": "information_discovery",
+            "label": "Information Discovery",
+            "reason": (
+                "Information Discovery is the right first outreach project because it can turn "
+                f"{bottleneck} into concrete conversations, sharper interview targets, and clearer learning goals."
+            ),
+        }
+    next_foundation.pop("biggestBottleneck", None)
+    return next_foundation
+
+
+async def _persist_state_and_next_turn(
+    session,
+    project_id: str,
+    state: dict,
+    chat_history: list[dict],
+    project_type: str,
+) -> dict:
+    finishable = is_onboarding_finishable(state, project_type)
+    current_turn = None if finishable else await _generate_turn(state, chat_history, project_type)
+    next_status = "ready" if finishable else "active"
+
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await onboarding_repo.save_state(conn, project_id, state)
+            await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, next_status)
+            if current_turn:
+                await onboarding_repo.save_message(conn, session["id"], project_id, "assistant", current_turn["question"], "question")
+
+    if current_turn:
+        chat_history.append({"role": "assistant", "content": current_turn["question"], "messageType": "question"})
+    return _chat_response(chat_history, current_turn, finishable, next_status)
+
+
+async def process_onboarding_request(user_id: str, project_id: str, body):
     project, session, state, chat_history, last_turn = await _get_context(user_id, project_id)
     project_type = normalize_project_type(dict(project).get("project_type"))
+    body = _request_data(body)
     request_type = body.get("type")
     pool = get_pool()
 
@@ -134,29 +221,22 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
             async with pool.acquire() as conn:
                 await onboarding_repo.persist_session_turn(conn, session["id"], None, "ready")
 
-        return {
-            "messages": chat_history,
-            "currentTurn": current_turn,
-            "isFinishable": finishable,
-            "sessionStatus": "ready" if finishable else (session["status"] or "active"),
-        }
+        status = "ready" if finishable else (session["status"] or "active")
+        return _chat_response(chat_history, current_turn, finishable, status)
 
     if request_type == "finish":
         if not is_onboarding_finishable(state, project_type):
             raise BadRequestError("Not finishable yet")
         message_pairs = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history]
         foundation_payload = await generate_foundation(message_pairs, state, project_type)
+        foundation = _ensure_startup_foundation_defaults(state, foundation_payload["foundation"], project_type)
         async with pool.acquire() as conn:
             async with conn.transaction():
-                await onboarding_repo.insert_foundation(conn, project_id, foundation_payload["foundation"])
+                await onboarding_repo.insert_foundation(conn, project_id, foundation)
                 await onboarding_repo.complete_session(conn, session["id"])
+                await _auto_name_draft_startup(conn, project, user_id, state, foundation)
                 await project_repo.update_project(conn, project_id, intake_status="complete")
-        return {
-            "messages": chat_history,
-            "currentTurn": None,
-            "isFinishable": True,
-            "sessionStatus": "completed",
-        }
+        return _chat_response(chat_history, None, True, "completed")
 
     if request_type == "kickoff":
         message = (body.get("message") or "").strip()
@@ -165,24 +245,10 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
         async with pool.acquire() as conn:
             await onboarding_repo.save_message(conn, session["id"], project_id, "user", message, "custom_answer")
         chat_history.append({"role": "user", "content": message, "messageType": "custom_answer"})
+
         extracted = await extract_kickoff_idea(message, project_type)
         next_state = merge_kickoff_context(state, extracted, project_type)
-        finishable = is_onboarding_finishable(next_state, project_type)
-        current_turn = None if finishable else await _generate_turn(next_state, chat_history, project_type)
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                await onboarding_repo.save_state(conn, project_id, next_state)
-                await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, "ready" if finishable else "active")
-                if current_turn:
-                    await onboarding_repo.save_message(conn, session["id"], project_id, "assistant", current_turn["question"], "question")
-        if current_turn:
-            chat_history.append({"role": "assistant", "content": current_turn["question"], "messageType": "question"})
-        return {
-            "messages": chat_history,
-            "currentTurn": current_turn,
-            "isFinishable": finishable,
-            "sessionStatus": "ready" if finishable else (session["status"] or "active"),
-        }
+        return await _persist_state_and_next_turn(session, project_id, next_state, chat_history, project_type)
 
     if request_type == "answer":
         if not last_turn:
@@ -213,114 +279,6 @@ async def process_onboarding_request(user_id: str, project_id: str, body: dict):
             selected_values = [choice["normalizedValue"] for choice in selected_choices]
             next_state = merge_slot_patch(state, last_turn["targetSlot"], selected_values, "solid", project_type)
 
-        if is_onboarding_finishable(next_state, project_type):
-            async with pool.acquire() as conn:
-                async with conn.transaction():
-                    await onboarding_repo.save_state(conn, project_id, next_state)
-                    await onboarding_repo.persist_session_turn(conn, session["id"], None, "ready")
-            return {
-                "messages": chat_history,
-                "currentTurn": None,
-                "isFinishable": True,
-                "sessionStatus": "ready",
-            }
-
-        current_turn = await _generate_turn(next_state, chat_history, project_type)
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                await onboarding_repo.save_state(conn, project_id, next_state)
-                await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, "active")
-                await onboarding_repo.save_message(conn, session["id"], project_id, "assistant", current_turn["question"], "question")
-        chat_history.append({"role": "assistant", "content": current_turn["question"], "messageType": "question"})
-        return {
-            "messages": chat_history,
-            "currentTurn": current_turn,
-            "isFinishable": False,
-            "sessionStatus": session["status"] or "active",
-        }
-
-    if request_type == "choice":
-        selected = None
-        if last_turn:
-            for choice in last_turn["choices"]:
-                if choice["id"] == body.get("choiceId"):
-                    selected = choice
-                    break
-        if not last_turn or not selected:
-            raise BadRequestError("Invalid choice for current turn")
-        async with pool.acquire() as conn:
-            await onboarding_repo.save_message(conn, session["id"], project_id, "user", selected["label"], "choice_answer")
-        chat_history.append({"role": "user", "content": selected["label"], "messageType": "choice_answer"})
-        next_state = merge_slot_patch(state, selected["slotKey"], selected["normalizedValue"], "solid", project_type)
-        if is_onboarding_finishable(next_state, project_type):
-            async with pool.acquire() as conn:
-                async with conn.transaction():
-                    await onboarding_repo.save_state(conn, project_id, next_state)
-                    await onboarding_repo.persist_session_turn(conn, session["id"], None, "ready")
-            return {
-                "messages": chat_history,
-                "currentTurn": None,
-                "isFinishable": True,
-                "sessionStatus": "ready",
-            }
-
-        current_turn = await _generate_turn(next_state, chat_history, project_type)
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                await onboarding_repo.save_state(conn, project_id, next_state)
-                await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, "active")
-                await onboarding_repo.save_message(conn, session["id"], project_id, "assistant", current_turn["question"], "question")
-        chat_history.append({"role": "assistant", "content": current_turn["question"], "messageType": "question"})
-        return {
-            "messages": chat_history,
-            "currentTurn": current_turn,
-            "isFinishable": False,
-            "sessionStatus": session["status"] or "active",
-        }
-
-    if request_type == "custom":
-        custom_text = (body.get("customText") or "").strip()
-        if not custom_text:
-            raise BadRequestError("Custom text is required")
-        if not last_turn:
-            raise BadRequestError("No active turn to answer")
-        async with pool.acquire() as conn:
-            await onboarding_repo.save_message(conn, session["id"], project_id, "user", custom_text, "custom_answer")
-        chat_history.append({"role": "user", "content": custom_text, "messageType": "custom_answer"})
-        recent = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history[-4:]]
-        extracted = await extract_custom_slot_answer(
-            last_turn["targetSlot"],
-            custom_text,
-            recent,
-            last_turn.get("choices") or [],
-            None,
-            project_type,
-        )
-        next_state = merge_slot_patch(state, last_turn["targetSlot"], extracted["value"], extracted["quality"], project_type)
-        if is_onboarding_finishable(next_state, project_type):
-            async with pool.acquire() as conn:
-                async with conn.transaction():
-                    await onboarding_repo.save_state(conn, project_id, next_state)
-                    await onboarding_repo.persist_session_turn(conn, session["id"], None, "ready")
-            return {
-                "messages": chat_history,
-                "currentTurn": None,
-                "isFinishable": True,
-                "sessionStatus": "ready",
-            }
-
-        current_turn = await _generate_turn(next_state, chat_history, project_type)
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                await onboarding_repo.save_state(conn, project_id, next_state)
-                await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, "active")
-                await onboarding_repo.save_message(conn, session["id"], project_id, "assistant", current_turn["question"], "question")
-        chat_history.append({"role": "assistant", "content": current_turn["question"], "messageType": "question"})
-        return {
-            "messages": chat_history,
-            "currentTurn": current_turn,
-            "isFinishable": False,
-            "sessionStatus": session["status"] or "active",
-        }
+        return await _persist_state_and_next_turn(session, project_id, next_state, chat_history, project_type)
 
     raise BadRequestError("Invalid request type")

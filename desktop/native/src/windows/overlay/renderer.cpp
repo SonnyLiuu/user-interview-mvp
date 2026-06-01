@@ -1,4 +1,4 @@
-// Direct2D renderer for the capture-excluded notepad shell.
+// Direct2D renderer for the visible notepad checklist shell.
 
 #include "renderer.h"
 
@@ -21,6 +21,8 @@ ComPtr<ID2D1Factory>      g_d2dFactory;
 ComPtr<IDWriteFactory>    g_dwriteFactory;
 ComPtr<IDWriteTextFormat> g_titleFormat;
 ComPtr<IDWriteTextFormat> g_bodyFormat;
+ComPtr<IDWriteTextFormat> g_titleNoWrapFormat;
+ComPtr<IDWriteTextFormat> g_bodyNoWrapFormat;
 ComPtr<IDWriteTextFormat> g_buttonFormat;
 ComPtr<IDWriteTextFormat> g_iconFormat;
 ComPtr<IDWriteTextFormat> g_topicFormat;
@@ -149,6 +151,22 @@ bool createTextFormat(float size,
     return true;
 }
 
+bool createSingleLineTextFormat(float size,
+                                DWRITE_FONT_WEIGHT weight,
+                                IDWriteTextFormat** out) {
+    if (!createTextFormat(size, weight, out)) {
+        return false;
+    }
+    (*out)->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    ComPtr<IDWriteInlineObject> ellipsis;
+    if (SUCCEEDED(g_dwriteFactory->CreateEllipsisTrimmingSign(*out, ellipsis.GetAddressOf()))) {
+        DWRITE_TRIMMING trimming{};
+        trimming.granularity = DWRITE_TRIMMING_GRANULARITY_CHARACTER;
+        (*out)->SetTrimming(&trimming, ellipsis.Get());
+    }
+    return true;
+}
+
 bool createIconFormat(float size, IDWriteTextFormat** out) {
     if (FAILED(g_dwriteFactory->CreateTextFormat(
             L"Segoe MDL2 Assets", nullptr, DWRITE_FONT_WEIGHT_NORMAL,
@@ -181,6 +199,16 @@ bool ensureFactories() {
     if (!g_bodyFormat &&
         !createTextFormat(13.0f, DWRITE_FONT_WEIGHT_NORMAL,
                           g_bodyFormat.GetAddressOf())) {
+        return false;
+    }
+    if (!g_titleNoWrapFormat &&
+        !createSingleLineTextFormat(16.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                                    g_titleNoWrapFormat.GetAddressOf())) {
+        return false;
+    }
+    if (!g_bodyNoWrapFormat &&
+        !createSingleLineTextFormat(13.0f, DWRITE_FONT_WEIGHT_NORMAL,
+                                    g_bodyNoWrapFormat.GetAddressOf())) {
         return false;
     }
     if (!g_buttonFormat &&
@@ -344,7 +372,7 @@ void drawSettingsPage(const OverlayRenderState& state, D2D1_SIZE_F sz) {
                                     state.hasAuthToken ? g_goalBrush.Get()
                                                        : g_accentBrush.Get());
     const wchar_t* authHint = state.hasAuthToken
-        ? L"Foundry Desktop can load call briefs for the current user."
+        ? L"User Interview Desktop can load call briefs for the current user."
         : L"Sign in before starting a session.";
     g_cachedRenderTarget->DrawTextW(authHint,
                                     static_cast<UINT32>(wcslen(authHint)),
@@ -398,21 +426,23 @@ void drawPersonRow(const OverlayPersonRow& person, D2D1_RECT_F rect,
     std::wstring name = person.name.empty() ? L"Unnamed person" : person.name;
     g_cachedRenderTarget->DrawTextW(name.c_str(),
                                     static_cast<UINT32>(name.size()),
-                                    g_titleFormat.Get(),
+                                    g_titleNoWrapFormat.Get(),
                                     D2D1::RectF(rect.left + 12.0f,
                                                 rect.top + 8.0f,
                                                 rect.right - 12.0f,
                                                 rect.top + 28.0f),
-                                    g_textBrush.Get());
+                                    g_textBrush.Get(),
+                                    D2D1_DRAW_TEXT_OPTIONS_CLIP);
     std::wstring meta = person.meta.empty() ? L"No details yet" : person.meta;
     g_cachedRenderTarget->DrawTextW(meta.c_str(),
                                     static_cast<UINT32>(meta.size()),
-                                    g_bodyFormat.Get(),
+                                    g_bodyNoWrapFormat.Get(),
                                     D2D1::RectF(rect.left + 12.0f,
-                                                rect.top + 29.0f,
+                                                rect.top + 31.0f,
                                                 rect.right - 12.0f,
                                                 rect.bottom - 6.0f),
-                                    g_mutedBrush.Get());
+                                    g_mutedBrush.Get(),
+                                    D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
 
 std::wstring ellipsize(const std::wstring& text, size_t maxChars) {
@@ -783,6 +813,21 @@ void renderOverlay(IDXGISwapChain* swapChain, const OverlayRenderState& state) {
                                         state.sessionActive ? g_textBrush.Get()
                                                             : g_mutedBrush.Get());
 
+        if (state.sessionActive && !state.realtimeStatus.empty()) {
+            D2D1_RECT_F rtBody = D2D1::RectF(body.left, body.bottom + 4.0f,
+                                             body.right, body.bottom + 23.0f);
+            bool isError = !state.realtimeError.empty() ||
+                           state.realtimeStatus == L"error";
+            ID2D1SolidColorBrush* rtBrush = isError
+                ? g_accentBrush.Get() : g_mutedBrush.Get();
+            std::wstring rtText = isError && !state.realtimeError.empty()
+                ? (L"AI: " + state.realtimeError)
+                : L"AI: " + state.realtimeStatus;
+            g_cachedRenderTarget->DrawTextW(
+                rtText.c_str(), static_cast<UINT32>(rtText.size()),
+                g_bodyFormat.Get(), rtBody, rtBrush);
+        }
+
         if (!state.sessionActive) {
             D2D1_RECT_F hint = D2D1::RectF(18.0f, 112.0f, sz.width - 18.0f,
                                           190.0f);
@@ -1050,6 +1095,8 @@ void releaseRendererResources() {
     g_signalBrush.Reset();
     g_titleFormat.Reset();
     g_bodyFormat.Reset();
+    g_titleNoWrapFormat.Reset();
+    g_bodyNoWrapFormat.Reset();
     g_buttonFormat.Reset();
     g_iconFormat.Reset();
     g_topicFormat.Reset();

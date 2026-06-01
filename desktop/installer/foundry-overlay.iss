@@ -1,11 +1,11 @@
-; Inno Setup script for Foundry Overlay.
+; Inno Setup script for User Interview Notetaker.
 ;
 ; Build:
 ;   1. Build Release exe:    cd ..\native && cmake --build build --config Release
 ;   2. (Optional) sign exe:  powershell -ExecutionPolicy Bypass -File ..\native\scripts\Sign-Dev.ps1
 ;   3. Compile installer:    iscc desktop\installer\foundry-overlay.iss
 ;   4. (Optional) sign installer:
-;        signtool sign /n "Foundry Overlay Dev" /fd SHA256 ^
+;        signtool sign /n "User Interview Notetaker Dev" /fd SHA256 ^
 ;          /tr http://timestamp.digicert.com /td SHA256 ^
 ;          desktop\installer\dist\foundry-overlay-setup-*.exe
 ;
@@ -13,11 +13,11 @@
 ;   %LOCALAPPDATA%\Programs\FoundryOverlay\
 ; HKCU registers foundry:// so the protocol works without admin too.
 
-#define MyAppName        "Foundry Overlay"
+#define MyAppName        "User Interview Notetaker"
 #define MyAppVersion     "0.1.0"
-#define MyAppPublisher   "Foundry"
+#define MyAppPublisher   "User Interview"
 #define MyAppExeName     "foundry_overlay.exe"
-#define MyAppURL         "https://foundry.local"
+#define MyAppURL         "https://userinterview.local"
 #define NativeBuildDir   "..\native\build\Release"
 
 [Setup]
@@ -49,7 +49,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "startmenu";  Description: "Create a Start Menu shortcut";    GroupDescription: "Shortcuts:"
-Name: "autostart";  Description: "Start Foundry Overlay when I sign in to Windows"; GroupDescription: "Startup:"; Flags: unchecked
+Name: "autostart";  Description: "Start User Interview Notetaker when I sign in to Windows"; GroupDescription: "Startup:"; Flags: unchecked
 
 [Files]
 Source: "{#NativeBuildDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
@@ -64,7 +64,7 @@ Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: au
 ; are needed. "%1" is replaced by Windows with the full URL (including
 ; query string) when the protocol is invoked from a browser or Run dialog.
 Root: HKCU; Subkey: "Software\Classes\foundry"; \
-  ValueType: string; ValueName: ""; ValueData: "URL:Foundry Protocol"; \
+  ValueType: string; ValueName: ""; ValueData: "URL:User Interview Protocol"; \
   Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\foundry"; \
   ValueType: string; ValueName: "URL Protocol"; ValueData: ""

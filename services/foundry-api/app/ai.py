@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 from typing import AsyncIterator
 
 import httpx
@@ -17,6 +16,13 @@ from .project_modes import (
     get_slot_context,
     normalize_project_type,
     project_actor,
+)
+from .onboarding_mode_hints import (
+    apply_networking_kickoff_hints,
+    extract_selectivity_detail,
+    networking_personalization_turn,
+    networking_selectivity_turn,
+    normalize_networking_foundation,
 )
 
 
@@ -111,299 +117,6 @@ def _clean_prompt_list(value) -> list[str]:
 def _join_prompt_list(value, fallback: str = "Not specified") -> str:
     cleaned = _clean_prompt_list(value)
     return "; ".join(cleaned) if cleaned else fallback
-
-
-def _slot_value(value: str, quality: str = "solid") -> dict:
-    return {"value": value, "quality": quality}
-
-
-def _slot_values(values: list[str], quality: str = "solid") -> dict:
-    return {"values": values, "quality": quality}
-
-
-def _has_solid_slot(extracted: dict, key: str) -> bool:
-    patch = extracted.get(key)
-    if not isinstance(patch, dict):
-        return False
-    if patch.get("quality") == "missing":
-        return False
-    value = patch.get("value")
-    values = patch.get("values")
-    return bool((isinstance(value, str) and value.strip()) or (isinstance(values, list) and values))
-
-
-def _extract_selectivity_detail(text: str) -> str | None:
-    compact = " ".join(text.split())
-    match = re.search(
-        r"(?i)(?:only\s+)?(\d+\s*(?:out of|/)\s*\d+[^.;,\n]*(?:selected|accepted|oral|papers)[^.;\n]*)",
-        compact,
-    )
-    if match:
-        return match.group(1).strip()
-    match = re.search(r"(?i)((?:very\s+)?selective[^.;\n]*)", compact)
-    if match:
-        return match.group(1).strip()
-    return None
-
-
-def _mentions_in_person_time(text: str) -> bool:
-    lower = text.lower()
-    return any(token in lower for token in ["in person", "during the workshop", "at the workshop", "on tuesday", "tuesday"])
-
-
-def _networking_kickoff_hints(user_message: str) -> dict:
-    lower = user_message.lower()
-    hints: dict[str, dict] = {}
-
-    event_match = re.search(r"(?i)(CAIS\s*26\s+Agent\s+Skills\s+workshop|Agent\s+Skills\s+workshop)", user_message)
-    event_name = event_match.group(1) if event_match else "the shared event"
-
-    has_linkedin = "linkedin" in lower
-    has_invited = "invited speaker" in lower or "invited speakers" in lower
-    has_organizer = "organizer" in lower or "organizers" in lower
-    if has_invited and has_organizer:
-        recipients = f"Invited speakers and organizers of {event_name}"
-    elif has_invited:
-        recipients = f"Invited speakers of {event_name}"
-    elif has_organizer:
-        recipients = f"Organizers of {event_name}"
-    else:
-        recipients = ""
-
-    if has_linkedin:
-        target = recipients or f"the target recipients for {event_name}"
-        hints["outreachGoal"] = _slot_value(f"Connect with {target} on LinkedIn")
-        hints["desiredOutcome"] = _slot_value(
-            "Connect on LinkedIn and look forward to meeting in person"
-            if _mentions_in_person_time(user_message)
-            else "Connect on LinkedIn"
-        )
-        hints["channelFormat"] = _slot_value("LinkedIn connection note under 300 characters")
-    if recipients:
-        hints["recipients"] = _slot_value(recipients)
-
-    presenting = any(token in lower for token in ["oral presentation", "oral presenter", "presenting", "present at"])
-    paper = "paper" in lower or "publication" in lower
-    if presenting:
-        background = f"The user is giving an oral presentation at {event_name}"
-        if paper:
-            background += " on their paper"
-        hints["senderContext"] = _slot_value(background)
-
-    if _mentions_in_person_time(user_message):
-        if "tuesday" in lower:
-            hints["sharedContext"] = _slot_value(f"The user and recipients will be at {event_name} on Tuesday")
-            hints["desiredOutcome"] = _slot_value("Connect on LinkedIn and look forward to meeting on Tuesday")
-        else:
-            hints["sharedContext"] = _slot_value(f"The user and recipients will be at {event_name} in person")
-
-    if presenting:
-        mentions = [f"The user is giving an oral presentation at {event_name}"]
-        # Selectivity stats are intentionally left out here; personalizationStrategy asks whether to include them.
-        hints["requiredMentions"] = _slot_values(mentions)
-
-    return hints
-
-
-def _apply_networking_kickoff_hints(extracted: dict, user_message: str) -> dict:
-    patched = dict(extracted)
-    for key, value in _networking_kickoff_hints(user_message).items():
-        if not _has_solid_slot(patched, key):
-            patched[key] = value
-
-    selectivity = _extract_selectivity_detail(user_message)
-    if selectivity:
-        required_patch = patched.get("requiredMentions")
-        if isinstance(required_patch, dict):
-            values = [
-                item
-                for item in required_patch.get("values", [])
-                if (
-                    isinstance(item, str)
-                    and "out of" not in item.lower()
-                    and "/" not in item
-                    and "selective" not in item.lower()
-                    and "selected" not in item.lower()
-                    and "accepted" not in item.lower()
-                )
-            ]
-            if values:
-                patched["requiredMentions"] = _slot_values(values, required_patch.get("quality") or "solid")
-            else:
-                patched.pop("requiredMentions", None)
-        optional = patched.get("optionalMentions")
-        values = optional.get("values", []) if isinstance(optional, dict) else []
-        if isinstance(values, list):
-            patched["optionalMentions"] = _slot_values(_append_unique(values, selectivity))
-        # Keep this missing so onboarding asks the include-vs-omit question.
-        patched["personalizationStrategy"] = _slot_value("", "missing")
-
-    return patched
-
-
-def _networking_selectivity_turn(selectivity_detail: str | None) -> dict:
-    detail = selectivity_detail or "the selective acceptance detail"
-    question = (
-        "Do you want recipient personalization, and should we include the 6 out of 45 selectivity detail?"
-        if "6" in detail and "45" in detail
-        else f"Do you want recipient personalization, and should we include the {detail} detail?"
-    )
-    include_label = (
-        "Include the 6 out of 45 selectivity detail"
-        if "6" in detail and "45" in detail
-        else "Include the selectivity detail"
-    )
-    return {
-        "targetSlot": "personalizationStrategy",
-        "question": question,
-        "choices": [
-            {
-                "id": "a",
-                "label": f"Light personalization, and {include_label.lower()}",
-                "normalizedValue": f"Use a concise LinkedIn note with light recipient personalization and include this optional credibility detail: {detail}",
-                "slotKey": "personalizationStrategy",
-            },
-            {
-                "id": "b",
-                "label": "Light personalization, but omit the selectivity detail",
-                "normalizedValue": "Use a concise LinkedIn note with light recipient personalization; mention the oral presentation but do not include the selectivity detail.",
-                "slotKey": "personalizationStrategy",
-            },
-            {
-                "id": "c",
-                "label": "No recipient personalization; keep the note shared-context only",
-                "normalizedValue": "Use a concise LinkedIn note without recipient-specific personalization; mention only the shared context, oral presentation, and desired next step.",
-                "slotKey": "personalizationStrategy",
-            },
-            {
-                "id": "d",
-                "label": "Role-based personalization for speakers vs organizers",
-                "normalizedValue": f"Use concise role-based personalization for speakers versus organizers and include the selectivity detail only when it fits naturally: {detail}",
-                "slotKey": "personalizationStrategy",
-            },
-        ],
-        "customPlaceholder": "Say whether to personalize each message, and whether to include the selectivity detail...",
-    }
-
-
-def _networking_personalization_turn() -> dict:
-    return {
-        "targetSlot": "personalizationStrategy",
-        "question": "Do you want these messages personalized, and if so how much?",
-        "choices": [
-            {
-                "id": "a",
-                "label": "No recipient personalization: use only the shared context and ask",
-                "normalizedValue": "No recipient personalization: use only the shared context and ask.",
-                "slotKey": "personalizationStrategy",
-            },
-            {
-                "id": "b",
-                "label": "Light personalization: add one obvious recipient hook when available",
-                "normalizedValue": "Light personalization: add one obvious recipient hook when available.",
-                "slotKey": "personalizationStrategy",
-            },
-            {
-                "id": "c",
-                "label": "Role-based personalization for recipient types",
-                "normalizedValue": "Role-based personalization: adapt the note for recipient types such as speakers, organizers, advisors, or collaborators.",
-                "slotKey": "personalizationStrategy",
-            },
-            {
-                "id": "d",
-                "label": "High personalization: include a specific work detail when available",
-                "normalizedValue": "High personalization: include a specific detail from the recipient's work when available.",
-                "slotKey": "personalizationStrategy",
-            },
-        ],
-        "customPlaceholder": "Describe whether to personalize each message and how much...",
-    }
-
-
-def _append_unique(values: list[str], item: str) -> list[str]:
-    if not item:
-        return values
-    seen = {value.strip().lower() for value in values if isinstance(value, str)}
-    return values if item.strip().lower() in seen else [*values, item]
-
-
-def _foundation_list(value) -> list[str]:
-    return [item.strip() for item in value if isinstance(item, str) and item.strip()] if isinstance(value, list) else []
-
-
-def _normalize_networking_foundation(foundation: dict, state: dict, transcript: str) -> dict:
-    normalized = dict(foundation)
-    haystack = f"{json.dumps(state, ensure_ascii=False)}\n{transcript}"
-    lower = haystack.lower()
-    hints = _networking_kickoff_hints(haystack)
-
-    for key in ["outreachGoal", "recipients", "senderContext", "sharedContext", "desiredOutcome", "channelFormat"]:
-        if not normalized.get(key):
-            patch = hints.get(key)
-            if isinstance(patch, dict) and patch.get("value"):
-                normalized[key] = patch["value"]
-
-    required_mentions = _foundation_list(normalized.get("requiredMentions"))
-    hint_mentions = hints.get("requiredMentions")
-    if isinstance(hint_mentions, dict):
-        for item in _foundation_list(hint_mentions.get("values")):
-            required_mentions = _append_unique(required_mentions, item)
-
-    selectivity_detail = _extract_selectivity_detail(haystack)
-    style = _clean_prompt_text(normalized.get("personalizationStrategy") or state.get("personalizationStrategy")).lower()
-    wants_omit_selectivity = any(
-        phrase in style
-        for phrase in [
-            "do not include the selectivity",
-            "without the selectivity",
-            "keep it lighter",
-            "keep the note lighter",
-            "omit the selectivity",
-        ]
-    )
-    wants_include_selectivity = bool(selectivity_detail) and "include" in style and not wants_omit_selectivity
-
-    if selectivity_detail:
-        optional_mentions = _foundation_list(normalized.get("optionalMentions"))
-        normalized["optionalMentions"] = _append_unique(optional_mentions, selectivity_detail)
-        required_mentions = [
-            item
-            for item in required_mentions
-            if (
-                "out of" not in item.lower()
-                and "/" not in item
-                and "selective" not in item.lower()
-                and "selected" not in item.lower()
-                and "accepted" not in item.lower()
-                and "acceptance" not in item.lower()
-            )
-        ]
-        if wants_include_selectivity:
-            required_mentions = _append_unique(required_mentions, selectivity_detail)
-
-    normalized["requiredMentions"] = required_mentions
-
-    message_boundaries = _foundation_list(normalized.get("messageBoundaries"))
-    if wants_omit_selectivity:
-        message_boundaries = _append_unique(message_boundaries, "Do not include the 6 out of 45 selectivity detail.")
-    if "linkedin" in lower:
-        normalized.setdefault("outreachGoal", "Connect with target recipients on LinkedIn")
-        normalized.setdefault("desiredOutcome", "Connect on LinkedIn")
-        normalized.setdefault("channelFormat", "LinkedIn connection note under 300 characters")
-    if "tuesday" in lower:
-        current_response = _clean_prompt_text(normalized.get("desiredOutcome"))
-        if "tuesday" not in current_response.lower():
-            normalized["desiredOutcome"] = "Connect on LinkedIn and look forward to meeting on Tuesday"
-    normalized["messageBoundaries"] = message_boundaries
-
-    if not normalized.get("personalizationStrategy"):
-        normalized["personalizationStrategy"] = (
-            "Use a concise LinkedIn note; mention the shared event and oral presentation without heavy biography."
-        )
-    if not normalized.get("tone"):
-        normalized["tone"] = "Warm, brief, and peer-like"
-
-    return normalized
 
 
 async def _await_provider(coro, provider: str, timeout: float, operation: str):
@@ -509,7 +222,7 @@ async def extract_kickoff_idea(user_message: str, project_type: str = "startup")
         "A user has just described a networking outreach project. Extract every field that is actually present.\n\n"
         if normalized_type == "networking"
         else
-        "A founder has just described their startup idea. Extract every Foundation field that is actually present.\n\n"
+        "A founder has just described their startup. Extract every startup onboarding field that is actually present.\n\n"
     )
     prompt = (
         intro
@@ -545,7 +258,7 @@ async def extract_kickoff_idea(user_message: str, project_type: str = "startup")
     if not isinstance(raw, dict):
         return {}
     if normalized_type == "networking":
-        return _apply_networking_kickoff_hints(raw, user_message)
+        return apply_networking_kickoff_hints(raw, user_message)
     return raw
 
 
@@ -565,10 +278,10 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
     user_label = "User" if normalized_type == "networking" else "Founder"
     snippet = "\n".join([f"{'AI' if msg['role'] == 'assistant' else user_label}: {msg['content']}" for msg in recent_messages[-6:]]) or "(none yet)"
     if normalized_type == "networking" and target_slot == "personalizationStrategy":
-        selectivity_detail = _extract_selectivity_detail(f"{chr(10).join(state_lines)}\n{snippet}")
+        selectivity_detail = extract_selectivity_detail(f"{chr(10).join(state_lines)}\n{snippet}")
         if selectivity_detail:
-            return _networking_selectivity_turn(selectivity_detail)
-        return _networking_personalization_turn()
+            return networking_selectivity_turn(selectivity_detail)
+        return networking_personalization_turn()
     advisor_role = (
         "You are a practical outreach strategist helping someone set up a focused networking campaign. "
         "Your job is to ask one focused question to understand the outreach goal better, then offer concrete answer starters.\n\n"
@@ -581,7 +294,7 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
         advisor_role
         +
         f"You need to learn: {slot_context[target_slot]}\n\n"
-        f"This is {'a clarification of a weak answer' if follow_up else 'the next useful Foundation question'}.\n"
+        f"This is {'a clarification of a weak answer' if follow_up else 'the next useful onboarding question'}.\n"
         "When a clarifying probe would sharpen the answer, ask about the real status quo, urgency, "
         "current workaround, or the riskiest assumption instead of repeating the field label.\n\n"
         "What you know so far:\n"
@@ -597,7 +310,7 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
         f'- Generate exactly 3-5 distinct, concrete choices relevant to this specific {user_label.lower()}\'s context\n'
         f'- Each choice should target the "{target_slot}" slot\n'
         "- Do not include a generic escape hatch; the UI always keeps free text available\n"
-        '- Labels may be detailed but must stay under 110 characters\n'
+        '- Labels may be detailed but must stay under 120 characters\n'
         '- Assign a short unique id to each choice (e.g. "a", "b", "c")\n'
         '- normalizedValue should be a clean sentence suitable for storage\n'
         '- customPlaceholder should be a short prompt for the free-text field'
@@ -711,11 +424,22 @@ async def generate_foundation(messages: list[dict], state: dict, project_type: s
             '"matchRubric":"string","lowFitSignals":["string"]}}'
         )
     else:
-        task = "Generate a Project Foundation document for a startup based on the onboarding conversation and collected state.\n\n"
+        task = "Generate a startup Foundation document based on the onboarding conversation and collected state.\n\n"
         extra_rules = (
-            "- biggestUnknown should name the highest-value assumption the founder still needs to test."
+            "- startupName should preserve the founder's chosen startup, product, company, or working name.\n"
+            "- recommendedOutreachProject must always recommend Information Discovery.\n"
+            "- Use the collected state's biggestBottleneck only to write recommendedOutreachProject.reason.\n"
+            "- Do not include biggestBottleneck as a Foundation field; it is only recommendation context.\n"
+            "- recommendedOutreachProject.reason must explain why learning-oriented outreach is valuable now.\n"
+            "- Do not recommend sales, investor, recruiting, partnership, advisor, or press outreach in V1."
         )
-        schema_hint = '{"foundation":{"summary":"string","targetUser":"string","painPoint":"string","valueProp":"string","idealPeopleTypes":["string"],"differentiation":"string","biggestUnknown":"string"}}'
+        schema_hint = (
+            '{"foundation":{"startupName":"string","summary":"string","targetUser":"string",'
+            '"painPoint":"string","valueProp":"string","idealPeopleTypes":["string"],'
+            '"startupStage":"string|null","traction":["string"],'
+            '"differentiation":"string|null","recommendedOutreachProject":'
+            '{"type":"information_discovery","label":"Information Discovery","reason":"string"}}}'
+        )
     prompt = (
         task
         +
@@ -735,7 +459,9 @@ async def generate_foundation(messages: list[dict], state: dict, project_type: s
     # Normalize: AI sometimes returns foundation fields at top level without the wrapper key
     foundation = raw.get("foundation") if "foundation" in raw else raw
     if normalized_type == "networking" and isinstance(foundation, dict):
-        foundation = _normalize_networking_foundation(foundation, state, transcript)
+        foundation = normalize_networking_foundation(foundation, state, transcript)
+    elif normalized_type == "startup" and isinstance(foundation, dict):
+        foundation.pop("biggestBottleneck", None)
     return {"foundation": foundation}
 
 
@@ -907,10 +633,17 @@ def _foundation_search_summary(foundation: dict) -> str:
         return "\n".join(part for part in parts if part)
 
     parts = [
+        f"Startup: {foundation.get('startupName')}" if foundation.get("startupName") else None,
         f"Summary: {foundation.get('summary')}" if foundation.get("summary") else None,
         f"Target user: {foundation.get('targetUser')}" if foundation.get("targetUser") else None,
         f"Pain point: {foundation.get('painPoint')}" if foundation.get("painPoint") else None,
         f"Value prop: {foundation.get('valueProp')}" if foundation.get("valueProp") else None,
+        f"Startup stage: {foundation.get('startupStage')}" if foundation.get("startupStage") else None,
+        (
+            f"Traction: {', '.join(foundation.get('traction') or [])}"
+            if foundation.get("traction")
+            else None
+        ),
         (
             f"Ideal people: {', '.join(foundation.get('idealPeopleTypes') or [])}"
             if foundation.get("idealPeopleTypes")

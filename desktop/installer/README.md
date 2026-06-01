@@ -1,6 +1,6 @@
-# Foundry Overlay installer
+# User Interview Notetaker installer
 
-Inno Setup script that packages [`desktop/native/build/Release/foundry_overlay.exe`](../native/) plus its `assets/` folder into a per-user installer for Windows.
+Inno Setup script that packages [`desktop/native/build/Release/foundry_overlay.exe`](../native/) plus its `assets/` folder into the User Interview Notetaker per-user installer for Windows.
 
 ## Prereqs
 
@@ -24,10 +24,48 @@ cd ..\installer
 
 Output: `desktop/installer/dist/foundry-overlay-setup-<version>.exe`.
 
+## Production signed build
+
+Use `Build-SignedInstaller.ps1` when you have a real Authenticode code-signing
+certificate. The script builds the native Release exe, signs it, creates the
+installer, signs the installer, and verifies both signatures. It refuses to use
+the local self-signed dev certificates.
+
+Certificate already installed in the Windows certificate store:
+
+```pwsh
+$env:FOUNDRY_CODESIGN_THUMBPRINT = "<real-code-signing-cert-thumbprint>"
+powershell -ExecutionPolicy Bypass -File .\Build-SignedInstaller.ps1
+```
+
+Certificate as a PFX file:
+
+```pwsh
+$env:FOUNDRY_CODESIGN_PFX_PATH = "C:\secure\user-interview-codesign.pfx"
+$env:FOUNDRY_CODESIGN_PFX_PASSWORD = "<password>"
+powershell -ExecutionPolicy Bypass -File .\Build-SignedInstaller.ps1
+```
+
+If Inno Setup is installed, the script uses it. Otherwise it falls back to the
+local IExpress package builder.
+
+## Local fallback build
+
+If Inno Setup is not installed, use the Windows built-in IExpress fallback to
+create a local MVP installer with the same output name:
+
+```pwsh
+powershell -ExecutionPolicy Bypass -File .\build-iexpress.ps1
+```
+
+This packages the release exe and assets, installs them under
+`%LOCALAPPDATA%\Programs\FoundryOverlay`, registers the `foundry://` protocol,
+creates a Start Menu shortcut, and launches the notetaker.
+
 ## Sign the installer (optional)
 
 ```pwsh
-signtool sign /n "Foundry Overlay Dev" /fd SHA256 `
+signtool sign /n "User Interview Notetaker Dev" /fd SHA256 `
   /tr http://timestamp.digicert.com /td SHA256 `
   dist\foundry-overlay-setup-*.exe
 ```

@@ -72,6 +72,8 @@ struct OverlayRenderState {
     std::wstring endSessionStatus;
     std::wstring selectedPersonName;
     std::wstring transcriptPreview;
+    std::wstring realtimeStatus;
+    std::wstring realtimeError;
     std::vector<OverlayTopicRow> topics;
     std::vector<OverlayPersonRow> people;
 };

@@ -86,6 +86,10 @@ Idea: ${projectContext.idea_summary ?? 'Not specified'}
 Target customer: ${projectContext.target_customer ?? 'Not specified'}
 Key assumptions to validate: ${projectContext.key_assumptions?.join('; ') ?? 'Not specified'}
 Most promising avenues: ${projectContext.most_promising_avenues?.join('; ') ?? 'Not specified'}
+Discovery match rubric: ${projectContext.match_rubric ?? 'Not specified'}
+Low-fit signals: ${projectContext.low_fit_signals?.join('; ') ?? 'Not specified'}
+Positive calibration patterns from this startup: ${projectContext.positive_patterns?.join('; ') ?? 'Not specified'}
+Negative calibration patterns from this startup: ${projectContext.negative_patterns?.join('; ') ?? 'Not specified'}
 
 SOURCE MATERIAL ABOUT THIS PERSON:
 ${analysisContent}
@@ -102,6 +106,9 @@ For relevance_rank: score against the founder's specific hypothesis, customer ty
 - high: directly matches the target customer or buyer; currently experiences the pain; controls budget for this type of solution; or is actively doing the exact workflow the founder wants to understand.
 - medium: useful learning fit; does not perfectly match the target customer, but has meaningful founder, startup, product, customer discovery, go-to-market, or technical-building experience that could inform the hypothesis. This includes founders, former founders, startup operators, accelerator participants, technical builders, or people who work closely with early-stage founders.
 - low: weak fit; minimal overlap with the target customer, startup context, customer discovery, founder workflows, or the problem space.
+
+For match_score: when a discovery match rubric is provided, return an integer from 0 to 100 that reflects this person's fit for the current Information Discovery outreach project. Derive match_rank from the score: high >= 75, medium >= 45, low < 45.
+For match_explanation: when a discovery match rubric is provided, write 1-2 concise sentences explaining why this person is or is not a strong learning conversation target.
 
 Important: Do not assign low relevance solely because the person is not the exact target customer. If the person is a founder, former founder, startup operator, technical builder, accelerator participant, or works closely with early-stage founders, they should usually be medium unless their background has almost no connection to startup formation, customer discovery, or founder workflows.`;
 
@@ -225,7 +232,7 @@ Important: Do not assign low relevance solely because the person is not the exac
     },
   });
 
-  if (!isNetworking) return analysis;
+  if (!isNetworking && !projectContext.match_profile_version) return analysis;
 
   const score = normalizeMatchScore(analysis.match_score) ?? scoreFromRank(analysis.relevance_rank) ?? 0;
   const rank = matchRankForScore(score);

@@ -11,10 +11,25 @@ from ..repositories import intake as intake_repo
 from ..repositories import projects as project_repo
 
 
+EPHEMERAL_STARTUP_FOUNDATION_KEYS = {"biggestBottleneck"}
+
+
 def _clean_list(value):
     if not isinstance(value, list):
         return []
     return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _sanitize_foundation_for_project(project_type: str | None, foundation_json):
+    if not isinstance(foundation_json, dict):
+        return foundation_json
+    if project_type != "startup":
+        return foundation_json
+    return {
+        key: value
+        for key, value in foundation_json.items()
+        if key not in EPHEMERAL_STARTUP_FOUNDATION_KEYS
+    }
 
 
 def _networking_match_profile(foundation_json: dict) -> dict:
@@ -122,6 +137,7 @@ async def update_project_foundation(user_id: str, project_id: str, foundation_js
         project = await project_repo.find_owned_project(conn, user_id, project_id)
         if not project:
             raise NotFoundError("Not found")
+        foundation_json = _sanitize_foundation_for_project(project["project_type"], foundation_json)
         changed = await foundation_repo.update_foundation(conn, project_id, foundation_json)
         if changed and project["project_type"] == "networking":
             await _refresh_networking_match_profile(conn, project_id, foundation_json)
@@ -143,6 +159,7 @@ async def get_foundation_view(user_id: str, project_id: str):
     raw_foundation = foundation["foundation_json"] if foundation and foundation["foundation_json"] else None
     if isinstance(raw_foundation, str):
         raw_foundation = json.loads(raw_foundation)
+    raw_foundation = _sanitize_foundation_for_project(project["project_type"], raw_foundation)
 
     return {
         "project": jsonable_encoder(dict(project)),

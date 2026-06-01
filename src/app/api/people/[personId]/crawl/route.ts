@@ -7,6 +7,7 @@ import { people, projects, users, project_foundations } from '@/lib/db/schema';
 import { crawlUrlsBestEffort, CrawlDepth, type CrawlUrlOutcome } from '@/lib/firecrawl';
 import { analyzePerson } from '@/lib/ai/analyze-person';
 import { discoverPersonLinks } from '@/lib/ai/discover-person-links';
+import { applyInformationDiscoveryBrief, getActiveInformationDiscoveryBrief } from '@/lib/information-discovery-context';
 import { ensureProjectMatchProfile, matchRankForScore, normalizeMatchScore, scoreFromRank } from '@/lib/match-profile';
 import type { Foundation, ProjectType } from '@/lib/backend-types';
 import type { DiscoveredUrl, ProjectMatchProfileJson } from '@/lib/db/schema';
@@ -33,8 +34,8 @@ function foundationToAnalysisContext(
   projectType: ProjectType,
   matchProfile?: { version: number; profile_json: ProjectMatchProfileJson | null } | null,
 ) {
+  const profile = matchProfile?.profile_json;
   if (projectType === 'networking') {
-    const profile = matchProfile?.profile_json;
     const requiredMentions = Array.isArray(foundation?.requiredMentions) ? foundation.requiredMentions : [];
     const optionalMentions = Array.isArray(foundation?.optionalMentions) ? foundation.optionalMentions : [];
     const boundaries = Array.isArray(foundation?.messageBoundaries) ? foundation.messageBoundaries : [];
@@ -91,14 +92,28 @@ function foundationToAnalysisContext(
           foundation.summary,
           foundation.painPoint ? `Pain point: ${foundation.painPoint}` : null,
           foundation.valueProp ? `Value proposition: ${foundation.valueProp}` : null,
+          foundation.desiredOutcome ? `Information Discovery outcome: ${foundation.desiredOutcome}` : null,
+          foundation.learningGoals?.length ? `Learning goals: ${foundation.learningGoals.join('; ')}` : null,
+          foundation.messageBoundaries?.length ? `Conversation boundaries: ${foundation.messageBoundaries.join('; ')}` : null,
         ].filter(Boolean).join('\n')
       : null,
     target_customer: foundation?.targetUser ?? null,
     key_assumptions: foundation
-      ? [foundation.painPoint, foundation.valueProp, foundation.targetUser]
+      ? [
+          ...(Array.isArray(foundation.keyAssumptions) ? foundation.keyAssumptions : []),
+          foundation.painPoint,
+          foundation.valueProp,
+          foundation.targetUser,
+          foundation.desiredOutcome,
+        ]
           .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
       : null,
     most_promising_avenues: foundation?.idealPeopleTypes ?? null,
+    match_rubric: profile?.matchRubric ?? foundation?.matchRubric ?? null,
+    low_fit_signals: profile?.lowFitSignals ?? (Array.isArray(foundation?.messageBoundaries) ? foundation.messageBoundaries : []),
+    match_profile_version: matchProfile?.version ?? null,
+    positive_patterns: profile?.positivePatterns ?? [],
+    negative_patterns: profile?.negativePatterns ?? [],
   };
 }
 
@@ -229,10 +244,18 @@ export async function POST(_req: NextRequest, { params }: Params) {
     );
   }
 
+  const activeDiscoveryBrief = projectType === 'startup'
+    ? await getActiveInformationDiscoveryBrief(person.project_id!)
+    : null;
+  const contextualFoundation = activeDiscoveryBrief
+    ? applyInformationDiscoveryBrief(foundation, activeDiscoveryBrief)
+    : foundation;
+  const usesMatchProfile = projectType === 'networking' || !!activeDiscoveryBrief;
+
   // Mark as crawling immediately so the UI can show the loading state
   await db
     .update(people)
-    .set({ crawl_status: 'crawling', crawl_error: null, match_status: projectType === 'networking' ? 'pending' : person.match_status, updated_at: new Date() })
+    .set({ crawl_status: 'crawling', crawl_error: null, match_status: usesMatchProfile ? 'pending' : person.match_status, updated_at: new Date() })
     .where(eq(people.id, personId));
 
   // Run crawl + analysis after the response is sent so the client gets 202 instantly
@@ -334,10 +357,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
         })
         .where(eq(people.id, personId));
 
-      const matchProfile = projectType === 'networking'
-        ? await ensureProjectMatchProfile(person.project_id!, foundation)
+      const matchProfile = usesMatchProfile
+        ? await ensureProjectMatchProfile(person.project_id!, contextualFoundation)
         : null;
-      const projectContext = foundationToAnalysisContext(foundation, projectType, matchProfile);
+      const projectContext = foundationToAnalysisContext(contextualFoundation, projectType, matchProfile);
 
       // Analyze
       const analysis = await analyzePerson(rawContent, projectContext);
@@ -346,7 +369,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       // length is garbage — drop it and fall back to whatever was already set.
       const sanitizedTitle = sanitizeIdentityField(analysis.title);
       const sanitizedCompany = sanitizeIdentityField(analysis.company);
-      const matchScore = projectType === 'networking'
+      const matchScore = usesMatchProfile
         ? (normalizeMatchScore(analysis.match_score) ?? scoreFromRank(analysis.relevance_rank) ?? null)
         : null;
       const matchRank = matchScore === null ? analysis.relevance_rank ?? null : matchRankForScore(matchScore);
@@ -366,10 +389,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
           relevance_rank: matchRank ?? analysis.relevance_rank ?? null,
           match_score: matchScore,
           match_rank: matchRank,
-          match_factors: projectType === 'networking' ? analysis.match_factors ?? null : null,
-          match_explanation: projectType === 'networking' ? analysis.match_explanation ?? analysis.why_they_matter ?? null : null,
-          match_profile_version: projectType === 'networking' ? matchProfile?.version ?? null : null,
-          match_status: projectType === 'networking' ? 'current' : null,
+          match_factors: usesMatchProfile ? analysis.match_factors ?? null : null,
+          match_explanation: usesMatchProfile ? analysis.match_explanation ?? analysis.why_they_matter ?? null : null,
+          match_profile_version: usesMatchProfile ? matchProfile?.version ?? null : null,
+          match_status: usesMatchProfile ? 'current' : null,
           updated_at: new Date(),
         })
         .where(eq(people.id, personId));

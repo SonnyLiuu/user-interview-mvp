@@ -15,6 +15,66 @@ def normalize_json(value: Any) -> Any:
     return value
 
 
+def _clean_text(value: Any) -> str:
+    return " ".join(value.strip().split()) if isinstance(value, str) else ""
+
+
+def _clean_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = _clean_text(item)
+        key = text.lower()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(text)
+    return cleaned
+
+
+def apply_information_discovery_brief(foundation: dict | None, brief: dict | None) -> dict:
+    base = dict(foundation or {})
+    if not isinstance(brief, dict):
+        return base
+
+    learning_goals = _clean_list(brief.get("learningGoals"))
+    target_people = _clean_list(brief.get("targetPeople"))
+    assumptions = _clean_list(brief.get("assumptionsToTest"))
+    boundaries = _clean_list(brief.get("conversationBoundaries"))
+    desired_outcome = _clean_text(brief.get("desiredOutcome"))
+    outreach_guidance = _clean_text(brief.get("outreachGuidance"))
+    starter_ask = _clean_text(brief.get("starterAsk"))
+
+    base["activeOutreachProject"] = {
+        "type": "information_discovery",
+        "label": _clean_text(brief.get("label")) or "Information Discovery",
+        "desiredOutcome": desired_outcome or None,
+        "learningGoals": learning_goals,
+        "targetPeople": target_people,
+        "assumptionsToTest": assumptions,
+        "conversationBoundaries": boundaries,
+        "outreachGuidance": outreach_guidance or None,
+        "starterAsk": starter_ask or None,
+    }
+    if desired_outcome:
+        base["desiredOutcome"] = desired_outcome
+    if target_people:
+        base["idealPeopleTypes"] = target_people
+    if assumptions:
+        base["keyAssumptions"] = assumptions
+    if learning_goals:
+        base["learningGoals"] = learning_goals
+    if boundaries:
+        base["messageBoundaries"] = boundaries
+    if outreach_guidance:
+        base["outreachGuidance"] = outreach_guidance
+    if starter_ask:
+        base["starterAsk"] = starter_ask
+    return base
+
+
 def foundation_to_project_context(foundation: dict | None, project_type: str = "startup") -> dict:
     foundation = foundation or {}
     normalized_type = normalize_project_type(project_type)
@@ -81,7 +141,12 @@ def foundation_to_project_context(foundation: dict | None, project_type: str = "
             ],
         }
 
-    ideal_people = foundation.get("idealPeopleTypes") or []
+    active_outreach = foundation.get("activeOutreachProject") if isinstance(foundation.get("activeOutreachProject"), dict) else {}
+    ideal_people = foundation.get("idealPeopleTypes") or active_outreach.get("targetPeople") or []
+    learning_goals = _clean_list(foundation.get("learningGoals") or active_outreach.get("learningGoals"))
+    assumptions = _clean_list(foundation.get("keyAssumptions") or active_outreach.get("assumptionsToTest"))
+    desired_outcome = foundation.get("desiredOutcome") or active_outreach.get("desiredOutcome")
+    boundaries = _clean_list(foundation.get("messageBoundaries") or active_outreach.get("conversationBoundaries"))
     labels = {
         "target": "Target user",
         "pain": "Pain point",
@@ -90,10 +155,20 @@ def foundation_to_project_context(foundation: dict | None, project_type: str = "
     }
 
     context_lines = [
+        f"Startup: {foundation.get('startupName')}" if foundation.get("startupName") else None,
         foundation.get("summary"),
         f"{labels['target']}: {foundation.get('targetUser')}" if foundation.get("targetUser") else None,
         f"{labels['pain']}: {foundation.get('painPoint')}" if foundation.get("painPoint") else None,
         f"{labels['value']}: {foundation.get('valueProp')}" if foundation.get("valueProp") else None,
+        f"Information Discovery outcome: {desired_outcome}" if desired_outcome else None,
+        f"Learning goals: {', '.join(learning_goals)}" if learning_goals else None,
+        f"Conversation boundaries: {', '.join(boundaries)}" if boundaries else None,
+        f"Startup stage: {foundation.get('startupStage')}" if foundation.get("startupStage") else None,
+        (
+            f"Traction: {', '.join(foundation.get('traction') or [])}"
+            if foundation.get("traction")
+            else None
+        ),
         f"{labels['differentiation']}: {foundation.get('differentiation')}" if foundation.get("differentiation") else None,
     ]
 
@@ -108,11 +183,17 @@ def foundation_to_project_context(foundation: dict | None, project_type: str = "
         "key_assumptions": [
             value
             for value in [
+                *assumptions,
                 foundation.get("painPoint"),
                 foundation.get("valueProp"),
                 foundation.get("targetUser"),
+                desired_outcome,
             ]
             if value
         ],
+        "desired_outcome": desired_outcome,
+        "message_boundaries": boundaries,
+        "outreach_guidance": foundation.get("outreachGuidance"),
+        "starter_ask": foundation.get("starterAsk"),
     }
 

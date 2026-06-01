@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
+import { buildBackendUrl } from '@/lib/backend-utils';
 import { db } from '@/lib/db';
 import { interactions, people, person_events, projects, transcripts } from '@/lib/db/schema';
 import { getDesktopUser } from '@/lib/desktop-auth';
@@ -13,10 +14,30 @@ type EndSessionInput = {
   startedAt?: string;
   endedAt?: string;
   liveSessionId?: string;
+  liveToken?: string;
   topics?: TopicInput[];
   notesRaw?: string;
   transcriptRaw?: string;
 };
+
+async function fetchBackendTranscript(body: EndSessionInput) {
+  if (!body.liveSessionId || !body.liveToken) return null;
+
+  try {
+    const res = await fetch(
+      buildBackendUrl(`/v1/desktop/live-sessions/${encodeURIComponent(body.liveSessionId)}`),
+      {
+        headers: { authorization: `Bearer ${body.liveToken}` },
+        cache: 'no-store',
+      },
+    );
+    if (!res.ok) return null;
+    const payload = await res.json() as { transcriptRaw?: string };
+    return typeof payload.transcriptRaw === 'string' ? payload.transcriptRaw : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request: Request) {
   const user = await getDesktopUser(request);
@@ -32,12 +53,13 @@ export async function POST(request: Request) {
   if (!body.personId) {
     return NextResponse.json({ error: 'personId required' }, { status: 400 });
   }
+  const personId = body.personId;
 
   const owned = await db
     .select({ person: people })
     .from(people)
     .innerJoin(projects, eq(people.project_id, projects.id))
-    .where(and(eq(people.id, body.personId), eq(projects.user_id, user.id)))
+    .where(and(eq(people.id, personId), eq(projects.user_id, user.id)))
     .limit(1);
 
   if (!owned[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -54,60 +76,79 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'endedAt invalid' }, { status: 400 });
   }
 
-  const [created] = await db
-    .insert(interactions)
-    .values({
-      person_id: body.personId,
-      type: 'call',
-      notes_raw: notesRaw,
-      transcript_raw: transcriptRaw,
-      completed_at: completedAt,
-    })
-    .returning();
-
-  await db
-    .update(people)
-    .set({
-      board_status: 'completed',
-      outcome: 'successful_call',
-      expires_at: null,
-      updated_at: completedAt,
-    })
-    .where(eq(people.id, body.personId));
-
-  const transcriptContent = transcriptRaw || userNotes;
-  if (transcriptContent) {
-    await db.insert(transcripts).values({
-      person_id: body.personId,
-      content: transcriptContent,
-      type: 'call',
-    });
+  if (body.liveSessionId) {
+    const [existing] = await db
+      .select()
+      .from(interactions)
+      .where(eq(interactions.live_session_id, body.liveSessionId))
+      .limit(1);
+    if (existing) {
+      return NextResponse.json({ ok: true, interaction: existing, idempotent: true }, { status: 200 });
+    }
   }
+
+  const backendTranscriptRaw = (await fetchBackendTranscript(body))?.trim() ?? '';
+  const finalTranscriptRaw = backendTranscriptRaw || transcriptRaw;
 
   const checkedTopics = topics.filter((topic) => topic.checked);
   const autoCheckedTopics = checkedTopics.filter((topic) => topic.checkedBy === 'gpt_realtime');
-  await db.insert(person_events).values({
-    person_id: body.personId,
-    type: 'desktop_call_session_saved',
-    metadata: {
-      interaction_id: created.id,
-      live_session_id: body.liveSessionId ?? null,
-      started_at: body.startedAt ?? null,
-      ended_at: completedAt.toISOString(),
-      topic_count: topics.length,
-      checked_count: checkedTopics.length,
-      checked_labels: checkedTopics.map((topic) => topic.label ?? ''),
-      auto_checked_count: autoCheckedTopics.length,
-      auto_checked_topics: autoCheckedTopics.map((topic) => ({
-        id: topic.id ?? null,
-        label: topic.label ?? '',
-        checked_at: topic.checkedAt ?? null,
-        evidence: topic.evidence ?? null,
-      })),
-      manual_override_count: topics.filter((topic) => topic.manualOverride).length,
-      ...matchEventMetadata(owned[0].person, {}, 4),
-    },
+  const created = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(interactions)
+      .values({
+        person_id: personId,
+        live_session_id: body.liveSessionId ?? null,
+        type: 'call',
+        notes_raw: notesRaw,
+        transcript_raw: finalTranscriptRaw,
+        completed_at: completedAt,
+      })
+      .returning();
+
+    await tx
+      .update(people)
+      .set({
+        board_status: 'completed',
+        outcome: 'successful_call',
+        expires_at: null,
+        updated_at: completedAt,
+      })
+      .where(eq(people.id, personId));
+
+    const transcriptContent = finalTranscriptRaw || userNotes;
+    if (transcriptContent) {
+      await tx.insert(transcripts).values({
+        person_id: personId,
+        content: transcriptContent,
+        type: 'call',
+      });
+    }
+
+    await tx.insert(person_events).values({
+      person_id: personId,
+      type: 'desktop_call_session_saved',
+      metadata: {
+        interaction_id: inserted.id,
+        live_session_id: body.liveSessionId ?? null,
+        started_at: body.startedAt ?? null,
+        ended_at: completedAt.toISOString(),
+        topic_count: topics.length,
+        checked_count: checkedTopics.length,
+        checked_labels: checkedTopics.map((topic) => topic.label ?? ''),
+        auto_checked_count: autoCheckedTopics.length,
+        auto_checked_topics: autoCheckedTopics.map((topic) => ({
+          id: topic.id ?? null,
+          label: topic.label ?? '',
+          checked_at: topic.checkedAt ?? null,
+          evidence: topic.evidence ?? null,
+        })),
+        manual_override_count: topics.filter((topic) => topic.manualOverride).length,
+        ...matchEventMetadata(owned[0].person, {}, 4),
+      },
+    });
+    return inserted;
   });
+
   if (owned[0].person.project_id) await refreshProjectMatchProfileFromSignals(owned[0].person.project_id, null);
 
   return NextResponse.json({ ok: true, interaction: created }, { status: 201 });

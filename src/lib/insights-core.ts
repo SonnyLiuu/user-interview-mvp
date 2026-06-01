@@ -11,7 +11,7 @@ type CurrentInsightSnapshot = {
 };
 
 const DEFAULT_HEADLINE = 'Early learning is taking shape';
-const DEFAULT_SUMMARY = 'Foundry has interview data to synthesize, but the current evidence is still light.';
+const DEFAULT_SUMMARY = 'User Interview has interview data to synthesize, but the current evidence is still light.';
 const DEFAULT_TAKEAWAY = 'Look for repeated pain, urgency, and current workaround patterns.';
 const DEFAULT_NEXT_FOCUS = 'Run another focused interview and ask for concrete recent examples.';
 

@@ -107,7 +107,7 @@ void WebViewWindow::initWebView() {
                 std::wcerr << L"WebView2: env create failed hr=" << std::hex
                            << hr << L"\n";
                 MessageBoxW(hwnd_,
-                            L"Foundry Settings requires the Microsoft Edge WebView2 Runtime.",
+                            L"User Interview Settings requires the Microsoft Edge WebView2 Runtime.",
                             L"WebView2 unavailable", MB_OK | MB_ICONERROR);
                 return hr;
             }
@@ -118,7 +118,7 @@ void WebViewWindow::initWebView() {
                         std::wcerr << L"WebView2: controller failed hr="
                                    << std::hex << hr << L"\n";
                         MessageBoxW(hwnd_,
-                                    L"Foundry could not start the settings window. Please check the WebView2 Runtime.",
+                                    L"User Interview could not start the settings window. Please check the WebView2 Runtime.",
                                     L"WebView2 unavailable",
                                     MB_OK | MB_ICONERROR);
                         return hr;
@@ -158,7 +158,7 @@ void WebViewWindow::initWebView() {
                    << std::hex << hr
                    << L" — is the WebView2 Runtime installed?\n";
         MessageBoxW(hwnd_,
-                    L"Foundry Settings requires the Microsoft Edge WebView2 Runtime.",
+                    L"User Interview Settings requires the Microsoft Edge WebView2 Runtime.",
                     L"WebView2 unavailable", MB_OK | MB_ICONERROR);
     }
 }

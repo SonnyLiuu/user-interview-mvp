@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { BOARD_STATUS_VALUES } from '@/lib/crm';
+import { CREATABLE_PROJECT_TYPES } from '@/lib/project-modes';
 
 // Common validation patterns
 const uuidSchema = z.string().uuid();
@@ -14,9 +15,18 @@ const pastedProfileTextSchema = z.string().max(50_000, 'Pasted text must be 50,0
 
 // Project-related schemas
 export const createProjectSchema = z.object({
-  name: nonEmptyString,
+  name: z.string().optional(),
   slug: z.string().optional(),
-  project_type: z.enum(['startup', 'networking']).optional().default('startup'),
+  project_type: z.enum(CREATABLE_PROJECT_TYPES).optional().default('startup'),
+  draft: z.boolean().optional().default(false),
+}).superRefine((data, ctx) => {
+  if (!data.draft && !data.name?.trim()) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['name'],
+      message: 'Name is required',
+    });
+  }
 });
 
 // Person-related schemas

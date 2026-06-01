@@ -171,7 +171,7 @@ Default URLs:
 | `AZURE_OPENAI_REALTIME_DEPLOYMENT` | Required for Azure checklist | Azure realtime deployment name, not necessarily the raw model name. |
 | `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
-| `GEMINI_MODEL` | No | Defaults to `gemini-2.0-flash`. |
+| `GEMINI_MODEL` | No | Defaults to `gemini-2.5-pro`. |
 | `GEMINI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `GEMINI_MODEL`. |
 | `FIRECRAWL_API_KEY` | Yes for person research | Used by `/api/people/[personId]/crawl`. |
 | `FOUNDRY_API_BASE_URL` | Yes | Usually `http://127.0.0.1:8001` locally. |
@@ -198,7 +198,7 @@ Default URLs:
 | `AZURE_OPENAI_REALTIME_DEPLOYMENT` | Required for Azure checklist | Azure realtime deployment name, not necessarily the raw model name. |
 | `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
-| `GEMINI_MODEL` | No | Defaults to `gemini-2.0-flash`. |
+| `GEMINI_MODEL` | No | Defaults to `gemini-2.5-pro`. |
 | `GEMINI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `GEMINI_MODEL`. |
 
 ## Common Commands
@@ -260,6 +260,7 @@ The repo includes a full housekeeping and performance audit trail:
 - `docs/AI_COST_AUDIT.md`
 - `docs/DB_SCHEMA_AUDIT.md`
 - `docs/CONTRACT_AUDIT.md`
+- `docs/notetaker-architecture.md`
 - `docs/PERF_AUDIT.md`
 
 The highest-value next refactor target is `PersonDetailClient`, followed by `AppNav`.

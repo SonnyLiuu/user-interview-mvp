@@ -3,7 +3,7 @@
 ## What It Does
 
 The desktop app is a Windows-first native overlay, not Electron. The native exe
-owns the tray icon, a topmost capture-excluded checklist window, WebView2 auth
+owns the tray icon, a topmost visible checklist window, WebView2 auth
 and form windows, persisted local settings, audio capture, and direct HTTP/SSE/
 WebSocket calls into the web and FastAPI backends.
 

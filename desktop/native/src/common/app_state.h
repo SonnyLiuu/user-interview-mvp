@@ -45,7 +45,11 @@ struct AppState {
     std::wstring liveSessionId;
     std::wstring liveToken;
     std::wstring foundryBaseUrl;
+    std::wstring captureProvider;
+    bool audioCaptureEnabled = false;
     std::wstring liveTranscriptRaw;
+    std::wstring realtimeStatus;
+    std::wstring realtimeError;
     std::vector<Topic> topics;
 };
 

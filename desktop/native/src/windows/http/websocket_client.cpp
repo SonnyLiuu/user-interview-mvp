@@ -67,7 +67,7 @@ bool BinaryWebSocketClient::connect(const std::wstring& url,
     ParsedUrl parsed;
     if (!parseUrl(url, parsed, error)) return false;
 
-    session_ = WinHttpOpen(L"FoundryOverlay/0.1",
+    session_ = WinHttpOpen(L"UserInterviewNotetaker/0.1",
                            WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                            WINHTTP_NO_PROXY_NAME,
                            WINHTTP_NO_PROXY_BYPASS, 0);

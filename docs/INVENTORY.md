@@ -162,7 +162,7 @@ Early refactor candidates for later phases:
 - Webhook: `src/app/api/webhooks/clerk/route.ts` with `svix`.
 - Backend auth consumes signed user context in `services/foundry-api/app/auth.py`.
 
-### Foundry FastAPI Backend
+### User Interview FastAPI Backend
 
 - Base URL helper: `src/lib/backend-utils.ts`.
 - Server-side fetch wrapper: `src/lib/backend-server.ts`.
