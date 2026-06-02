@@ -287,6 +287,7 @@ export const project_briefs = pgTable('project_briefs', {
 export const people = pgTable('people', {
   id: uuid('id').primaryKey().defaultRandom(),
   project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  outreach_project_id: uuid('outreach_project_id').references(() => outreach_projects.id, { onDelete: 'set null' }),
 
   name: text('name').notNull(),
   title: text('title'),
@@ -326,6 +327,8 @@ export const people = pgTable('people', {
 }, (table) => [
   index('people_project_created_at_idx').on(table.project_id, table.created_at),
   index('people_project_updated_at_idx').on(table.project_id, table.updated_at),
+  index('people_outreach_project_created_at_idx').on(table.outreach_project_id, table.created_at),
+  index('people_outreach_project_updated_at_idx').on(table.outreach_project_id, table.updated_at),
 ]);
 
 // ── outreach ──────────────────────────────────────────────────────────────────
