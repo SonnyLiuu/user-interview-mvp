@@ -1,6 +1,7 @@
 import 'server-only';
 
 interface EnvConfig {
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: string;
   DATABASE_URL: string;
   DATABASE_URL_UNPOOLED?: string;
   CLERK_SECRET_KEY: string;
@@ -24,6 +25,7 @@ type EnvState = {
 };
 
 const REQUIRED_BASE_VARS = [
+  'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
   'DATABASE_URL',
   'CLERK_SECRET_KEY',
   'CLERK_WEBHOOK_SECRET',
@@ -67,6 +69,7 @@ function buildFallbackConfig(): EnvConfig {
   const aiProvider = readAIProvider();
 
   return {
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'build-time-placeholder',
     DATABASE_URL: process.env.DATABASE_URL || 'build-time-placeholder',
     DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY || 'build-time-placeholder',
@@ -109,6 +112,7 @@ function readAndValidateEnvironment(): EnvConfig {
   }
 
   return {
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!,
     DATABASE_URL: process.env.DATABASE_URL!,
     DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY!,

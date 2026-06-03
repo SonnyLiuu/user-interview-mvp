@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users, person_events } from '@/lib/db/schema';
+import { people, person_events } from '@/lib/db/schema';
 import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
+import { getOwnedPerson } from '@/lib/person-ownership';
 
 type Params = { params: Promise<{ personId: string }> };
 
@@ -13,17 +14,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   const { personId } = await params;
 
-  const rows = await db
-    .select({ person: people })
-    .from(people)
-    .innerJoin(projects, eq(people.project_id, projects.id))
-    .innerJoin(users, eq(projects.user_id, users.id))
-    .where(and(eq(people.id, personId), eq(users.clerk_user_id, clerkUserId)))
-    .limit(1);
-
-  if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  const current = rows[0].person;
+  const current = await getOwnedPerson(personId, clerkUserId);
+  if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const nextBoardStatus =
     current.board_status === 'bookmarked'
       ? null

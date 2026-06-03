@@ -1,9 +1,8 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { call_prep, outreach, people, projects, transcripts, users } from '@/lib/db/schema';
-import { getProjectBySlugOrId } from '@/lib/backend-server';
-import { auth } from '@clerk/nextjs/server';
+import { call_prep, outreach, people, transcripts } from '@/lib/db/schema';
+import { requireOwnedProjectBySlug } from '@/lib/project-access';
 import { PersonDetailClient } from './PersonDetailClient';
 
 export default async function PersonDetailPage({
@@ -12,28 +11,7 @@ export default async function PersonDetailPage({
   params: Promise<{ slug: string; personId: string }>;
 }) {
   const { slug, personId } = await params;
-
-  const { userId: clerkUserId } = await auth();
-  if (!clerkUserId) redirect('/login');
-
-  const lookup = await getProjectBySlugOrId(slug);
-  if (!lookup?.project) redirect('/dashboard');
-  const { project } = lookup;
-
-  // Verify user owns the project
-  const [user] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.clerk_user_id, clerkUserId));
-
-  if (!user) redirect('/dashboard');
-
-  const [proj] = await db
-    .select({ id: projects.id })
-    .from(projects)
-    .where(and(eq(projects.id, project.id), eq(projects.user_id, user.id)));
-
-  if (!proj) redirect('/dashboard');
+  const { project } = await requireOwnedProjectBySlug(slug);
 
   // Load the person — must belong to this project
   const [person] = await db

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Header, Request
 
 from ..config import get_settings
 from ..errors import BadRequestError, UnauthorizedError
-from ..services.live_sessions import find_session_by_bot_id, recall_webhook_ingest
+from ..services.live_sessions import recall_webhook_ingest
 from ..services.recall_provider import verify_recall_webhook_signature
 
 router = APIRouter(prefix="/v1/recall", tags=["recall"])

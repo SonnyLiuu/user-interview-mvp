@@ -1,84 +1,16 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { and, desc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, project_foundations, projects, users, type CrawledContent, type ProjectMatchProfileJson } from '@/lib/db/schema';
+import { people, project_foundations, type CrawledContent } from '@/lib/db/schema';
 import { analyzePerson } from '@/lib/ai/analyze-person';
 import { applyInformationDiscoveryBrief, getActiveInformationDiscoveryBrief } from '@/lib/information-discovery-context';
 import { ensureProjectMatchProfile, matchRankForScore, normalizeMatchScore, scoreFromRank } from '@/lib/match-profile';
+import { foundationToAnalysisContext } from '@/lib/person-analysis-context';
+import { getOwnedPersonWithProject } from '@/lib/person-ownership';
 import type { Foundation, ProjectType } from '@/lib/backend-types';
 
 type Params = { params: Promise<{ personId: string }> };
-
-function foundationToAnalysisContext(
-  foundation: Foundation | null,
-  projectType: ProjectType,
-  matchProfile?: { version: number; profile_json: ProjectMatchProfileJson | null } | null,
-) {
-  const profile = matchProfile?.profile_json;
-  if (projectType !== 'networking') {
-    return {
-      project_type: projectType,
-      idea_summary: [
-        foundation?.summary,
-        foundation?.desiredOutcome ? `Information Discovery outcome: ${foundation.desiredOutcome}` : null,
-        foundation?.learningGoals?.length ? `Learning goals: ${foundation.learningGoals.join('; ')}` : null,
-        foundation?.messageBoundaries?.length ? `Conversation boundaries: ${foundation.messageBoundaries.join('; ')}` : null,
-      ].filter(Boolean).join('\n') || null,
-      target_customer: foundation?.targetUser ?? null,
-      key_assumptions: [
-        ...(Array.isArray(foundation?.keyAssumptions) ? foundation.keyAssumptions : []),
-        foundation?.painPoint,
-        foundation?.valueProp,
-        foundation?.targetUser,
-        foundation?.desiredOutcome,
-      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
-      most_promising_avenues: foundation?.idealPeopleTypes ?? null,
-      match_rubric: profile?.matchRubric ?? foundation?.matchRubric ?? null,
-      low_fit_signals: profile?.lowFitSignals ?? (Array.isArray(foundation?.messageBoundaries) ? foundation.messageBoundaries : []),
-      match_profile_version: matchProfile?.version ?? null,
-      positive_patterns: profile?.positivePatterns ?? [],
-      negative_patterns: profile?.negativePatterns ?? [],
-    };
-  }
-
-  const priorityRecipientTypes = Array.isArray(foundation?.priorityRecipientTypes)
-    ? foundation.priorityRecipientTypes.filter((item): item is string => typeof item === 'string')
-    : profile?.priorityRecipientTypes ?? foundation?.idealPeopleTypes ?? null;
-  const lowFitSignals = Array.isArray(foundation?.lowFitSignals)
-    ? foundation.lowFitSignals.filter((item): item is string => typeof item === 'string')
-    : profile?.lowFitSignals ?? [];
-  const senderContext = foundation?.senderContext;
-  const desiredOutcome = foundation?.desiredOutcome;
-  const personalizationStrategy = foundation?.personalizationStrategy;
-
-  return {
-    project_type: projectType,
-    idea_summary: [
-      foundation?.outreachGoal ?? foundation?.summary,
-      senderContext ? `Sender context: ${senderContext}` : null,
-      foundation?.sharedContext ? `Shared context: ${foundation.sharedContext}` : null,
-      desiredOutcome ? `Desired outcome: ${desiredOutcome}` : null,
-      personalizationStrategy ? `Personalization strategy: ${personalizationStrategy}` : null,
-      foundation?.channelFormat ? `Channel format: ${foundation.channelFormat}` : null,
-    ].filter(Boolean).join('\n'),
-    target_customer: foundation?.recipients ?? foundation?.targetUser ?? null,
-    key_assumptions: [
-      foundation?.sharedContext,
-      desiredOutcome,
-      senderContext,
-      personalizationStrategy,
-      foundation?.tone,
-      foundation?.channelFormat,
-    ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
-    most_promising_avenues: priorityRecipientTypes,
-    match_rubric: profile?.matchRubric ?? foundation?.matchRubric ?? null,
-    low_fit_signals: lowFitSignals,
-    match_profile_version: matchProfile?.version ?? null,
-    positive_patterns: profile?.positivePatterns ?? [],
-    negative_patterns: profile?.negativePatterns ?? [],
-  };
-}
 
 function contentText(content: CrawledContent | null): string {
   if (!content) return '';
@@ -90,17 +22,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { personId } = await params;
-  const rows = await db
-    .select({ person: people, projectType: projects.project_type })
-    .from(people)
-    .innerJoin(projects, eq(people.project_id, projects.id))
-    .innerJoin(users, eq(projects.user_id, users.id))
-    .where(and(eq(people.id, personId), eq(users.clerk_user_id, clerkUserId)))
-    .limit(1);
-
-  const row = rows[0];
+  const row = await getOwnedPersonWithProject(personId, clerkUserId);
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  const projectType = (row.projectType ?? 'startup') as ProjectType;
+  const projectType = (row.project.project_type ?? 'startup') as ProjectType;
   const activeDiscoveryBrief = projectType === 'startup'
     ? await getActiveInformationDiscoveryBrief(row.person.project_id!)
     : null;

@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { buildBackendUrl } from '@/lib/backend-utils';
 import { db } from '@/lib/db';
-import { interactions, people, person_events, projects, transcripts } from '@/lib/db/schema';
+import { interactions, people, person_events, transcripts } from '@/lib/db/schema';
 import { getDesktopUser } from '@/lib/desktop-auth';
 import { buildDesktopSessionNotesRaw, type DesktopSessionTopicInput } from '@/lib/desktop-session-summary';
 import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
+import { getOwnedPersonForLocalUser } from '@/lib/person-ownership';
 
 type TopicInput = DesktopSessionTopicInput;
 
@@ -55,14 +56,8 @@ export async function POST(request: Request) {
   }
   const personId = body.personId;
 
-  const owned = await db
-    .select({ person: people })
-    .from(people)
-    .innerJoin(projects, eq(people.project_id, projects.id))
-    .where(and(eq(people.id, personId), eq(projects.user_id, user.id)))
-    .limit(1);
-
-  if (!owned[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const owned = await getOwnedPersonForLocalUser(personId, user.id);
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const topics = Array.isArray(body.topics)
     ? body.topics.filter((topic) => typeof topic.label === 'string' && topic.label.trim())
@@ -143,13 +138,13 @@ export async function POST(request: Request) {
           evidence: topic.evidence ?? null,
         })),
         manual_override_count: topics.filter((topic) => topic.manualOverride).length,
-        ...matchEventMetadata(owned[0].person, {}, 4),
+        ...matchEventMetadata(owned.person, {}, 4),
       },
     });
     return inserted;
   });
 
-  if (owned[0].person.project_id) await refreshProjectMatchProfileFromSignals(owned[0].person.project_id, null);
+  if (owned.person.project_id) await refreshProjectMatchProfileFromSignals(owned.person.project_id, null);
 
   return NextResponse.json({ ok: true, interaction: created }, { status: 201 });
 }

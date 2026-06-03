@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import json
-from typing import AsyncIterator
 
-import httpx
-from anthropic import AsyncAnthropic
-from openai import AsyncOpenAI
-
-from .config import get_settings
-from .errors import AIServiceError
+from .ai_clients import generate_json as _generate_json
+from .ai_clients import get_web_context as _get_web_context
+from .ai_clients import stream_intake_reply
 from .project_modes import (
     get_array_slots,
     get_mode_slots,
@@ -24,72 +19,6 @@ from .onboarding_mode_hints import (
     networking_selectivity_turn,
     normalize_networking_foundation,
 )
-
-
-def _read_provider() -> str:
-    settings = get_settings()
-    provider = settings.ai_provider.strip().lower()
-    return provider if provider in {"openai", "anthropic", "gemini"} else "openai"
-
-
-def _gemini_rest_thinking_config(model: str) -> dict | None:
-    level = (get_settings().gemini_thinking_level or "").strip().lower()
-    if not level or level == "off":
-        return None
-    if "gemini-3" in model:
-        return {"thinkingLevel": "high" if level == "high" else "low"}
-    if "gemini-2.5" in model:
-        budgets = {"low": 4096, "high": -1}
-        return {"thinkingBudget": budgets.get(level, -1)}
-    return None
-
-
-def _parse_json_response(raw: str, provider: str) -> dict:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.removeprefix("```json").removeprefix("```").strip()
-        text = text.removesuffix("```").strip()
-
-    try:
-        parsed = json.loads(text or "{}")
-    except json.JSONDecodeError as exc:
-        raise AIServiceError("AI response was not valid JSON", provider) from exc
-
-    if isinstance(parsed, str):
-        try:
-            parsed = json.loads(parsed)
-        except json.JSONDecodeError as exc:
-            raise AIServiceError("AI response JSON string did not contain a valid object", provider) from exc
-
-    if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
-        parsed = parsed[0]
-
-    if not isinstance(parsed, dict):
-        raise AIServiceError("AI response JSON was not an object", provider)
-
-    return parsed
-
-
-def _is_json_response_error(exc: AIServiceError) -> bool:
-    message = str(exc)
-    return "valid JSON" in message or "valid object" in message or "JSON was not an object" in message
-
-
-def _with_json_retry_instruction(messages: list[dict], schema_hint: str) -> list[dict]:
-    if not messages:
-        return messages
-    retry_messages = [*messages]
-    last = retry_messages[-1]
-    retry_messages[-1] = {
-        **last,
-        "content": (
-            f"{last['content']}\n\n"
-            "Your previous response could not be parsed as the required JSON object. "
-            "Return exactly one valid JSON object, with no markdown fences, prose, comments, or trailing text. "
-            f"Schema hint:\n{schema_hint}"
-        ),
-    }
-    return retry_messages
 
 
 def _clean_prompt_text(value) -> str:
@@ -117,96 +46,6 @@ def _clean_prompt_list(value) -> list[str]:
 def _join_prompt_list(value, fallback: str = "Not specified") -> str:
     cleaned = _clean_prompt_list(value)
     return "; ".join(cleaned) if cleaned else fallback
-
-
-async def _await_provider(coro, provider: str, timeout: float, operation: str):
-    try:
-        return await asyncio.wait_for(coro, timeout=timeout)
-    except TimeoutError as exc:
-        raise AIServiceError(f"{operation} timed out", provider) from exc
-    except AIServiceError:
-        raise
-    except Exception as exc:
-        raise AIServiceError(f"{operation} failed: {exc}", provider) from exc
-
-
-async def _generate_json_once(messages: list[dict], schema_hint: str) -> dict:
-    settings = get_settings()
-    provider = _read_provider()
-    timeout = settings.ai_request_timeout_seconds
-
-    if provider == "anthropic":
-        if not settings.anthropic_api_key:
-            raise AIServiceError("ANTHROPIC_API_KEY is not configured", provider)
-        client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        response = await _await_provider(
-            client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=4096,
-                messages=[{"role": "user", "content": f"{messages[0]['content']}\n\nReturn strict JSON only. Schema hint:\n{schema_hint}"}],
-            ),
-            provider,
-            timeout,
-            "Anthropic request",
-        )
-        text_blocks = [block.text for block in response.content if getattr(block, "type", "") == "text"]
-        return _parse_json_response("".join(text_blocks), provider)
-
-    if provider == "gemini":
-        if not settings.gemini_api_key:
-            raise AIServiceError("GEMINI_API_KEY is not configured", provider)
-        model = _gemini_model_path(settings.gemini_model)
-        url = f"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent"
-        prompt = f"{messages[0]['content']}\n\nReturn strict JSON only. Schema hint:\n{schema_hint}"
-        body: dict = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json"},
-        }
-        thinking = _gemini_rest_thinking_config(model)
-        if thinking:
-            body["generationConfig"]["thinkingConfig"] = thinking
-        async with httpx.AsyncClient(timeout=timeout + 5) as client:
-            response = await _await_provider(
-                client.post(url, params={"key": settings.gemini_api_key}, json=body),
-                provider,
-                timeout + 5,
-                "Gemini request",
-            )
-        if response.status_code >= 400:
-            raise AIServiceError(f"Gemini request failed with HTTP {response.status_code}", provider)
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise AIServiceError("Gemini request did not return valid JSON", provider) from exc
-        return _parse_json_response(_gemini_response_text(payload) or "{}", provider)
-
-    if not settings.openai_api_key:
-        raise AIServiceError("OPENAI_API_KEY is not configured", provider)
-    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=timeout)
-    response = await _await_provider(
-        client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": f"You are a JSON API. Respond with valid JSON only. Use this exact schema:\n{schema_hint}"},
-                *[{"role": msg["role"], "content": msg["content"]} for msg in messages],
-            ],
-            response_format={"type": "json_object"},
-        ),
-        provider,
-        timeout + 5,
-        "OpenAI request",
-    )
-    content = response.choices[0].message.content or "{}"
-    return _parse_json_response(content, provider)
-
-
-async def _generate_json(messages: list[dict], schema_hint: str) -> dict:
-    try:
-        return await _generate_json_once(messages, schema_hint)
-    except AIServiceError as exc:
-        if not _is_json_response_error(exc):
-            raise
-        return await _generate_json_once(_with_json_retry_instruction(messages, schema_hint), schema_hint)
 
 
 async def extract_kickoff_idea(user_message: str, project_type: str = "startup") -> dict:
@@ -654,40 +493,7 @@ def _foundation_search_summary(foundation: dict) -> str:
     return "\n".join(part for part in parts if part)
 
 
-def _gemini_model_path(model: str) -> str:
-    return model if model.startswith("models/") else f"models/{model}"
-
-
-def _gemini_response_text(payload: dict) -> str:
-    candidates = payload.get("candidates") or []
-    if not candidates:
-        return ""
-    parts = ((candidates[0].get("content") or {}).get("parts")) or []
-    return "\n".join(part.get("text", "") for part in parts if part.get("text")).strip()
-
-
-def _gemini_grounding_sources(payload: dict) -> list[str]:
-    candidates = payload.get("candidates") or []
-    if not candidates:
-        return []
-
-    chunks = (candidates[0].get("groundingMetadata") or {}).get("groundingChunks") or []
-    sources: list[str] = []
-    seen: set[str] = set()
-    for chunk in chunks:
-        web = chunk.get("web") or {}
-        uri = web.get("uri")
-        if not uri or uri in seen:
-            continue
-        seen.add(uri)
-        title = web.get("title") or "Source"
-        sources.append(f"- {title}: {uri}")
-    return sources
-
-
 async def get_advisor_web_context(user_message: str, foundation: dict, recent_messages: list[dict] | None = None) -> str:
-    settings = get_settings()
-    provider = _read_provider()
     recent = "\n".join(
         f"{'Advisor' if msg.get('role') == 'assistant' else 'Founder'}: {msg.get('content', '')}"
         for msg in (recent_messages or [])[-4:]
@@ -702,123 +508,4 @@ async def get_advisor_web_context(user_message: str, foundation: dict, recent_me
         f"Founder request:\n{user_message}\n\n"
         "Return a concise research note with 3-6 bullets. Include source names and URLs inline for any factual claims."
     )
-
-    if provider == "gemini":
-        if not settings.gemini_api_key:
-            return ""
-        model = _gemini_model_path(settings.gemini_web_search_model or settings.gemini_model)
-        url = f"https://generativelanguage.googleapis.com/v1beta/{model}:generateContent"
-        body: dict = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "tools": [{"google_search": {}}],
-        }
-        thinking = _gemini_rest_thinking_config(model)
-        if thinking:
-            body["generationConfig"] = {"thinkingConfig": thinking}
-        try:
-            async with httpx.AsyncClient(timeout=settings.ai_request_timeout_seconds + 15) as client:
-                response = await _await_provider(
-                    client.post(url, params={"key": settings.gemini_api_key}, json=body),
-                    provider,
-                    settings.ai_request_timeout_seconds + 15,
-                    "Gemini web search request",
-                )
-            if response.status_code >= 400:
-                raise AIServiceError(f"Gemini web search request failed with HTTP {response.status_code}", provider)
-            payload = response.json()
-        except (AIServiceError, ValueError):
-            return ""
-
-        text = _gemini_response_text(payload)
-        sources = _gemini_grounding_sources(payload)
-        if sources:
-            text = f"{text}\n\nSources:\n{chr(10).join(sources)}".strip()
-        return text
-
-    if provider == "openai":
-        if not settings.openai_api_key:
-            return ""
-        client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=settings.ai_request_timeout_seconds)
-        try:
-            response = await _await_provider(
-                client.responses.create(
-                    model=settings.openai_web_search_model or settings.openai_model,
-                    tools=[{"type": "web_search_preview"}],
-                    tool_choice="auto",
-                    input=prompt,
-                ),
-                provider,
-                settings.ai_request_timeout_seconds + 15,
-                "OpenAI web search request",
-            )
-        except AIServiceError:
-            return ""
-        return (getattr(response, "output_text", "") or "").strip()
-
-    return ""
-
-
-async def stream_intake_reply(system_prompt: str, messages: list[dict]) -> AsyncIterator[str]:
-    settings = get_settings()
-    provider = _read_provider()
-    timeout = settings.ai_request_timeout_seconds
-
-    if provider == "anthropic":
-        if not settings.anthropic_api_key:
-            raise AIServiceError("ANTHROPIC_API_KEY is not configured", provider)
-        client = AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=timeout)
-        async with client.messages.stream(
-            model=settings.anthropic_model,
-            max_tokens=1024,
-            system=system_prompt,
-            messages=messages,
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
-        return
-
-    if provider == "gemini":
-        if not settings.gemini_api_key:
-            raise AIServiceError("GEMINI_API_KEY is not configured", provider)
-        try:
-            import google.generativeai as genai
-        except ImportError as exc:
-            raise AIServiceError(
-                "google-generativeai is not installed. Run `pip install -r requirements.txt` "
-                "or set AI_PROVIDER to openai/anthropic.",
-                provider,
-            ) from exc
-        genai.configure(api_key=settings.gemini_api_key)
-        gemini_model = genai.GenerativeModel(
-            model_name=settings.gemini_model,
-            system_instruction=system_prompt,
-        )
-        history = [
-            {"role": "model" if m["role"] == "assistant" else "user", "parts": [m["content"]]}
-            for m in messages[:-1]
-        ]
-        last_message = messages[-1]["content"] if messages else "Hello"
-        chat = gemini_model.start_chat(history=history)
-        stream = await _await_provider(
-            chat.send_message_async(last_message, stream=True, request_options={"timeout": timeout}),
-            provider,
-            timeout + 5,
-            "Gemini stream request",
-        )
-        async for chunk in stream:
-            if chunk.text:
-                yield chunk.text
-        return
-
-    if not settings.openai_api_key:
-        raise AIServiceError("OPENAI_API_KEY is not configured", provider)
-    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=timeout)
-    stream = await client.chat.completions.create(
-        model=settings.openai_model,
-        stream=True,
-        messages=[{"role": "system", "content": system_prompt}, *messages],
-    )
-    async for chunk in stream:
-        text = chunk.choices[0].delta.content or ""
-        if text:
-            yield text
+    return await _get_web_context(prompt)

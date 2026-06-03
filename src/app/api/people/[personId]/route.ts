@@ -1,27 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users } from '@/lib/db/schema';
+import { people } from '@/lib/db/schema';
 import { validateInput, updatePersonSchema } from '@/lib/validation';
 import { getProjectPathSegment } from '@/lib/projects';
+import { getOwnedPersonWithProject } from '@/lib/person-ownership';
 
 type Params = { params: Promise<{ personId: string }> };
 
-// Fetch a person and project, verifying they belong to the authenticated user.
-async function getOwnedPersonWithProject(personId: string, clerkUserId: string) {
-  const rows = await db
-    .select({ person: people, project: projects })
-    .from(people)
-    .innerJoin(projects, eq(people.project_id, projects.id))
-    .innerJoin(users, eq(projects.user_id, users.id))
-    .where(and(eq(people.id, personId), eq(users.clerk_user_id, clerkUserId)))
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-function revalidatePersonProject(project: typeof projects.$inferSelect) {
+function revalidatePersonProject(project: { id: string; slug: string | null }) {
   const projectPath = getProjectPathSegment(project);
   revalidatePath(`/dashboard/${projectPath}/people`);
   revalidatePath(`/dashboard/${projectPath}/board`);

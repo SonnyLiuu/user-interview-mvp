@@ -1,19 +1,7 @@
 import { generateObject } from './provider';
 import type { PersonAnalysis } from '@/lib/db/schema';
 import { matchRankForScore, normalizeMatchScore, scoreFromRank } from '@/lib/match-profile';
-
-type ProjectContext = {
-  project_type?: 'startup' | 'networking';
-  idea_summary?: string | null;
-  target_customer?: string | null;
-  key_assumptions?: string[] | null;
-  most_promising_avenues?: string[] | null;
-  match_rubric?: string | null;
-  low_fit_signals?: string[] | null;
-  match_profile_version?: number | null;
-  positive_patterns?: string[] | null;
-  negative_patterns?: string[] | null;
-};
+import type { PersonAnalysisContext } from '@/lib/person-analysis-context';
 
 const MAX_CRAWLED_CONTENT_CHARS = 24_000;
 
@@ -26,7 +14,7 @@ function limitSourceMaterial(content: string) {
 
 export async function analyzePerson(
   crawledContent: string,
-  projectContext: ProjectContext
+  projectContext: PersonAnalysisContext
 ): Promise<PersonAnalysis> {
   const analysisContent = limitSourceMaterial(crawledContent);
   const isNetworking = projectContext.project_type === 'networking';

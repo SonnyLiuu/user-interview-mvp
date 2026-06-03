@@ -1,9 +1,7 @@
-import { redirect } from 'next/navigation';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users } from '@/lib/db/schema';
-import { getProjectBySlugOrId } from '@/lib/backend-server';
-import { auth } from '@clerk/nextjs/server';
+import { people } from '@/lib/db/schema';
+import { requireOwnedProjectBySlug } from '@/lib/project-access';
 import { PeoplePageClient } from './PeoplePageClient';
 import styles from './people-page.module.css';
 
@@ -15,29 +13,7 @@ export default async function PeoplePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-
-  const { userId: clerkUserId } = await auth();
-  if (!clerkUserId) redirect('/login');
-
-  const lookup = await getProjectBySlugOrId(slug);
-  if (!lookup?.project) redirect('/dashboard');
-  const { project } = lookup;
-
-  // Resolve the user's DB id
-  const [user] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.clerk_user_id, clerkUserId));
-
-  if (!user) redirect('/dashboard');
-
-  // Verify this project belongs to the user
-  const [proj] = await db
-    .select({ id: projects.id })
-    .from(projects)
-    .where(and(eq(projects.id, project.id), eq(projects.user_id, user.id)));
-
-  if (!proj) redirect('/dashboard');
+  const { project } = await requireOwnedProjectBySlug(slug);
 
   // Load all people for this project. `expires_at` is legacy-only; researched
   // people are project records and should not disappear from the workspace.

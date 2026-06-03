@@ -21,7 +21,7 @@ from ..services.fireflies_provider import (
     parse_fireflies_transcript,
     verify_fireflies_webhook_signature,
 )
-from ..services.live_sessions import fireflies_ingest_turns, find_session_by_fireflies_meeting
+from ..services.live_sessions import fireflies_ingest_turns, ingest_fireflies_webhook_turns
 
 router = APIRouter(prefix="/v1/fireflies", tags=["fireflies"])
 logger = logging.getLogger(__name__)
@@ -114,28 +114,10 @@ async def fireflies_webhook(
     if not turns:
         return {"status": "ok", "turns_ingested": 0}
 
-    # Find session by meeting metadata (stored when user starts a fireflies session)
-    session = find_session_by_fireflies_meeting(meeting_id)
-    if not session:
+    ingested = await ingest_fireflies_webhook_turns(meeting_id, turns)
+    if ingested is None:
         logger.info("Fireflies webhook: no active session found for meeting=%s", meeting_id)
         return {"status": "ok", "turns_ingested": 0, "note": "no active session for this meeting"}
-
-    from ..services.live_sessions import _handle_transcript_turn
-
-    ingested = 0
-    for turn in turns:
-        text = turn.get("text", "").strip()
-        if not text:
-            continue
-        recorded = await _handle_transcript_turn(
-            session,
-            source="fireflies",
-            transcript=text,
-            speaker=turn.get("speaker", "Speaker"),
-            external_turn_id=turn.get("external_turn_id"),
-        )
-        if recorded:
-            ingested += 1
 
     logger.info("Fireflies webhook: ingested %s turns for meeting=%s", ingested, meeting_id)
     return {"status": "ok", "turns_ingested": ingested}

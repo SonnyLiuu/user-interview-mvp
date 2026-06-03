@@ -3,8 +3,10 @@ import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { outreach, people, projects, users, person_events } from '@/lib/db/schema';
+import { outreach, people, person_events } from '@/lib/db/schema';
 import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
+import { getProjectPathSegment } from '@/lib/projects';
+import { getOwnedPersonWithProject } from '@/lib/person-ownership';
 
 type Params = { params: Promise<{ personId: string }> };
 
@@ -16,15 +18,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const body = await req.json().catch(() => ({})) as { body?: unknown };
   const sentBody = typeof body.body === 'string' ? body.body.trim() : '';
 
-  const rows = await db
-    .select({ person: people, projectSlug: projects.slug, projectId: projects.id })
-    .from(people)
-    .innerJoin(projects, eq(people.project_id, projects.id))
-    .innerJoin(users, eq(projects.user_id, users.id))
-    .where(and(eq(people.id, personId), eq(users.clerk_user_id, clerkUserId)))
-    .limit(1);
-
-  if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const owned = await getOwnedPersonWithProject(personId, clerkUserId);
+  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const now = new Date();
   const [updated] = await db
@@ -36,9 +31,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   await db.insert(person_events).values({
     person_id: personId,
     type: 'outreach_copied',
-    metadata: matchEventMetadata(rows[0].person, {}, 2),
+    metadata: matchEventMetadata(owned.person, {}, 2),
   });
-  if (rows[0].person.project_id) await refreshProjectMatchProfileFromSignals(rows[0].person.project_id, null);
+  if (owned.person.project_id) await refreshProjectMatchProfileFromSignals(owned.person.project_id, null);
 
   let savedOutreach = null;
   if (sentBody) {
@@ -62,7 +57,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   }
 
-  const projectPath = rows[0].projectSlug ?? rows[0].projectId;
+  const projectPath = getProjectPathSegment(owned.project);
   revalidatePath(`/dashboard/${projectPath}/board`);
   revalidatePath(`/dashboard/${projectPath}/people`);
 

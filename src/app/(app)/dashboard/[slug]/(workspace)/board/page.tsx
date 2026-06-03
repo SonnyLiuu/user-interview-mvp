@@ -1,9 +1,7 @@
-import { redirect } from 'next/navigation';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { call_prep, people, projects, users } from '@/lib/db/schema';
-import { getProjectBySlugOrId } from '@/lib/backend-server';
-import { auth } from '@clerk/nextjs/server';
+import { call_prep, people } from '@/lib/db/schema';
+import { requireOwnedProjectBySlug } from '@/lib/project-access';
 import { BoardPageClient } from './BoardPageClient';
 
 export const dynamic = 'force-dynamic';
@@ -14,27 +12,7 @@ export default async function BoardPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-
-  const { userId: clerkUserId } = await auth();
-  if (!clerkUserId) redirect('/login');
-
-  const lookup = await getProjectBySlugOrId(slug);
-  if (!lookup?.project) redirect('/dashboard');
-  const { project } = lookup;
-
-  const [user] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.clerk_user_id, clerkUserId));
-
-  if (!user) redirect('/dashboard');
-
-  const [proj] = await db
-    .select({ id: projects.id })
-    .from(projects)
-    .where(and(eq(projects.id, project.id), eq(projects.user_id, user.id)));
-
-  if (!proj) redirect('/dashboard');
+  const { project } = await requireOwnedProjectBySlug(slug);
 
   // All people for this project. `expires_at` is legacy-only; the board should
   // reflect the durable project pipeline.

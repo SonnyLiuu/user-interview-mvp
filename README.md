@@ -24,7 +24,7 @@ The product is built around one loop:
 
 ### Web App
 
-- Next.js 15 App Router
+- Next.js 16 App Router
 - React 19
 - TypeScript
 - Clerk auth
@@ -205,6 +205,8 @@ Default URLs:
 
 ```powershell
 npm run dev          # Next dev server
+npm run test         # Web unit tests
+npm run test:backend # FastAPI service unit tests
 npm run typecheck    # TypeScript check
 npm run build        # Production Next build
 npm run start        # Start built Next app

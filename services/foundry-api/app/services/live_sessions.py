@@ -23,8 +23,6 @@ from .project_context import normalize_json
 from .realtime_bridge import NormalizedTurn, RealtimeBridge, RestChecklistBridge
 from .recall_provider import (
     create_recall_bot,
-    parse_recall_transcript,
-    stop_recall_bot,
 )
 from .source_transcription_bridge import SourceTranscriptionBridge
 from .transcript_parser import apply_speaker_map, parse_transcript
@@ -210,6 +208,20 @@ async def _session_for_token(token: str) -> LiveSessionState:
     if not session:
         raise UnauthorizedError("Live session not found")
     _sessions[session.session_id] = session
+    return session
+
+
+async def _require_session_for_token(
+    session_id: str,
+    live_token: str,
+    *,
+    active: bool = False,
+) -> LiveSessionState:
+    session = await _session_for_token(live_token)
+    if session.session_id != session_id:
+        raise UnauthorizedError("Live session token does not match session")
+    if active and session.status != "active":
+        raise NotFoundError("Live session is not active")
     return session
 
 
@@ -525,9 +537,7 @@ async def start_live_session(
 
 
 async def get_live_session(session_id: str, live_token: str) -> dict:
-    session = await _session_for_token(live_token)
-    if session.session_id != session_id:
-        raise UnauthorizedError("Live session token does not match session")
+    session = await _require_session_for_token(session_id, live_token)
     return session.to_dict()
 
 
@@ -538,11 +548,7 @@ async def override_live_session_topic(
     *,
     checked: bool,
 ) -> dict:
-    session = await _session_for_token(live_token)
-    if session.session_id != session_id:
-        raise UnauthorizedError("Live session token does not match session")
-    if session.status != "active":
-        raise NotFoundError("Live session is not active")
+    session = await _require_session_for_token(session_id, live_token, active=True)
 
     topic = _topic_by_id(session, topic_id)
     if not topic:
@@ -584,9 +590,7 @@ async def stream_audio_to_live_session(
     *,
     source: str = "mixed",
 ) -> bool:
-    session = await _session_for_token(live_token)
-    if session.session_id != session_id:
-        raise UnauthorizedError("Live session token does not match session")
+    session = await _require_session_for_token(session_id, live_token)
     if session.status != "active":
         return False
     if not session.audio_capture_enabled:
@@ -622,11 +626,7 @@ async def ingest_live_transcript_turn(
     transcript: str,
     external_turn_id: str | None = None,
 ) -> dict[str, Any]:
-    session = await _session_for_token(live_token)
-    if session.session_id != session_id:
-        raise UnauthorizedError("Live session token does not match session")
-    if session.status != "active":
-        raise NotFoundError("Live session is not active")
+    session = await _require_session_for_token(session_id, live_token, active=True)
 
     before = len(session.transcript_turns)
     text_was_recorded = await _handle_transcript_turn(
@@ -655,11 +655,7 @@ async def ingest_transcript_upload(
     speaker_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Parse an uploaded transcript file and ingest all turns into a live session."""
-    session = await _session_for_token(live_token)
-    if session.session_id != session_id:
-        raise UnauthorizedError("Live session token does not match session")
-    if session.status != "active":
-        raise NotFoundError("Live session is not active")
+    session = await _require_session_for_token(session_id, live_token, active=True)
 
     turns = parse_transcript(content, filename)
     if not turns:
@@ -699,9 +695,7 @@ async def stream_live_session_events(
     session_id: str,
     live_token: str,
 ) -> AsyncIterator[dict[str, Any]]:
-    session = await _session_for_token(live_token)
-    if session.session_id != session_id:
-        raise UnauthorizedError("Live session token does not match session")
+    session = await _require_session_for_token(session_id, live_token)
 
     queue: asyncio.Queue[LiveSessionEvent] = asyncio.Queue()
     _event_queues.setdefault(session.session_id, []).append(queue)
@@ -731,9 +725,7 @@ async def stream_live_session_events(
 
 
 async def end_live_session(session_id: str, live_token: str) -> dict:
-    session = await _session_for_token(live_token)
-    if session.session_id != session_id:
-        raise UnauthorizedError("Live session token does not match session")
+    session = await _require_session_for_token(session_id, live_token)
     if session.status != "ended":
         session.status = "ended"
         session.ended_at = _now_iso()
@@ -1170,21 +1162,68 @@ def _reject_tool_call(
     }
 
 
+async def _remember_provider_reference(
+    session: LiveSessionState,
+    provider: str,
+    key: str,
+    value: str,
+) -> None:
+    if not value:
+        return
+    if not isinstance(session.metadata, dict):
+        session.metadata = {}
+
+    provider_meta = session.metadata.get(provider)
+    if not isinstance(provider_meta, dict):
+        provider_meta = {}
+    provider_meta[key] = value
+    session.metadata[provider] = provider_meta
+    await _persist_session(session)
+
+
+async def _ingest_provider_turns(
+    session: LiveSessionState,
+    *,
+    source: str,
+    turns: list[dict[str, Any]],
+) -> int:
+    ingested = 0
+    for turn in turns:
+        text = _clean_arg(turn.get("text"))
+        if not text:
+            continue
+        recorded = await _handle_transcript_turn(
+            session,
+            source=source,
+            transcript=text,
+            speaker=_clean_arg(turn.get("speaker")) or "Speaker",
+            external_turn_id=turn.get("external_turn_id"),
+        )
+        if recorded:
+            ingested += 1
+    return ingested
+
+
+def _find_session_by_provider_reference(
+    provider: str,
+    key: str,
+    value: str,
+) -> LiveSessionState | None:
+    for session in _sessions.values():
+        provider_meta = session.metadata.get(provider) if isinstance(session.metadata, dict) else None
+        if isinstance(provider_meta, dict) and provider_meta.get(key) == value:
+            return session
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Recall.ai integration
 # ---------------------------------------------------------------------------
 
 
 def find_session_by_bot_id(bot_id: str) -> LiveSessionState | None:
-    """Find an active live session that owns a Recall.ai bot.
-
-    Searches in-memory sessions first, then falls back to DB.
-    """
-    for session in _sessions.values():
-        recall = session.metadata.get("recall") if isinstance(session.metadata, dict) else None
-        if isinstance(recall, dict) and recall.get("botId") == bot_id:
-            return session
-    return None
+    """Find the in-memory live session that owns a Recall.ai bot."""
+    return _find_session_by_provider_reference("recall", "botId", bot_id)
 
 
 async def recall_webhook_ingest(payload: dict[str, Any]) -> None:
@@ -1226,22 +1265,7 @@ async def recall_webhook_ingest(payload: dict[str, Any]) -> None:
 
     if event_type == "transcript.data":
         turns = parse_recall_transcript(data)
-        ingested = 0
-        for turn in turns:
-            text = turn.get("text", "").strip()
-            if not text:
-                continue
-            speaker = turn.get("speaker", "Speaker")
-            external_id = turn.get("external_turn_id")
-            recorded = await _handle_transcript_turn(
-                session,
-                source="recall_ai",
-                transcript=text,
-                speaker=speaker,
-                external_turn_id=external_id,
-            )
-            if recorded:
-                ingested += 1
+        ingested = await _ingest_provider_turns(session, source="recall_ai", turns=turns)
         logger.info(
             "Recall transcript.data session=%s turns=%s ingested=%s",
             session.session_id,
@@ -1260,15 +1284,15 @@ async def recall_webhook_ingest(payload: dict[str, Any]) -> None:
 
 
 def find_session_by_fireflies_meeting(meeting_id: str) -> LiveSessionState | None:
-    """Find an active live session that's tracking a Fireflies meeting.
+    """Find the in-memory live session that tracks a Fireflies meeting."""
+    return _find_session_by_provider_reference("fireflies", "meetingId", meeting_id)
 
-    Searches in-memory sessions for metadata.fireflies.meetingId match.
-    """
-    for session in _sessions.values():
-        ff = session.metadata.get("fireflies") if isinstance(session.metadata, dict) else None
-        if isinstance(ff, dict) and ff.get("meetingId") == meeting_id:
-            return session
-    return None
+
+async def ingest_fireflies_webhook_turns(meeting_id: str, turns: list[dict[str, Any]]) -> int | None:
+    session = find_session_by_fireflies_meeting(meeting_id)
+    if not session or session.status != "active":
+        return None
+    return await _ingest_provider_turns(session, source="fireflies", turns=turns)
 
 
 async def fireflies_ingest_turns(
@@ -1282,34 +1306,11 @@ async def fireflies_ingest_turns(
 
     Called by the Fireflies import endpoint and webhook handler.
     """
-    session = await _session_for_token(live_token)
-    if session.session_id != session_id:
-        raise UnauthorizedError("Live session token does not match session")
-    if session.status != "active":
-        raise NotFoundError("Live session is not active")
+    session = await _require_session_for_token(session_id, live_token, active=True)
 
     # Store meeting reference for future webhook lookups
-    if meeting_id:
-        ff_meta = session.metadata.get("fireflies") if isinstance(session.metadata, dict) else {}
-        if isinstance(ff_meta, dict):
-            ff_meta["meetingId"] = meeting_id
-            session.metadata["fireflies"] = ff_meta
-            await _persist_session(session)
-
-    ingested = 0
-    for turn in turns:
-        text = (turn.get("text") or "").strip()
-        if not text:
-            continue
-        recorded = await _handle_transcript_turn(
-            session,
-            source="fireflies",
-            transcript=text,
-            speaker=turn.get("speaker", "Speaker"),
-            external_turn_id=turn.get("external_turn_id"),
-        )
-        if recorded:
-            ingested += 1
+    await _remember_provider_reference(session, "fireflies", "meetingId", meeting_id)
+    ingested = await _ingest_provider_turns(session, source="fireflies", turns=turns)
 
     logger.info(
         "Fireflies ingest session=%s meeting=%s turns=%s ingested=%s",
@@ -1331,15 +1332,15 @@ async def fireflies_ingest_turns(
 
 
 def find_session_by_otter_speech(speech_id: str) -> LiveSessionState | None:
-    """Find an active live session tracking an Otter speech.
+    """Find the in-memory live session that tracks an Otter speech."""
+    return _find_session_by_provider_reference("otter", "speechId", speech_id)
 
-    Searches in-memory sessions for metadata.otter.speechId match.
-    """
-    for session in _sessions.values():
-        otter = session.metadata.get("otter") if isinstance(session.metadata, dict) else None
-        if isinstance(otter, dict) and otter.get("speechId") == speech_id:
-            return session
-    return None
+
+async def ingest_otter_webhook_turns(speech_id: str, turns: list[dict[str, Any]]) -> int | None:
+    session = find_session_by_otter_speech(speech_id)
+    if not session or session.status != "active":
+        return None
+    return await _ingest_provider_turns(session, source="otter", turns=turns)
 
 
 async def otter_ingest_turns(
@@ -1350,33 +1351,10 @@ async def otter_ingest_turns(
     speech_id: str = "",
 ) -> dict[str, Any]:
     """Ingest parsed Otter turns into a live session."""
-    session = await _session_for_token(live_token)
-    if session.session_id != session_id:
-        raise UnauthorizedError("Live session token does not match session")
-    if session.status != "active":
-        raise NotFoundError("Live session is not active")
+    session = await _require_session_for_token(session_id, live_token, active=True)
 
-    if speech_id:
-        otter_meta = session.metadata.get("otter") if isinstance(session.metadata, dict) else {}
-        if isinstance(otter_meta, dict):
-            otter_meta["speechId"] = speech_id
-            session.metadata["otter"] = otter_meta
-            await _persist_session(session)
-
-    ingested = 0
-    for turn in turns:
-        text = (turn.get("text") or "").strip()
-        if not text:
-            continue
-        recorded = await _handle_transcript_turn(
-            session,
-            source="otter",
-            transcript=text,
-            speaker=turn.get("speaker", "Speaker"),
-            external_turn_id=turn.get("external_turn_id"),
-        )
-        if recorded:
-            ingested += 1
+    await _remember_provider_reference(session, "otter", "speechId", speech_id)
+    ingested = await _ingest_provider_turns(session, source="otter", turns=turns)
 
     logger.info(
         "Otter ingest session=%s speech=%s turns=%s ingested=%s",

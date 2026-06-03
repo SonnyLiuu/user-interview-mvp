@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from ..config import get_settings
 from ..errors import BadRequestError, UnauthorizedError
-from ..services.live_sessions import find_session_by_otter_speech, otter_ingest_turns
+from ..services.live_sessions import ingest_otter_webhook_turns, otter_ingest_turns
 from ..services.otter_provider import (
     fetch_otter_transcript,
     parse_otter_transcript,
@@ -110,27 +110,10 @@ async def otter_webhook(
     if not turns:
         return {"status": "ok", "turns_ingested": 0}
 
-    session = find_session_by_otter_speech(speech_id)
-    if not session:
+    ingested = await ingest_otter_webhook_turns(speech_id, turns)
+    if ingested is None:
         logger.info("Otter webhook: no active session found for speech=%s", speech_id)
         return {"status": "ok", "turns_ingested": 0, "note": "no active session for this speech"}
-
-    from ..services.live_sessions import _handle_transcript_turn
-
-    ingested = 0
-    for turn in turns:
-        text = turn.get("text", "").strip()
-        if not text:
-            continue
-        recorded = await _handle_transcript_turn(
-            session,
-            source="otter",
-            transcript=text,
-            speaker=turn.get("speaker", "Speaker"),
-            external_turn_id=turn.get("external_turn_id"),
-        )
-        if recorded:
-            ingested += 1
 
     logger.info("Otter webhook: ingested %s turns for speech=%s", ingested, speech_id)
     return {"status": "ok", "turns_ingested": ingested}

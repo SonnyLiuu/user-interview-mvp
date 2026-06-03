@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users, person_events } from '@/lib/db/schema';
+import { people, person_events } from '@/lib/db/schema';
 import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
+import { getOwnedPerson } from '@/lib/person-ownership';
 
 type Params = { params: Promise<{ personId: string }> };
 
@@ -18,15 +19,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const scheduledAt = new Date(body.scheduledAt);
   if (isNaN(scheduledAt.getTime())) return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
 
-  const rows = await db
-    .select({ person: people })
-    .from(people)
-    .innerJoin(projects, eq(people.project_id, projects.id))
-    .innerJoin(users, eq(projects.user_id, users.id))
-    .where(and(eq(people.id, personId), eq(users.clerk_user_id, clerkUserId)))
-    .limit(1);
-
-  if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const current = await getOwnedPerson(personId, clerkUserId);
+  if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const [updated] = await db
     .update(people)
@@ -37,9 +31,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   await db.insert(person_events).values({
     person_id: personId,
     type: 'stage_changed',
-    metadata: matchEventMetadata(rows[0].person, { to: 'scheduled', scheduled_at: scheduledAt.toISOString() }, 3),
+    metadata: matchEventMetadata(current, { to: 'scheduled', scheduled_at: scheduledAt.toISOString() }, 3),
   });
-  if (rows[0].person.project_id) await refreshProjectMatchProfileFromSignals(rows[0].person.project_id, null);
+  if (current.project_id) await refreshProjectMatchProfileFromSignals(current.project_id, null);
 
   return NextResponse.json(updated);
 }
