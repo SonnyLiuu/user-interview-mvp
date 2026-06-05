@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import type { DiscoveredUrl, Person } from '@/lib/db/schema';
+import type { Person } from '@/lib/db/schema';
 import { PersonaBubble } from './PersonaBubble';
 import type { PersonaType } from './PersonaBubble';
 import { RelevanceIndicator } from './RelevanceIndicator';
@@ -86,26 +86,7 @@ function CardActive({
 
 // ── Loading (skeleton) ────────────────────────────────────────────────────────
 
-function formatDetectedSources(discovered: DiscoveredUrl[] | null | undefined): string | null {
-  if (!discovered?.length) return null;
-
-  const labels = discovered.slice(0, 2).map((source) => {
-    let host = source.url;
-    try {
-      host = new URL(source.url).hostname.replace(/^www\./, '');
-    } catch {
-      host = source.url.replace(/^https?:\/\//, '').split('/')[0] || source.url;
-    }
-    const kind = source.kind === 'github' ? 'GitHub' : source.kind === 'blog' ? 'Blog' : 'Website';
-    return `${kind}: ${host}`;
-  });
-
-  const remaining = discovered.length - labels.length;
-  return remaining > 0 ? `${labels.join(', ')} +${remaining}` : labels.join(', ');
-}
-
-function CardLoading({ discovered }: { discovered?: DiscoveredUrl[] | null }) {
-  const detectedSummary = formatDetectedSources(discovered);
+function CardLoading() {
   return (
     <div className={styles.loading} aria-busy="true" aria-label="Researching person">
       <div className={styles.skeletonLine} style={{ width: '60%', height: 14 }} />
@@ -114,11 +95,8 @@ function CardLoading({ discovered }: { discovered?: DiscoveredUrl[] | null }) {
       <div className={`${styles.skeletonLine} ${styles.skeletonBubble}`} />
       <div className={styles.skeletonLine} style={{ width: '90%', height: 11, marginTop: 8 }} />
       <div className={styles.skeletonLine} style={{ width: '75%', height: 11, marginTop: 4 }} />
-      {detectedSummary && (
-        <p className={styles.loadingDetected}>
-          <span>Auto-detected</span> {detectedSummary}
-        </p>
-      )}
+      <div className={styles.skeletonLine} style={{ width: '68%', height: 11, marginTop: 8 }} />
+      <div className={styles.skeletonLine} style={{ width: '82%', height: 11, marginTop: 4 }} />
       <div className={styles.skeletonFooter}>
         <div className={styles.skeletonLine} style={{ width: 72, height: 44 }} />
         <div className={styles.skeletonLine} style={{ width: '40%', height: 11 }} />
@@ -158,6 +136,55 @@ function CardError({ onRetry, message }: { onRetry: () => void; message?: string
 
 // ── Filled ────────────────────────────────────────────────────────────────────
 
+const FIT_COPY: Record<PersonaType, { bestFor: string; fallbackAsks: string[] }> = {
+  potential_user: {
+    bestFor: 'Validating user pain and current workflow',
+    fallbackAsks: ['Current workaround', 'Research steps', 'Switching trigger'],
+  },
+  buyer: {
+    bestFor: 'Understanding purchase criteria and budget',
+    fallbackAsks: ['Buying process', 'Success criteria', 'Budget owner'],
+  },
+  operator: {
+    bestFor: 'Mapping workflow bottlenecks and handoffs',
+    fallbackAsks: ['Operational gaps', 'Manual steps', 'Decision points'],
+  },
+  domain_expert: {
+    bestFor: 'Stress-testing the market and category',
+    fallbackAsks: ['Market pattern', 'Hidden risks', 'Better targets'],
+  },
+  skeptic: {
+    bestFor: 'Finding objections before they slow outreach',
+    fallbackAsks: ['Deal blockers', 'Weak claims', 'Alternatives'],
+  },
+  connector: {
+    bestFor: 'Finding warmer paths to the right people',
+    fallbackAsks: ['Best intro', 'Relevant circles', 'Credibility signals'],
+  },
+};
+
+function questionToChip(question: string) {
+  return question
+    .replace(/^[\s"']+|[\s"'?.!]+$/g, '')
+    .replace(/^(how|what|where|when|why|who)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function interviewFitFor(personaType: string | null, recommendedQuestions?: string[]) {
+  const persona = personaType as PersonaType | null;
+  const fallback = persona && FIT_COPY[persona] ? FIT_COPY[persona] : FIT_COPY.potential_user;
+  const questionChips = (recommendedQuestions ?? [])
+    .map(questionToChip)
+    .filter((question) => question.length >= 8)
+    .slice(0, 2);
+
+  return {
+    bestFor: fallback.bestFor,
+    askAbout: questionChips.length ? questionChips : fallback.fallbackAsks,
+  };
+}
+
 function CardFilled({
   person,
   slug,
@@ -173,14 +200,11 @@ function CardFilled({
 }) {
   const analysis = person.analysis as {
     why_they_matter?: string;
-    contact_info?: { email?: string; twitter?: string; linkedin?: string; website?: string };
+    recommended_questions?: string[];
   } | null;
 
-  const contactLine = analysis?.contact_info
-    ? Object.values(analysis.contact_info).find(Boolean) ?? null
-    : null;
-  const detectedSummary = formatDetectedSources(person.discovered_urls);
   const matchRank = (person.match_rank ?? person.relevance_rank) as 'low' | 'medium' | 'high' | null;
+  const interviewFit = interviewFitFor(person.persona_type, analysis?.recommended_questions);
 
   return (
     <Link
@@ -232,24 +256,27 @@ function CardFilled({
         <p className={styles.why}>{analysis.why_they_matter}</p>
       )}
 
-      {detectedSummary && (
-        <p className={styles.detectedSources}>
-          <span>Auto-detected</span> {detectedSummary}
-        </p>
-      )}
+      <div className={styles.interviewFit}>
+        <div className={styles.fitHeader}>
+          <span className={styles.fitLabel}>Interview fit</span>
+          <span className={styles.fitBest}>{interviewFit.bestFor}</span>
+        </div>
+        <div className={styles.askRow}>
+          <span className={styles.askLabel}>Ask about</span>
+          <span className={styles.askChips}>
+            {interviewFit.askAbout.map((item) => (
+              <span key={item} className={styles.askChip}>{item}</span>
+            ))}
+          </span>
+        </div>
+      </div>
 
-      {/* Footer: gauge + contact */}
+      {/* Footer: gauge + profile affordance */}
       <div className={styles.footer}>
         {matchRank && (
           <RelevanceIndicator rank={matchRank} score={person.match_score} stale={person.match_status === 'stale'} />
         )}
-        <div className={styles.contact}>
-          {contactLine ? (
-            <span className={styles.contactFound}>{contactLine}</span>
-          ) : (
-            <span className={styles.contactMissing}>Contact not found</span>
-          )}
-        </div>
+        <span className={styles.openProfile}>Open profile</span>
       </div>
     </Link>
   );
@@ -341,7 +368,7 @@ export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, o
 
   return (
     <div className={styles.card}>
-      {isLoading && <CardLoading discovered={person.discovered_urls} />}
+      {isLoading && <CardLoading />}
       {isError && <CardError onRetry={handleRetry} message={person.crawl_error} />}
       {!isLoading && !isError && (
         <CardFilled

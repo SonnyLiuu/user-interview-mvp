@@ -40,3 +40,7 @@ export function boardStatusToStage(boardStatus: string | null): CRMStage {
 export function stageToBoardStatus(stage: CRMStage): BoardStatus {
   return STAGE_TO_DB[stage];
 }
+
+export function shouldClearNoResponseOutcome(stage: CRMStage): boolean {
+  return stage === 'sent' || stage === 'scheduled';
+}

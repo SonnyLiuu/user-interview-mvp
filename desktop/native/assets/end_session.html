@@ -46,6 +46,43 @@
     font: inherit;
     resize: vertical;
   }
+  .transcript-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .transcript-header label {
+    font-size: 13px;
+    color: #a1a1aa;
+  }
+  .source-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .source-badge.fastapi {
+    background: #1e3a5f;
+    color: #7cb3e9;
+    border: 1px solid #2d5a8a;
+  }
+  .source-badge.whisper {
+    background: #1e3f2e;
+    color: #7ce9a5;
+    border: 1px solid #2d6a42;
+  }
+  .source-badge.manual {
+    background: #3a2e1e;
+    color: #e9b77c;
+    border: 1px solid #6a502d;
+  }
+  .source-badge.none {
+    background: #2a1e2e;
+    color: #b97ce9;
+    border: 1px solid #502d6a;
+  }
   .actions {
     display: flex;
     justify-content: flex-end;
@@ -59,6 +96,7 @@
     font-size: 13px;
   }
   .status.error { color: #ffad99; }
+  .status.pending { color: #e9b77c; }
   button {
     background: #262626;
     color: #f4f4f5;
@@ -73,6 +111,7 @@
     border-color: #b85a4d;
   }
   button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: 0.5; cursor: default; }
 </style>
 </head>
 <body>
@@ -90,7 +129,11 @@
     </div>
   </div>
 
-  <textarea id="transcript" placeholder="Paste transcript or post-call notes here..."></textarea>
+  <div class="transcript-header">
+    <label for="transcript">Meeting Transcript</label>
+    <span id="sourceBadge" class="source-badge none">No source</span>
+  </div>
+  <textarea id="transcript" placeholder="Transcript will appear here after the meeting..."></textarea>
 
   <div class="actions">
     <button id="cancel">Cancel</button>
@@ -105,6 +148,7 @@
   const checkedTitle = document.getElementById('checkedTitle');
   const uncheckedTitle = document.getElementById('uncheckedTitle');
   const transcript = document.getElementById('transcript');
+  const sourceBadge = document.getElementById('sourceBadge');
   const status = document.getElementById('status');
   const save = document.getElementById('save');
   let currentSession = null;
@@ -128,6 +172,11 @@
     }
   }
 
+  function setSourceBadge(source, label) {
+    sourceBadge.className = 'source-badge ' + source;
+    sourceBadge.textContent = label;
+  }
+
   function renderSession(session) {
     currentSession = session;
     person.textContent = session.personName
@@ -139,6 +188,27 @@
     uncheckedTitle.textContent = `Unchecked (${uncheckedItems.length})`;
     renderList(checked, checkedItems);
     renderList(unchecked, uncheckedItems);
+
+    // Populate transcript and source badge
+    const src = session.transcriptSource || 'none';
+    if (src === 'fastapi') {
+      setSourceBadge('fastapi', 'FastAPI (Option C)');
+    } else if (src === 'whisper') {
+      setSourceBadge('whisper', 'whisper.cpp (Option A)');
+    } else if (session.transcriptRaw) {
+      setSourceBadge('manual', 'Manual paste');
+    } else {
+      setSourceBadge('none', 'No transcript');
+    }
+
+    if (session.transcriptRaw) {
+      transcript.value = session.transcriptRaw;
+    }
+
+    if (session.transcriptStatus) {
+      status.className = 'status pending';
+      status.textContent = session.transcriptStatus;
+    }
   }
 
   document.getElementById('cancel').onclick = () => post({ type: 'cancelEndSession' });
@@ -154,15 +224,23 @@
   };
 
   window.chrome.webview.addEventListener('message', e => {
-    if (e.data?.type === 'loadEndSession') renderSession(e.data.session);
-    if (e.data?.type === 'saveSucceeded') {
+    if (!e.data) return;
+    if (e.data.type === 'loadEndSession') renderSession(e.data.session);
+    if (e.data.type === 'saveSucceeded') {
       status.className = 'status';
       status.textContent = 'Saved. You can close this window.';
     }
-    if (e.data?.type === 'saveFailed') {
+    if (e.data.type === 'saveFailed') {
       save.disabled = false;
       status.className = 'status error';
       status.textContent = e.data.message || 'Save failed.';
+    }
+    if (e.data.type === 'transcriptProgress') {
+      status.className = 'status pending';
+      status.textContent = e.data.message || 'Transcribing...';
+      if (e.data.text) {
+        transcript.value = e.data.text;
+      }
     }
   });
 

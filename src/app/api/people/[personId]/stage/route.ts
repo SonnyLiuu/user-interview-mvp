@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { people, person_events } from '@/lib/db/schema';
-import { CRM_STAGE_IDS, stageToBoardStatus } from '@/lib/crm';
+import { CRM_STAGE_IDS, shouldClearNoResponseOutcome, stageToBoardStatus } from '@/lib/crm';
 import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
 import { getOwnedPerson } from '@/lib/person-ownership';
 
@@ -23,9 +23,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const current = await getOwnedPerson(personId, clerkUserId);
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  const clearsNoResponse = current.outcome === 'no_response' && shouldClearNoResponseOutcome(stage);
+  const eventMetadata = {
+    from: current.board_status,
+    to: stage,
+    ...(clearsNoResponse ? { cleared_outcome: 'no_response' } : {}),
+  };
   const [updated] = await db
     .update(people)
-    .set({ board_status: stageToBoardStatus(stage), expires_at: null, updated_at: new Date() })
+    .set({
+      board_status: stageToBoardStatus(stage),
+      outcome: clearsNoResponse ? null : current.outcome,
+      expires_at: null,
+      updated_at: new Date(),
+    })
     .where(eq(people.id, personId))
     .returning();
 
@@ -34,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     type: 'stage_changed',
     metadata: matchEventMetadata(
       current,
-      { from: current.board_status, to: stage },
+      eventMetadata,
       stage === 'sent' ? 2 : stage === 'scheduled' ? 3 : stage === 'completed' ? 4 : 1,
     ),
   });

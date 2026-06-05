@@ -62,6 +62,10 @@ export default function ProjectPageRecommendationBand({
   }, [alerts]);
 
   useEffect(() => {
+    setActiveIndex((current) => Math.max(0, Math.min(current, alertCount - 1)));
+  }, [alertCount]);
+
+  useEffect(() => {
     function handleDismiss(event: Event) {
       const alertId = (event as CustomEvent<{ alertId?: string }>).detail?.alertId;
       if (!alertId) return;

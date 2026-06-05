@@ -74,7 +74,7 @@ def _instructions(session: LiveSessionState) -> str:
         "- If the label is a participant name or Speaker, use the content of the exchange rather than the label alone.\n"
         "- Do not mark a goal from Founder: restating a hoped-for answer unless "
         "an Interviewee: turn confirms it.\n"
-        "- Call the tool only when the founder clearly asked the question, or "
+        "- Call the tool when the founder clearly asked the question, or "
         "the interviewee produced usable evidence for the goal.\n"
         "- For long checklist items, match the core intent rather than requiring "
         "every word in the item to be repeated.\n"
@@ -82,9 +82,33 @@ def _instructions(session: LiveSessionState) -> str:
         "same practical intent, mark that question immediately.\n"
         "- If one answer or exchange clearly covers multiple listed items, call "
         "mark_items_covered with every covered item.\n"
-        "- If the evidence is partial, ambiguous, or merely related, do nothing.\n"
         "- Never mark signal items covered in this V1.\n"
         "- Keep evidence to one short sentence grounded in what was heard.\n\n"
+        "HOW TO DECIDE — use this priority:\n"
+        "1. CLEAR MATCH → Call the tool immediately. The speaker asked the exact question "
+        "or gave an answer that directly addresses the checklist item.\n"
+        "2. STRONG IMPLICATION → Call the tool. The speaker addressed the core intent even if "
+        "they used different words. Example: checklist says 'What workaround do you use?' and "
+        "interviewee says 'Right now we export to Excel and email it' → mark it.\n"
+        "3. PARTIAL / RELATED → Call the tool if you are reasonably confident (70%+). "
+        "Better to mark a partially-covered item than leave it blank. The user can uncheck "
+        "it later. Example: checklist says 'How often does this happen?' and "
+        "interviewee says 'It happens a lot, probably every few weeks' → mark it.\n"
+        "4. VAGUE / UNRELATED → Do nothing. If the connection is thin or you would need to "
+        "guess, skip it. But err on the side of marking — it's easier for the user to "
+        "uncheck a false positive than to notice a missed item.\n\n"
+        "SPEAKER LABEL GUIDANCE:\n"
+        "- Founder: = the interviewer (asking questions, guiding the conversation).\n"
+        "- Interviewee: = the person being interviewed (giving answers, describing experiences).\n"
+        "- Speaker: = unknown/ambiguous (could be either). Treat as neutral and use content "
+        "to decide. If the turn sounds like a question being asked, treat as Founder:. "
+        "If it sounds like an answer or explanation, treat as Interviewee:.\n"
+        "- If you see a mix of Speaker: and named labels, prefer the named labels for "
+        "identifying who is asking vs answering.\n\n"
+        "CONTEXT REFRESH: You will periodically receive the full checklist and recent "
+        "transcript history. When this happens, re-evaluate ALL unchecked items against "
+        "the full context — earlier turns may now clearly cover items that were ambiguous "
+        "when first seen.\n\n"
         f"Interviewee: {session.person_name}\n"
         "Checklist:\n"
         f"{topics or '- No checkable items'}"
@@ -507,6 +531,8 @@ class RealtimeBridge:
             await self._turn_queue.put(turn)
 
     async def _turn_worker(self) -> None:
+        _REVAL_INTERVAL = 10  # send full context refresh every N turns
+        turns_since_reval = 0
         while not self._stop.is_set():
             turn: NormalizedTurn = await self._turn_queue.get()
             try:
@@ -537,6 +563,7 @@ class RealtimeBridge:
                     }
                 )
                 self._turns_sent += 1
+                turns_since_reval += 1
                 if self._turns_sent in {1, 5, 25} or self._turns_sent % 100 == 0:
                     logger.warning(
                         "Sent labeled transcript turn session=%s provider=%s turns=%s",
@@ -544,6 +571,63 @@ class RealtimeBridge:
                         turn.provider,
                         self._turns_sent,
                     )
+
+                # Periodic full re-evaluation: send unchecked topics + recent
+                # transcript so the AI can catch items that became clear with
+                # later context.
+                if turns_since_reval >= _REVAL_INTERVAL:
+                    turns_since_reval = 0
+                    unchecked = [
+                        topic for topic in self.session.topics
+                        if topic.category in {"goal", "question"}
+                        and not topic.checked
+                        and not topic.manual_override
+                    ]
+                    if unchecked:
+                        # Build a condensed transcript of last ~20 turns
+                        recent = self.session.transcript_turns[-20:]
+                        history = "\n".join(
+                            f"{turn.speaker}: {turn.text[:200]}"
+                            for turn in recent
+                        )
+                        unchecked_list = "\n".join(
+                            f"- {topic.id} [{topic.category}]: {topic.label}"
+                            for topic in unchecked
+                        )
+                        reval_msg = (
+                            "CONTEXT REFRESH — re-evaluate all unchecked items "
+                            "against the full transcript below.\n\n"
+                            "Remaining unchecked items:\n"
+                            f"{unchecked_list}\n\n"
+                            "Recent transcript:\n"
+                            f"{history}\n\n"
+                            "Check each unchecked item above. If any are now "
+                            "clearly covered by the transcript above, call "
+                            "mark_item_covered or mark_items_covered."
+                        )
+                        await self._send(
+                            {
+                                "type": "conversation.item.create",
+                                "item": {
+                                    "type": "message",
+                                    "role": "user",
+                                    "content": [
+                                        {"type": "input_text", "text": reval_msg}
+                                    ],
+                                },
+                            }
+                        )
+                        await self._send(
+                            {
+                                "type": "response.create",
+                                "response": {"output_modalities": ["text"]},
+                            }
+                        )
+                        logger.warning(
+                            "Re-evaluation sent session=%s unchecked=%s",
+                            self.session.session_id,
+                            len(unchecked),
+                        )
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -592,8 +676,8 @@ def _speaker_for_source(source: str) -> str:
 # REST-based checklist bridge (for Gemini, Anthropic, and non-OpenAI providers)
 # ---------------------------------------------------------------------------
 
-_REST_FLUSH_INTERVAL_SECONDS = 4.0
-_REST_MAX_TURNS_PER_FLUSH = 8
+_REST_FLUSH_INTERVAL_SECONDS = 2.0  # was 4.0 — faster response for live calls
+_REST_MAX_TURNS_PER_FLUSH = 6       # was 8 — flush sooner to reduce latency
 
 
 def _rest_tool_declarations() -> list[dict]:
@@ -702,6 +786,8 @@ class RestChecklistBridge:
             self._provider,
         )
         self._on_status("connected", None)
+        flush_count = 0
+        _REVAL_EVERY_N_FLUSHES = 3  # re-evaluate all unchecked every 3rd flush
         try:
             while not self._stop.is_set():
                 try:
@@ -714,6 +800,10 @@ class RestChecklistBridge:
                 self._buffer_event.clear()
                 if self._buffer:
                     await self._flush()
+                    flush_count += 1
+                    # Periodic full re-evaluation
+                    if flush_count % _REVAL_EVERY_N_FLUSHES == 0:
+                        await self._reval()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -761,6 +851,53 @@ class RestChecklistBridge:
                     )
         except Exception:
             logger.exception("REST flush failed session=%s", self._session.session_id)
+
+    async def _reval(self) -> None:
+        """Periodic full re-evaluation: send all unchecked topics + recent
+        transcript history so the AI can catch items that became clear with
+        later context."""
+        unchecked = [
+            topic for topic in self._session.topics
+            if topic.category in {"goal", "question"}
+            and not topic.checked
+            and not topic.manual_override
+        ]
+        if not unchecked:
+            return
+
+        recent = self._session.transcript_turns[-20:]
+        history = "\n".join(
+            f"{turn.speaker}: {turn.text[:200]}" for turn in recent
+        )
+        unchecked_list = "\n".join(
+            f"- {topic.id} [{topic.category}]: {topic.label}"
+            for topic in unchecked
+        )
+        prompt = (
+            "CONTEXT REFRESH — re-evaluate all remaining unchecked items "
+            "against the full transcript below.\n\n"
+            "Remaining unchecked items:\n"
+            f"{unchecked_list}\n\n"
+            "Recent transcript:\n"
+            f"{history}\n\n"
+            "Check each unchecked item above. If any are now clearly covered "
+            "by the transcript above, call mark_item_covered or "
+            "mark_items_covered. If nothing is covered, say 'no_op'."
+        )
+
+        try:
+            tool_calls = await self._call_ai(prompt)
+            for name, args in tool_calls:
+                if name in {"mark_item_covered", "mark_items_covered"}:
+                    result = await self._on_tool_call(name, args)
+                    logger.warning(
+                        "REST reval result session=%s name=%s accepted=%s",
+                        self._session.session_id,
+                        name,
+                        result.get("accepted") if isinstance(result, dict) else None,
+                    )
+        except Exception:
+            logger.exception("REST reval failed session=%s", self._session.session_id)
 
     async def _call_ai(self, prompt: str) -> list[tuple[str, dict]]:
         settings = get_settings()

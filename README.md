@@ -169,15 +169,29 @@ Default URLs:
 | `AZURE_OPENAI_REALTIME_ENDPOINT` | Required for Azure checklist | Azure OpenAI endpoint, for example `https://resource.openai.azure.com/openai/v1`. |
 | `AZURE_OPENAI_REALTIME_API_KEY` | Required for Azure checklist | Azure OpenAI/Foundry API key used only when `CHECKLIST_AI_PROVIDER=azure`. |
 | `AZURE_OPENAI_REALTIME_DEPLOYMENT` | Required for Azure checklist | Azure realtime deployment name, not necessarily the raw model name. |
+| `AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT` | Required for Azure transcription | Azure transcription deployment name used by source transcription flows. |
 | `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
 | `GEMINI_MODEL` | No | Defaults to `gemini-2.5-pro`. |
 | `GEMINI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `GEMINI_MODEL`. |
+| `GEMINI_THINKING_LEVEL` | No | Optional Gemini thinking control. |
+| `AI_REQUEST_TIMEOUT_SECONDS` | No | AI provider request timeout in seconds; defaults to `45`. |
 | `FIRECRAWL_API_KEY` | Yes for person research | Used by `/api/people/[personId]/crawl`. |
 | `FOUNDRY_API_BASE_URL` | Yes | Usually `http://127.0.0.1:8001` locally. |
 | `FOUNDRY_DESKTOP_API_PUBLIC_URL` | No | Public FastAPI base URL used by the Windows overlay for live SSE/WebSocket streams; falls back to `FOUNDRY_API_BASE_URL`. |
 | `FOUNDRY_OVERLAY_INSTALLER_URL` | No | Public URL for the signed Windows installer shown on `/download` and settings. |
 | `FOUNDRY_BACKEND_SHARED_SECRET` | Yes | Shared HMAC secret for Next -> FastAPI calls. |
+| `ZOOM_RTMS_ENABLED` | No | Enables Zoom RTMS integration; defaults to `false`. |
+| `ZOOM_RTMS_CLIENT_ID` | Required for Zoom RTMS | Zoom RTMS client ID. |
+| `ZOOM_RTMS_CLIENT_SECRET` | Required for Zoom RTMS | Zoom RTMS client secret. |
+| `ZOOM_RTMS_WEBHOOK_SECRET_TOKEN` | Required for Zoom RTMS | Zoom RTMS webhook secret token. |
+| `RECALL_API_KEY` | Required for Recall.ai | Recall.ai meeting bot API key. |
+| `RECALL_REGION` | No | Recall.ai region; defaults to `us-west-2`. |
+| `RECALL_WEBHOOK_SECRET` | No | Recall.ai webhook signing secret. |
+| `FIREFLIES_API_KEY` | Required for Fireflies | Fireflies API key for transcript import. |
+| `FIREFLIES_WEBHOOK_SECRET` | No | Fireflies webhook signing secret. |
+| `OTTER_API_KEY` | Required for Otter.ai | Otter.ai API key for transcript import. |
+| `OTTER_WEBHOOK_SECRET` | No | Otter.ai webhook signing secret. |
 
 ### `services/foundry-api/.env.local`
 
@@ -196,10 +210,24 @@ Default URLs:
 | `AZURE_OPENAI_REALTIME_ENDPOINT` | Required for Azure checklist | Azure OpenAI endpoint, for example `https://resource.openai.azure.com/openai/v1`. |
 | `AZURE_OPENAI_REALTIME_API_KEY` | Required for Azure checklist | Azure OpenAI/Foundry API key used only when `CHECKLIST_AI_PROVIDER=azure`. |
 | `AZURE_OPENAI_REALTIME_DEPLOYMENT` | Required for Azure checklist | Azure realtime deployment name, not necessarily the raw model name. |
+| `AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT` | Required for Azure transcription | Azure transcription deployment name used by source transcription flows. |
 | `OPENAI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `OPENAI_MODEL`. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-4-6`. |
 | `GEMINI_MODEL` | No | Defaults to `gemini-2.5-pro`. |
 | `GEMINI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `GEMINI_MODEL`. |
+| `GEMINI_THINKING_LEVEL` | No | Optional Gemini thinking control. |
+| `AI_REQUEST_TIMEOUT_SECONDS` | No | AI provider request timeout in seconds; defaults to `45`. |
+| `ZOOM_RTMS_ENABLED` | No | Enables Zoom RTMS integration; defaults to `false`. |
+| `ZOOM_RTMS_CLIENT_ID` | Required for Zoom RTMS | Zoom RTMS client ID. |
+| `ZOOM_RTMS_CLIENT_SECRET` | Required for Zoom RTMS | Zoom RTMS client secret. |
+| `ZOOM_RTMS_WEBHOOK_SECRET_TOKEN` | Required for Zoom RTMS | Zoom RTMS webhook secret token. |
+| `RECALL_API_KEY` | Required for Recall.ai | Recall.ai meeting bot API key. |
+| `RECALL_REGION` | No | Recall.ai region; defaults to `us-west-2`. |
+| `RECALL_WEBHOOK_SECRET` | No | Recall.ai webhook signing secret. |
+| `FIREFLIES_API_KEY` | Required for Fireflies | Fireflies API key for transcript import. |
+| `FIREFLIES_WEBHOOK_SECRET` | No | Fireflies webhook signing secret. |
+| `OTTER_API_KEY` | Required for Otter.ai | Otter.ai API key for transcript import. |
+| `OTTER_WEBHOOK_SECRET` | No | Otter.ai webhook signing secret. |
 
 ## Common Commands
 
@@ -248,6 +276,8 @@ Run:
 ```powershell
 npm run db:migrate
 ```
+
+After pulling latest, run `npm run db:migrate` before using the app if new files appeared in `drizzle/`.
 
 Avoid destructive resets unless you know the database is disposable.
 

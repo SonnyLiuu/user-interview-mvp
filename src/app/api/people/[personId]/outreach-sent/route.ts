@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { outreach, people, person_events } from '@/lib/db/schema';
+import { shouldClearNoResponseOutcome } from '@/lib/crm';
 import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
 import { getProjectPathSegment } from '@/lib/projects';
 import { getOwnedPersonWithProject } from '@/lib/person-ownership';
@@ -22,16 +23,27 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const now = new Date();
+  const clearsNoResponse = owned.person.outcome === 'no_response' && shouldClearNoResponseOutcome('sent');
   const [updated] = await db
     .update(people)
-    .set({ board_status: 'sent', last_contacted_at: now, expires_at: null, updated_at: now })
+    .set({
+      board_status: 'sent',
+      outcome: clearsNoResponse ? null : owned.person.outcome,
+      last_contacted_at: now,
+      expires_at: null,
+      updated_at: now,
+    })
     .where(eq(people.id, personId))
     .returning();
 
   await db.insert(person_events).values({
     person_id: personId,
     type: 'outreach_copied',
-    metadata: matchEventMetadata(owned.person, {}, 2),
+    metadata: matchEventMetadata(
+      owned.person,
+      clearsNoResponse ? { cleared_outcome: 'no_response' } : {},
+      2,
+    ),
   });
   if (owned.person.project_id) await refreshProjectMatchProfileFromSignals(owned.person.project_id, null);
 

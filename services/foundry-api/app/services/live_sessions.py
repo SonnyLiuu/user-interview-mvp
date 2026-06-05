@@ -998,6 +998,10 @@ async def _handle_transcript_turn(
     if bridge:
         normalized = _normalize_turn(session.capture_provider, source, text, speaker_label)
         await bridge.send_labeled_turn(normalized)
+
+    # --- Signal auto-detection: simple keyword matching for signal topics ---
+    await _detect_signals(session, text)
+
     return True
 
 
@@ -1054,6 +1058,106 @@ async def _mark_items_covered(session: LiveSessionState, args: dict[str, Any]) -
         "acceptedCount": len(accepted),
         "results": results,
     }
+
+
+# --- Signal auto-detection ---
+# Simple keyword-based detection for signal-type checklist items.
+# Signal topics track behavioral indicators (workarounds, referrals, buying signals)
+# that are harder for the AI to detect via the standard prompt. This runs on every
+# transcript turn and checks signal topics against accumulated transcript text.
+
+_SIGNAL_KEYWORD_GROUPS: dict[str, list[list[str]]] = {
+    # "They describe a recent, repeated, or expensive workaround."
+    "workaround": [
+        ["workaround", "manual", "spreadsheet", "excel"],
+        ["export", "copy", "paste", "email"],
+        ["hack", "duct tape", "band-aid", "temporary"],
+        ["pain", "frustrating", "annoying", "waste time", "takes forever"],
+        ["expensive", "costs us", "spending", "paying for"],
+    ],
+    # "They can name other people who share or own the problem."
+    "referral": [
+        ["you should talk to", "speak with", "connect you"],
+        ["my colleague", "my team", "my boss", "my manager"],
+        ["other people", "other teams", "other departments"],
+        ["also has this", "same problem", "similar issue", "deals with"],
+        ["not just me", "everyone", "whole team"],
+    ],
+    # "They ask to see the solution or offer a relevant introduction."
+    "buying_signal": [
+        ["show me", "demo", "see it", "try it"],
+        ["how does it work", "what does it do", "can it"],
+        ["pricing", "how much", "cost", "trial"],
+        ["next steps", "follow up", "let me introduce"],
+        ["when can we", "how soon", "timeline"],
+    ],
+}
+
+
+def _detect_signal_hit(signal_type: str, text_lower: str, full_transcript: str) -> bool:
+    """Check if a transcript turn + accumulated context matches signal patterns."""
+    groups = _SIGNAL_KEYWORD_GROUPS.get(signal_type, [])
+    if not groups:
+        return False
+
+    # Search both the current turn and the last ~2000 chars of full transcript
+    search_text = (full_transcript[-2000:] + " " + text_lower).lower()
+
+    # A group matches if ALL keywords in the group appear in the text
+    for group in groups:
+        if all(keyword.lower() in search_text for keyword in group):
+            return True
+    return False
+
+
+async def _detect_signals(session: LiveSessionState, turn_text: str) -> None:
+    """Check un-checked signal topics against the current transcript turn."""
+    if session.status != "active":
+        return
+
+    text_lower = turn_text.lower()
+    full_transcript = format_transcript(session)
+
+    for topic in session.topics:
+        if topic.category != "signal":
+            continue
+        if topic.checked or topic.manual_override:
+            continue
+
+        label_lower = topic.label.lower()
+        signal_type = None
+
+        if "workaround" in label_lower or "hack" in label_lower:
+            signal_type = "workaround"
+        elif "other people" in label_lower or "share" in label_lower or "introduction" in label_lower:
+            signal_type = "referral"
+        elif "see the solution" in label_lower or "ask to see" in label_lower or "offer" in label_lower:
+            signal_type = "buying_signal"
+
+        if signal_type and _detect_signal_hit(signal_type, text_lower, full_transcript):
+            checked_at = _now_iso()
+            topic.checked = True
+            topic.checked_by = "signal_detection"
+            topic.checked_at = checked_at
+            topic.evidence = f"Signal detected from transcript: {turn_text[:200]}"
+
+            _append_event(
+                session,
+                "topic_checked",
+                {
+                    "sessionId": session.session_id,
+                    "topic": topic.to_dict(),
+                    "reason": "signal_detected",
+                    "source": "signal_detection",
+                },
+            )
+            await _persist_topics(session)
+            logger.warning(
+                "Signal auto-detected session=%s topic=%s type=%s",
+                session.session_id,
+                topic.id,
+                signal_type,
+            )
 
 
 async def _mark_item_covered(session: LiveSessionState, args: dict[str, Any]) -> dict[str, Any]:

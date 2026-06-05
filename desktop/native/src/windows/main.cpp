@@ -22,6 +22,7 @@
 #include <mutex>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <atomic>
@@ -726,7 +727,9 @@ void syncLiveTopicOverride(const foundry::AppState& appState,
     }).detach();
 }
 
-std::wstring endSessionJson(const foundry::AppState& appState) {
+std::wstring endSessionJson(const foundry::AppState& appState,
+                              const std::wstring& transcriptSource,
+                              const std::wstring& transcriptStatus) {
     Json topics = Json::array();
     for (const auto& topic : appState.topics) {
         topics.push_back(Json{
@@ -740,8 +743,129 @@ std::wstring endSessionJson(const foundry::AppState& appState) {
         {"session",
          Json{{"personId", foundry::json::toUtf8(appState.selectedPersonId)},
               {"personName", foundry::json::toUtf8(appState.selectedPersonName)},
-              {"topics", topics}}},
+              {"topics", topics},
+              {"transcriptRaw", foundry::json::toUtf8(appState.liveTranscriptRaw)},
+              {"transcriptSource", foundry::json::toUtf8(transcriptSource)},
+              {"transcriptStatus", foundry::json::toUtf8(transcriptStatus)}}},
     });
+}
+
+std::wstring endSessionHtmlPath() {
+    wchar_t exePath[MAX_PATH] = {0};
+    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    std::filesystem::path dir = std::filesystem::path(exePath).parent_path();
+    std::filesystem::path html = dir / L"assets" / L"end_session.html";
+    return L"file:///" + html.wstring();
+}
+
+// --- Option A: whisper.cpp local transcription ---
+
+// Returns the directory containing the running exe.
+std::wstring exeDir() {
+    wchar_t path[MAX_PATH] = {0};
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+    return std::filesystem::path(path).parent_path().wstring();
+}
+
+// Runs whisper.cpp as a subprocess and captures stdout.
+// whisper-cli.exe and the model file (ggml-base.en.bin) must be in the exe directory.
+// Returns the transcript text, or empty on failure.
+std::wstring runWhisperTranscription(const std::wstring& wavPath) {
+    std::wstring exeDirPath = exeDir();
+    std::wstring whisperExe = exeDirPath + L"\\whisper-cli.exe";
+    std::wstring modelPath = exeDirPath + L"\\ggml-base.en.bin";
+
+    if (!std::filesystem::exists(whisperExe)) {
+        std::wcerr << L"[whisper] whisper-cli.exe not found at " << whisperExe << L"\n";
+        return L"";
+    }
+    if (!std::filesystem::exists(modelPath)) {
+        std::wcerr << L"[whisper] model not found at " << modelPath
+                   << L" — download from https://huggingface.co/ggerganov/whisper.cpp\n";
+        return L"";
+    }
+
+    // Build command line: whisper-cli.exe -m model.bin -f audio.wav -l en -otxt -of output
+    std::wstring outputPrefix = wavPath + L".whisper";
+    std::wstring cmdLine = L"\"" + whisperExe + L"\""
+        L" -m \"" + modelPath + L"\""
+        L" -f \"" + wavPath + L"\""
+        L" -l en"
+        L" -otxt"
+        L" -of \"" + outputPrefix + L"\"";
+
+    std::wcout << L"[whisper] running: " << cmdLine << L"\n";
+
+    // Create pipe for stdout
+    SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
+    HANDLE stdoutRead = nullptr;
+    HANDLE stdoutWrite = nullptr;
+    if (!CreatePipe(&stdoutRead, &stdoutWrite, &sa, 0)) {
+        return L"";
+    }
+    SetHandleInformation(stdoutRead, HANDLE_FLAG_INHERIT, 0);
+
+    STARTUPINFOW si{sizeof(si)};
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdOutput = stdoutWrite;
+    si.hStdError = stdoutWrite;
+
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr,
+                        TRUE, CREATE_NO_WINDOW, nullptr,
+                        exeDirPath.c_str(), &si, &pi)) {
+        CloseHandle(stdoutRead);
+        CloseHandle(stdoutWrite);
+        std::wcerr << L"[whisper] CreateProcess failed: " << GetLastError() << L"\n";
+        return L"";
+    }
+
+    CloseHandle(stdoutWrite);
+    CloseHandle(pi.hThread);
+
+    // Read stdout while process runs
+    std::string output;
+    char buffer[4096];
+    DWORD bytesRead = 0;
+    while (ReadFile(stdoutRead, buffer, sizeof(buffer) - 1, &bytesRead, nullptr) &&
+           bytesRead > 0) {
+        buffer[bytesRead] = '\0';
+        output += buffer;
+    }
+    CloseHandle(stdoutRead);
+
+    WaitForSingleObject(pi.hProcess, 60000);  // 60s timeout
+    CloseHandle(pi.hProcess);
+
+    std::wcout << L"[whisper] stdout (" << output.size() << L" bytes)\n";
+
+    // Also try reading the .txt output file
+    std::wstring txtPath = outputPrefix + L".txt";
+    std::wstring transcript;
+    if (std::filesystem::exists(txtPath)) {
+        std::ifstream txtFile(txtPath);
+        if (txtFile) {
+            std::stringstream ss;
+            ss << txtFile.rdbuf();
+            std::string txtContent = ss.str();
+            // Convert to wide
+            int len = MultiByteToWideChar(CP_UTF8, 0, txtContent.c_str(),
+                                          static_cast<int>(txtContent.size()),
+                                          nullptr, 0);
+            if (len > 0) {
+                transcript.resize(len);
+                MultiByteToWideChar(CP_UTF8, 0, txtContent.c_str(),
+                                    static_cast<int>(txtContent.size()),
+                                    transcript.data(), len);
+            }
+        }
+    }
+
+    // Clean up temp files
+    std::filesystem::remove(wavPath);
+    std::filesystem::remove(txtPath);
+
+    return transcript;
 }
 
 std::wstring buildNotesSummary(const foundry::AppState& appState);
@@ -1432,6 +1556,12 @@ int main() {
     std::unique_ptr<WebViewWindow> authWindow;
     bool authClosed = false;
 
+    // End-session WebView2 window for transcript review & editing.
+    std::unique_ptr<WebViewWindow> endSessionWindow;
+    bool endSessionClosed = false;
+    std::wstring endSessionTranscriptSource = L"none";
+    std::wstring endSessionTranscriptStatus;
+
     TrayActions actions;
     auto openAuthWindow = [&] {
         if (focusIfOpen(authWindow)) return;
@@ -1533,6 +1663,7 @@ int main() {
 
     auto stopLiveAudio = [&] {
         meetingAudio.stop();
+        meetingAudio.clearAccumulatedAudio();
         liveAudioSocket.close();
         g_liveRealtimeConnected.store(false);
     };
@@ -1556,12 +1687,17 @@ int main() {
                 appState.foundryBaseUrl, path);
         std::wstring error;
         if (!liveAudioSocket.connect(url, appState.liveToken, error)) {
-            std::wcout << L"[live] audio websocket failed: " << error << L"\n";
-            return;
+            std::wcout << L"[live] audio websocket failed: " << error
+                       << L" — starting local-only capture for offline transcription\n";
+            // Fallback: capture audio locally even without backend for Option A
         }
         auto sentChunks = std::make_shared<std::atomic<unsigned long long>>(0);
         auto failedChunks = std::make_shared<std::atomic<unsigned long long>>(0);
         auto skippedChunks = std::make_shared<std::atomic<unsigned long long>>(0);
+
+        // Option A: enable audio accumulation for offline whisper.cpp transcription
+        meetingAudio.setAccumulateAudio(true);
+
         if (!meetingAudio.start(
                 [&, sentChunks, failedChunks, skippedChunks](
                     AudioSource source,
@@ -1619,7 +1755,7 @@ int main() {
             overlayPickerOpen = false;
             overlayEndOpen = true;
             overlayPersonDropdownOpen = false;
-            overlayEndStatus = L"Ready to save.";
+            overlayEndStatus = L"Opening transcript review...";
             overlayHoverTarget = OverlayHoverTarget::None;
             overlayHoverIndex = -1;
             overlayDirty = true;
@@ -1724,6 +1860,107 @@ int main() {
         }
     };
 
+    // Open end-session WebView2 window for transcript review.
+    // Option C (fastapi): transcript fetched from FastAPI backend.
+    // Option A (whisper): transcript from local whisper.cpp (fallback).
+    auto openEndSessionWindow = [&] {
+        if (focusIfOpen(endSessionWindow)) return;
+        endSessionClosed = false;
+        overlayEndOpen = false;  // WebView replaces the Direct2D end-session page
+
+        // --- Option C: fetch transcript from FastAPI ---
+        endSessionTranscriptSource = L"none";
+        endSessionTranscriptStatus.clear();
+        if (!appState.liveSessionId.empty() && !appState.liveToken.empty() &&
+            !appState.foundryBaseUrl.empty()) {
+            refreshLiveSessionSnapshot(appState, true);
+            if (!appState.liveTranscriptRaw.empty()) {
+                endSessionTranscriptSource = L"fastapi";
+            } else {
+                endSessionTranscriptStatus = L"FastAPI transcript not available. "
+                    L"You can paste or type notes below.";
+            }
+        }
+
+        // --- Option A: try local whisper.cpp as fallback ---
+        if (endSessionTranscriptSource == L"none") {
+            meetingAudio.stop();
+            std::vector<std::uint8_t> accumulated = meetingAudio.getAccumulatedAudio();
+            if (!accumulated.empty()) {
+                std::wstring sessionsDir = foundry::windows::appDataDir().wstring() +
+                    L"\\sessions";
+                std::wstring wavFile = L"session_" +
+                    appState.sessionStartedAt.substr(0, 10) + L"_" +
+                    appState.sessionStartedAt.substr(11, 8) + L".wav";
+                // Replace colons for filename safety
+                for (auto& ch : wavFile) {
+                    if (ch == L':') ch = L'-';
+                }
+                std::wstring wavPath = meetingAudio.writeWavFile(sessionsDir, wavFile);
+                if (!wavPath.empty()) {
+                    std::wcout << L"[whisper] WAV written: " << wavPath << L"\n";
+                    std::wstring whisperTranscript = runWhisperTranscription(wavPath);
+                    if (!whisperTranscript.empty()) {
+                        appState.liveTranscriptRaw = whisperTranscript;
+                        endSessionTranscriptSource = L"whisper";
+                        endSessionTranscriptStatus.clear();
+                        std::wcout << L"[whisper] transcript generated ("
+                                   << whisperTranscript.size() << L" chars)\n";
+                    } else {
+                        endSessionTranscriptStatus =
+                            L"whisper.cpp not available or failed. "
+                            L"Install whisper-cli.exe + ggml-base.en.bin next to the app.";
+                    }
+                }
+            }
+            meetingAudio.clearAccumulatedAudio();
+        }
+
+        std::wstring htmlUrl = endSessionHtmlPath();
+        endSessionWindow = std::make_unique<WebViewWindow>(
+            L"User Interview - End Session", 640, 700, htmlUrl,
+            [&](const std::wstring& json) {
+                Json msg = foundry::json::parseWide(json);
+                std::string type = msg.value("type", "");
+                std::cout << "[endsession -> native] type=" << type << "\n";
+
+                if (type == "endSessionReady") {
+                    endSessionWindow->postMessageToJs(
+                        endSessionJson(appState,
+                                       endSessionTranscriptSource,
+                                       endSessionTranscriptStatus));
+                } else if (type == "saveSession") {
+                    std::wstring transcriptRaw =
+                        foundry::json::wideValue(msg, "transcriptRaw", L"");
+                    Json result = saveEndSession(appState, transcriptRaw);
+                    endSessionWindow->postMessageToJs(
+                        foundry::json::dumpWide(result));
+                    std::string resultType = result.value("type", "");
+                    if (resultType == "saveSucceeded") {
+                        stopLiveAudio();
+                        liveEvents.stop();
+                        nextLivePollTick = 0;
+                        overlayEndOpen = false;
+                        overlayPersonDropdownOpen = false;
+                        overlayScrollOffset = 0;
+                        overlayEndStatus = L"Ready to save.";
+                        overlayDirty = true;
+                    }
+                } else if (type == "cancelEndSession") {
+                    if (endSessionWindow && IsWindow(endSessionWindow->hwnd())) {
+                        DestroyWindow(endSessionWindow->hwnd());
+                    }
+                    overlayEndOpen = false;
+                    overlayPersonDropdownOpen = false;
+                    overlayHoverTarget = OverlayHoverTarget::None;
+                    overlayHoverIndex = -1;
+                    overlayDirty = true;
+                }
+            },
+            [&] { endSessionClosed = true; });
+        endSessionWindow->show();
+    };
+
     actions.onStartSession = startSession;
     actions.onSettings = [&] { overlaySettingsRequested = true; };
     actions.onQuit = [] {
@@ -1754,6 +1991,12 @@ int main() {
         if (authClosed) {
             authWindow.reset();
             authClosed = false;
+        }
+        if (endSessionClosed) {
+            endSessionWindow.reset();
+            endSessionClosed = false;
+            overlayEndOpen = false;
+            overlayDirty = true;
         }
         {
             std::vector<Json> events;
@@ -1922,22 +2165,33 @@ int main() {
             if (appState.sessionStatus == foundry::SessionStatus::Active) {
                 overlaySettingsOpen = false;
                 overlayPickerOpen = false;
-                overlayEndOpen = true;
+                overlayEndOpen = false;  // WebView handles end session, not overlay
                 overlayPersonDropdownOpen = false;
-                overlayEndStatus = L"Ready to save.";
+                overlayEndStatus = L"Opening transcript review...";
                 overlayHoverTarget = OverlayHoverTarget::None;
                 overlayHoverIndex = -1;
                 overlayDirty = true;
+                openEndSessionWindow();
             }
             overlayEndRequested = false;
         }
         if (overlayCancelEndRequested) {
+            if (endSessionWindow && IsWindow(endSessionWindow->hwnd())) {
+                DestroyWindow(endSessionWindow->hwnd());
+            }
             overlayEndOpen = false;
             overlayPersonDropdownOpen = false;
             overlayHoverTarget = OverlayHoverTarget::None;
             overlayHoverIndex = -1;
             overlayDirty = true;
             overlayCancelEndRequested = false;
+        }
+        // If end session was triggered via tray without going through
+        // overlayEndRequested, open the WebView now.
+        if (overlayEndOpen &&
+            appState.sessionStatus == foundry::SessionStatus::Active &&
+            (!endSessionWindow || !IsWindow(endSessionWindow->hwnd()))) {
+            openEndSessionWindow();
         }
         if (overlaySaveEndRequested) {
             overlayEndStatus = L"Saving call...";
@@ -2010,6 +2264,7 @@ exit:
     stopLiveAudio();
     liveEvents.stop();
     authWindow.reset();
+    endSessionWindow.reset();
     releaseRendererResources();
     CoUninitialize();
     if (singleInstanceMutex) CloseHandle(singleInstanceMutex);

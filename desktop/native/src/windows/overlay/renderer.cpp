@@ -720,28 +720,45 @@ void drawSectionHeader(const wchar_t* title, unsigned int count,
 
 void drawTopicRow(const OverlayTopicRow& topic, D2D1_RECT_F rect,
                   bool hovered) {
+    ID2D1SolidColorBrush* rowFill = topic.checked
+        ? g_goalHeaderBrush.Get()
+        : (hovered ? g_buttonHoverBrush.Get() : g_buttonBrush.Get());
+    ID2D1SolidColorBrush* rowBorder = topic.checked
+        ? g_goalBrush.Get()
+        : (hovered ? g_accentBrush.Get() : g_borderBrush.Get());
+
     g_cachedRenderTarget->FillRoundedRectangle(rounded(rect, 5.0f),
-                                               hovered ? g_buttonHoverBrush.Get()
-                                                       : g_buttonBrush.Get());
+                                               rowFill);
     g_cachedRenderTarget->DrawRoundedRectangle(rounded(rect, 5.0f),
-                                               hovered ? g_accentBrush.Get()
-                                                       : g_borderBrush.Get(),
-                                               hovered ? 1.3f : 1.0f);
+                                               rowBorder,
+                                               hovered || topic.checked
+                                                   ? 1.3f
+                                                   : 1.0f);
+    if (topic.checked) {
+        const float stripeX = rect.left + 4.0f;
+        g_cachedRenderTarget->DrawLine(
+            D2D1::Point2F(stripeX, rect.top + 8.0f),
+            D2D1::Point2F(stripeX, rect.bottom - 8.0f),
+            g_goalBrush.Get(), 3.0f);
+    }
 
     D2D1_RECT_F box = D2D1::RectF(rect.left + 12.0f, rect.top + 22.0f,
                                  rect.left + 30.0f, rect.top + 40.0f);
-    g_cachedRenderTarget->DrawRectangle(box, g_borderBrush.Get(), 1.2f);
     if (topic.checked) {
+        g_cachedRenderTarget->FillRectangle(box, g_goalBrush.Get());
+        g_cachedRenderTarget->DrawRectangle(box, g_goalBrush.Get(), 1.2f);
         g_cachedRenderTarget->DrawLine(D2D1::Point2F(box.left + 3.0f,
                                                      box.top + 8.0f),
                                        D2D1::Point2F(box.left + 7.0f,
                                                      box.bottom - 3.0f),
-                                       g_accentBrush.Get(), 2.0f);
+                                       g_paperBrush.Get(), 2.0f);
         g_cachedRenderTarget->DrawLine(D2D1::Point2F(box.left + 7.0f,
                                                      box.bottom - 3.0f),
                                        D2D1::Point2F(box.right - 2.0f,
                                                      box.top + 3.0f),
-                                       g_accentBrush.Get(), 2.0f);
+                                       g_paperBrush.Get(), 2.0f);
+    } else {
+        g_cachedRenderTarget->DrawRectangle(box, g_borderBrush.Get(), 1.2f);
     }
 
     D2D1_RECT_F textRect = D2D1::RectF(rect.left + 42.0f, rect.top + 9.0f,
@@ -751,12 +768,6 @@ void drawTopicRow(const OverlayTopicRow& topic, D2D1_RECT_F rect,
                                     g_topicFormat.Get(), textRect,
                                     topic.checked ? g_mutedBrush.Get()
                                                   : g_textBrush.Get());
-    if (topic.checked) {
-        float y = rect.top + 35.0f;
-        g_cachedRenderTarget->DrawLine(D2D1::Point2F(textRect.left, y),
-                                       D2D1::Point2F(textRect.right, y),
-                                       g_accentBrush.Get(), 1.5f);
-    }
 }
 
 }  // namespace

@@ -31,6 +31,15 @@ function outreachProjectActionLabel(project?: OutreachProjectRecord) {
   return 'Open project';
 }
 
+function isFullyCreatedInformationDiscoveryProject(project?: OutreachProjectRecord) {
+  return Boolean(
+    project
+    && project.type === 'information_discovery'
+    && project.status !== 'archived'
+    && project.brief_json,
+  );
+}
+
 function StartupRecommendationPanel({
   foundation,
   outreachProjects,
@@ -46,6 +55,7 @@ function StartupRecommendationPanel({
   const informationDiscoveryProject = outreachProjects.find((project) => (
     project.type === 'information_discovery' && project.status !== 'archived'
   ));
+  const showInformationDiscoveryRecommendation = !isFullyCreatedInformationDiscoveryProject(informationDiscoveryProject);
   const projectActionLabel = outreachProjectActionLabel(informationDiscoveryProject);
   const alerts: RecommendationBandAlert[] = [
     {
@@ -57,7 +67,10 @@ function StartupRecommendationPanel({
       actionTargetId: 'ongoing-advisor-input',
       actionEventName: 'foundation-advisor:try',
     },
-    {
+  ];
+
+  if (showInformationDiscoveryRecommendation) {
+    alerts.push({
       id: 'recommended-outreach-project',
       eyebrow: 'Recommended first outreach project',
       title: recommendation.label,
@@ -69,8 +82,8 @@ function StartupRecommendationPanel({
         type: 'information_discovery',
         projectId: informationDiscoveryProject?.id,
       },
-    },
-  ];
+    });
+  }
 
   return <ProjectPageRecommendationBand alerts={alerts} />;
 }

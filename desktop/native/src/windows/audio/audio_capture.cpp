@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <filesystem>
 
 using Microsoft::WRL::ComPtr;
 
@@ -206,12 +208,104 @@ void MeetingAudioCapture::captureLoop(bool loopback) {
         if (!chunk.empty() && callback_) {
             callback_(loopback ? AudioSource::Loopback : AudioSource::Microphone,
                       chunk);
+            if (accumulate_) {
+                accumulate(chunk);
+            }
         }
     }
 
     audioClient->Stop();
     CoTaskMemFree(rawFormat);
     if (didCoInit) CoUninitialize();
+}
+
+// --- Option A: ring buffer accumulation ---
+
+void MeetingAudioCapture::setAccumulateAudio(bool accumulate) {
+    accumulate_ = accumulate;
+}
+
+void MeetingAudioCapture::accumulate(const std::vector<std::uint8_t>& chunk) {
+    std::lock_guard<std::mutex> lock(bufferMutex_);
+    accumulatedPcm_.insert(accumulatedPcm_.end(), chunk.begin(), chunk.end());
+}
+
+std::vector<std::uint8_t> MeetingAudioCapture::getAccumulatedAudio() const {
+    std::lock_guard<std::mutex> lock(bufferMutex_);
+    return accumulatedPcm_;
+}
+
+void MeetingAudioCapture::clearAccumulatedAudio() {
+    std::lock_guard<std::mutex> lock(bufferMutex_);
+    accumulatedPcm_.clear();
+}
+
+std::wstring MeetingAudioCapture::writeWavFile(
+    const std::wstring& dirPath,
+    const std::wstring& fileName) const {
+
+    std::vector<std::uint8_t> pcm24k;
+    {
+        std::lock_guard<std::mutex> lock(bufferMutex_);
+        pcm24k = accumulatedPcm_;
+    }
+
+    if (pcm24k.empty()) return L"";
+
+    // Resample from 24kHz → 16kHz (simple integer-ratio: skip every 3rd sample)
+    // 24000 / 16000 = 3/2 → drop 1 out of every 3 samples
+    size_t sampleCount24k = pcm24k.size() / sizeof(int16_t);
+    size_t sampleCount16k = (sampleCount24k * 2) / 3;
+    std::vector<int16_t> samples16k(sampleCount16k);
+
+    const auto* src = reinterpret_cast<const int16_t*>(pcm24k.data());
+    for (size_t i = 0, j = 0; i < sampleCount24k && j < sampleCount16k; ++i) {
+        // Keep 2, skip 1
+        if (i % 3 != 2) {
+            samples16k[j++] = src[i];
+        }
+    }
+
+    // Ensure directory exists
+    std::filesystem::create_directories(dirPath);
+
+    std::filesystem::path filePath = std::filesystem::path(dirPath) / fileName;
+    std::ofstream file(filePath, std::ios::binary);
+    if (!file) return L"";
+
+    uint32_t dataSize = static_cast<uint32_t>(samples16k.size() * sizeof(int16_t));
+    uint32_t fileSize = 36 + dataSize;  // header minus 8 + fmt chunk + data chunk
+
+    // RIFF header
+    file.write("RIFF", 4);
+    file.write(reinterpret_cast<const char*>(&fileSize), 4);
+    file.write("WAVE", 4);
+
+    // fmt subchunk
+    file.write("fmt ", 4);
+    uint32_t fmtSize = 16;
+    uint16_t audioFormat = 1;  // PCM
+    uint16_t numChannels = 1;  // mono
+    uint32_t sampleRate = 16000;
+    uint32_t byteRate = sampleRate * numChannels * sizeof(int16_t);
+    uint16_t blockAlign = numChannels * sizeof(int16_t);
+    uint16_t bitsPerSample = 16;
+
+    file.write(reinterpret_cast<const char*>(&fmtSize), 4);
+    file.write(reinterpret_cast<const char*>(&audioFormat), 2);
+    file.write(reinterpret_cast<const char*>(&numChannels), 2);
+    file.write(reinterpret_cast<const char*>(&sampleRate), 4);
+    file.write(reinterpret_cast<const char*>(&byteRate), 4);
+    file.write(reinterpret_cast<const char*>(&blockAlign), 2);
+    file.write(reinterpret_cast<const char*>(&bitsPerSample), 2);
+
+    // data subchunk
+    file.write("data", 4);
+    file.write(reinterpret_cast<const char*>(&dataSize), 4);
+    file.write(reinterpret_cast<const char*>(samples16k.data()), dataSize);
+
+    file.close();
+    return filePath.wstring();
 }
 
 }  // namespace foundry::windows::audio

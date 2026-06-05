@@ -23,7 +23,7 @@ const centerInsideDroppable: CollisionDetection = ({ droppableContainers, collis
   return [];
 };
 import type { Person } from '@/lib/db/schema';
-import { CRM_STAGES, boardStatusToStage, stageToBoardStatus, type CRMStage } from '@/lib/crm';
+import { CRM_STAGES, boardStatusToStage, shouldClearNoResponseOutcome, stageToBoardStatus, type CRMStage } from '@/lib/crm';
 import { BoardColumn } from '@/components/board/BoardColumn';
 import { CRMPersonCard, CRMPersonCardOverlay } from '@/components/board/CRMPersonCard';
 import styles from './BoardPageClient.module.css';
@@ -92,7 +92,13 @@ export function BoardPageClient({ initialPeople, slug, initialCallBriefPersonIds
     setPeople((prev) =>
       prev.map((p) =>
         p.id === personId
-          ? { ...p, board_status: stageToBoardStatus(targetStage), expires_at: null, updated_at: new Date() }
+          ? {
+              ...p,
+              board_status: stageToBoardStatus(targetStage),
+              outcome: p.outcome === 'no_response' && shouldClearNoResponseOutcome(targetStage) ? null : p.outcome,
+              expires_at: null,
+              updated_at: new Date(),
+            }
           : p
       )
     );

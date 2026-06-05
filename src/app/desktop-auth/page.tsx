@@ -70,7 +70,7 @@ export default function DesktopAuthPage() {
         <h1 style={{ fontSize: 22, margin: '0 0 8px' }}>User Interview Desktop</h1>
         <p style={{ color: '#a1a1aa', margin: '0 0 24px', fontSize: 14 }}>{status}</p>
         {isLoaded && !isSignedIn ? (
-          <SignIn routing="hash" afterSignInUrl="/desktop-auth" signUpUrl="/signup" />
+          <SignIn routing="hash" fallbackRedirectUrl="/desktop-auth" signUpUrl="/signup" />
         ) : null}
       </section>
     </main>
