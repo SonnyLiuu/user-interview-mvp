@@ -32,11 +32,19 @@ export default function DesktopAuthPage() {
     async function sendToken() {
       try {
         setStatus('Connecting desktop app...');
-        const token = await getToken();
+        const sessionToken = await getToken();
+        const tokenResponse = await fetch('/api/desktop/auth-token', {
+          method: 'POST',
+          headers: sessionToken ? { authorization: `Bearer ${sessionToken}` } : undefined,
+          cache: 'no-store',
+        });
+        const tokenPayload = await tokenResponse.json() as { token?: string; error?: string };
+        const token = tokenPayload.token;
         if (cancelled) return;
-        if (!token) {
-          setStatus('Could not get a session token.');
-          postToDesktop({ type: 'desktopAuthError', error: 'Missing token' });
+        if (!tokenResponse.ok || !token) {
+          const message = tokenPayload.error || 'Could not create a desktop auth token.';
+          setStatus(message);
+          postToDesktop({ type: 'desktopAuthError', error: message });
           return;
         }
         postToDesktop({ type: 'desktopAuthToken', token, userId });

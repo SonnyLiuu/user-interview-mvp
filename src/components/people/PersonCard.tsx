@@ -228,7 +228,7 @@ function CardFilled({
       {/* Bookmark — top-right */}
       <div className={styles.bookmarkWrap}>
         <BookmarkButton
-          bookmarked={person.board_status !== null}
+          bookmarked={person.board_status === 'bookmarked'}
           onToggle={onBookmarkToggle}
           loading={bookmarkLoading}
         />

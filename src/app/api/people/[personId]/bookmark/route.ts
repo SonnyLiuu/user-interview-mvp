@@ -16,10 +16,15 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   const current = await getOwnedPerson(personId, clerkUserId);
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // Only toggle between null and 'bookmarked'.
+  // If the person is already in a pipeline stage (sent/scheduled/completed),
+  // leave their board_status alone — the bookmark button is a no-op in that case.
   const nextBoardStatus =
     current.board_status === 'bookmarked'
       ? null
-      : current.board_status ?? 'bookmarked';
+      : current.board_status
+        ? current.board_status // sent / scheduled / completed — don't touch
+        : 'bookmarked'; // null → bookmarked
 
   const [updated] = await db
     .update(people)
