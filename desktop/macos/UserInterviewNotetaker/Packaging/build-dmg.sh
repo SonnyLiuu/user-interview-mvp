@@ -23,6 +23,7 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp ".build/release/$EXECUTABLE_NAME" "$MACOS_DIR/$EXECUTABLE_NAME"
 cp "UserInterviewNotetaker/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "UserInterviewNotetaker/Resources/UserInterviewNotetaker.entitlements" "$RESOURCES_DIR/UserInterviewNotetaker.entitlements"
+cp "UserInterviewNotetaker/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 
 if [ -n "$IDENTITY" ]; then
   codesign \
