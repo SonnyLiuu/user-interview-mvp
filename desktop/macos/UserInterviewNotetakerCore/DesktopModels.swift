@@ -49,13 +49,25 @@ public struct DesktopPerson: Codable, Identifiable, Equatable, Sendable {
     public var title: String?
     public var company: String?
     public var projectName: String?
+    public var projectId: String?
+    public var projectSlug: String?
 
-    public init(id: String, name: String, title: String? = nil, company: String? = nil, projectName: String? = nil) {
+    public init(
+        id: String,
+        name: String,
+        title: String? = nil,
+        company: String? = nil,
+        projectName: String? = nil,
+        projectId: String? = nil,
+        projectSlug: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.title = title
         self.company = company
         self.projectName = projectName
+        self.projectId = projectId
+        self.projectSlug = projectSlug
     }
 
     public var subtitle: String {

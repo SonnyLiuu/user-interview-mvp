@@ -7,13 +7,25 @@ struct OverlayView: View {
     var onEnd: () -> Void
     var onSettings: () -> Void
     var onToggleTopic: (Topic) -> Void
+    var onSelectPerson: (DesktopPerson) -> Void
+    var onRefreshPeople: () -> Void
+    var onBackFromPicker: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            header
+            if viewModel.status != .pickingPerson {
+                header
+            }
             if viewModel.isActive {
                 topicList
                 footer
+            } else if viewModel.status == .pickingPerson {
+                PersonPickerView(
+                    viewModel: viewModel,
+                    onSelectPerson: onSelectPerson,
+                    onRefresh: onRefreshPeople,
+                    onBack: onBackFromPicker
+                )
             } else {
                 idle
             }
@@ -30,10 +42,20 @@ struct OverlayView: View {
                 Text(viewModel.selectedPersonName.isEmpty ? "User Interview Notetaker" : viewModel.selectedPersonName)
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
-                Text(viewModel.realtimeError ?? viewModel.message)
-                    .font(.system(size: 12))
-                    .foregroundStyle(viewModel.realtimeError == nil ? Color.secondary : Color.red)
-                    .lineLimit(2)
+                HStack(spacing: 4) {
+                    if viewModel.isCapturingAudio {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 6, height: 6)
+                        Text("Recording")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.red)
+                    }
+                    Text(viewModel.audioCaptureError ?? viewModel.realtimeError ?? viewModel.message)
+                        .font(.system(size: 12))
+                        .foregroundStyle((viewModel.realtimeError ?? viewModel.audioCaptureError) == nil ? Color.secondary : Color.red)
+                        .lineLimit(2)
+                }
             }
             Spacer()
             Button(action: onSettings) {
@@ -46,7 +68,7 @@ struct OverlayView: View {
 
     private var idle: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Open a scheduled person in the web app and click Start call, or choose Start Session here.")
+            Text("Pick a person to start a live call checklist, or open a scheduled person in the web app.")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

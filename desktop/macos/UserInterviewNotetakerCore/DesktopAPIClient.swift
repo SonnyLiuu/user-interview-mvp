@@ -97,12 +97,13 @@ public final class DesktopAPIClient: Sendable {
         authToken: String,
         personId: String,
         launchToken: String,
-        zoomMeetingIdentifier: String?
+        captureProvider: String = "desktop_audio",
+        zoomMeetingIdentifier: String? = nil
     ) async throws -> LiveSessionResponse {
         let body = StartLiveSessionRequest(
             personId: personId,
             launchToken: launchToken,
-            captureProvider: "zoom_rtms",
+            captureProvider: captureProvider,
             zoomMeetingIdentifier: zoomMeetingIdentifier
         )
         let request = try jsonRequest(

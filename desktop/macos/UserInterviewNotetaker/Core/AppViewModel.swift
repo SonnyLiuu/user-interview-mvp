@@ -23,8 +23,70 @@ final class AppViewModel: ObservableObject {
     @Published var topics: [Topic] = []
     @Published var message = "Ready."
 
+    // People picker state
+    @Published var allPeople: [DesktopPerson] = []
+    @Published var selectedStartup: String?  // company filter ("All Startups" = nil)
+    @Published var selectedProject: String?  // projectName filter ("All Projects" = nil)
+    @Published var isLoadingPeople = false
+
+    // Audio capture state
+    @Published var isCapturingAudio = false
+    @Published var audioCaptureError: String?
+
     var isActive: Bool {
         status == .active
+    }
+
+    /// Unique companies from the loaded people list, sorted alphabetically.
+    var availableStartups: [String] {
+        let companies = allPeople.compactMap { person -> String? in
+            guard let company = person.company?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !company.isEmpty else { return nil }
+            return company
+        }
+        return Array(Set(companies)).sorted()
+    }
+
+    /// Unique project names from the loaded people list, sorted alphabetically.
+    var availableProjects: [String] {
+        let projectNames = allPeople.compactMap { person -> String? in
+            guard let name = person.projectName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else { return nil }
+            return name
+        }
+        return Array(Set(projectNames)).sorted()
+    }
+
+    /// People filtered by the selected startup and/or project.
+    var filteredPeople: [DesktopPerson] {
+        allPeople.filter { person in
+            if let startup = selectedStartup {
+                guard person.company == startup else { return false }
+            }
+            if let project = selectedProject {
+                guard person.projectName == project else { return false }
+            }
+            return true
+        }
+    }
+
+    func loadPeople(apiBaseUrl: String, authToken: String) async {
+        isLoadingPeople = true
+        message = "Loading people..."
+        let client = DesktopAPIClient()
+        do {
+            allPeople = try await client.people(apiBaseUrl: apiBaseUrl, authToken: authToken)
+            message = allPeople.isEmpty ? "No people found." : "Pick a person for the call."
+        } catch {
+            message = error.localizedDescription
+        }
+        isLoadingPeople = false
+    }
+
+    func resetPicker() {
+        allPeople = []
+        selectedStartup = nil
+        selectedProject = nil
     }
 
     func applyLiveSession(_ response: LiveSessionResponse) {
@@ -78,6 +140,8 @@ final class AppViewModel: ObservableObject {
         realtimeError = nil
         liveTranscriptRaw = ""
         topics = []
+        isCapturingAudio = false
+        audioCaptureError = nil
         message = "Ready."
     }
 

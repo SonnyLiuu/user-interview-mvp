@@ -13,7 +13,10 @@ final class OverlayWindowController: NSWindowController {
         onStart: @escaping () -> Void,
         onEnd: @escaping () -> Void,
         onSettings: @escaping () -> Void,
-        onToggleTopic: @escaping (Topic) -> Void
+        onToggleTopic: @escaping (Topic) -> Void,
+        onSelectPerson: @escaping (DesktopPerson) -> Void,
+        onRefreshPeople: @escaping () -> Void,
+        onBackFromPicker: @escaping () -> Void
     ) {
         self.viewModel = viewModel
         self.settingsStore = settingsStore
@@ -38,7 +41,10 @@ final class OverlayWindowController: NSWindowController {
             onStart: onStart,
             onEnd: onEnd,
             onSettings: onSettings,
-            onToggleTopic: onToggleTopic
+            onToggleTopic: onToggleTopic,
+            onSelectPerson: onSelectPerson,
+            onRefreshPeople: onRefreshPeople,
+            onBackFromPicker: onBackFromPicker
         )
         panel.contentViewController = NSHostingController(rootView: root)
 

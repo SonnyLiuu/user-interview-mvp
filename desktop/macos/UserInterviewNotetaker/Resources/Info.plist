@@ -37,5 +37,7 @@
   <string>Copyright User Interview</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>User Interview Notetaker needs microphone access to capture audio during live call sessions for real-time transcription.</string>
 </dict>
 </plist>

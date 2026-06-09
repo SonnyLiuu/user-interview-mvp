@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let desktopAPI = DesktopAPIClient()
     private let liveAPI = LiveSessionClient()
     private let sseParser = SSEParser()
+    private let audioCapture = AudioCaptureManager()
+    private let systemAudio = SystemAudioCapture()
 
     private var statusItem: NSStatusItem?
     private var overlayWindow: OverlayWindowController?
@@ -18,8 +20,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var transcriptWindow: TranscriptWindowController?
     private var eventTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
+    private var audioTask: Task<Void, Never>?
     private var pendingDeepLink: String?
     private var lastSSEEventTime = Date.distantPast
+    private var audioSocket: LiveAudioWebSocket?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         viewModel.settings = settingsStore.load()
@@ -34,6 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayWindow?.persistPosition()
         eventTask?.cancel()
         pollTask?.cancel()
+        audioTask?.cancel()
+        stopAudioCapture()
     }
 
     // MARK: URL Handling
@@ -73,7 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onStart: { [weak self] in self?.startSessionFromMenu() },
             onEnd: { [weak self] in self?.endSession() },
             onSettings: { [weak self] in self?.openSettings() },
-            onToggleTopic: { [weak self] topic in self?.toggleTopic(topic) }
+            onToggleTopic: { [weak self] topic in self?.toggleTopic(topic) },
+            onSelectPerson: { [weak self] person in self?.selectPerson(person) },
+            onRefreshPeople: { [weak self] in self?.refreshPeople() },
+            onBackFromPicker: { [weak self] in self?.dismissPicker() }
         )
     }
 
@@ -96,7 +105,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openAuth()
             return
         }
-        viewModel.message = "Open a scheduled person in the dashboard and click Start call."
+        openPicker()
+    }
+
+    private func openPicker() {
+        viewModel.status = .pickingPerson
+        viewModel.resetPicker()
+        guard let authToken = viewModel.authToken else { return }
+        Task {
+            await viewModel.loadPeople(
+                apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
+                authToken: authToken
+            )
+        }
+    }
+
+    private func selectPerson(_ person: DesktopPerson) {
+        viewModel.message = "Starting live checklist..."
+        guard let authToken = viewModel.authToken else { return }
+        Task {
+            do {
+                // Get launch token
+                let launchResponse = try await desktopAPI.launchToken(
+                    apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
+                    authToken: authToken,
+                    personId: person.id,
+                    zoomMeetingIdentifier: nil
+                )
+                guard let launchToken = launchResponse.token else {
+                    viewModel.message = "Could not prepare secure launch token."
+                    return
+                }
+
+                // Start live session with desktop audio capture.
+                let response = try await desktopAPI.startLiveSession(
+                    apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
+                    authToken: authToken,
+                    personId: person.id,
+                    launchToken: launchToken,
+                    captureProvider: "desktop_audio",
+                    zoomMeetingIdentifier: nil
+                )
+                viewModel.applyLiveSession(response)
+                startLiveMonitoring()
+
+                // Start audio capture if the backend enabled it.
+                if response.audioCaptureEnabled {
+                    startAudioCapture(
+                        foundryBaseUrl: viewModel.foundryBaseUrl,
+                        sessionId: response.sessionId,
+                        liveToken: response.liveToken
+                    )
+                }
+            } catch {
+                viewModel.message = error.localizedDescription
+                if case DesktopAPIError.unauthorized = error {
+                    clearAuth()
+                    openAuth()
+                }
+            }
+        }
+    }
+
+    private func refreshPeople() {
+        guard let authToken = viewModel.authToken else { return }
+        Task {
+            await viewModel.loadPeople(
+                apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
+                authToken: authToken
+            )
+        }
+    }
+
+    private func dismissPicker() {
+        viewModel.resetPicker()
+        viewModel.status = .idle
+        viewModel.message = "Ready."
     }
 
     @objc private func openSettings() {
@@ -210,6 +294,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     authToken: authToken,
                     personId: personId,
                     launchToken: launchToken,
+                    captureProvider: "zoom_rtms",
                     zoomMeetingIdentifier: link.zoomMeetingIdentifier
                 )
                 viewModel.applyLiveSession(response)
@@ -387,7 +472,103 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Audio Capture (standalone desktop recording)
+
+    private func startAudioCapture(
+        foundryBaseUrl: String?,
+        sessionId: String?,
+        liveToken: String?
+    ) {
+        guard let foundryBaseUrl,
+              let sessionId,
+              let liveToken
+        else {
+            viewModel.audioCaptureError = "Missing session info for audio capture."
+            return
+        }
+
+        audioTask?.cancel()
+        stopAudioCapture()
+
+        audioTask = Task { [weak self] in
+            guard let self else { return }
+
+            // Build WebSocket URL: wss://foundry-base/v1/desktop/live-sessions/{id}/audio?token=...
+            let wsBase = foundryBaseUrl
+                .replacingOccurrences(of: "https://", with: "wss://")
+                .replacingOccurrences(of: "http://", with: "ws://")
+            let wsURLString = "\(wsBase)/v1/desktop/live-sessions/\(sessionId)/audio?token=\(liveToken)"
+
+            guard let wsURL = URL(string: wsURLString) else {
+                await MainActor.run {
+                    self.viewModel.audioCaptureError = "Invalid audio WebSocket URL."
+                }
+                return
+            }
+
+            let socket = LiveAudioWebSocket(url: wsURL)
+            self.audioSocket = socket
+
+            socket.onStatusChange = { [weak self] status in
+                Task { @MainActor in
+                    switch status {
+                    case .connecting:
+                        self?.viewModel.message = "Connecting audio..."
+                    case .connected:
+                        self?.viewModel.isCapturingAudio = true
+                        self?.viewModel.message = "Audio streaming live."
+                    case .disconnected(let error):
+                        self?.viewModel.isCapturingAudio = false
+                        if let error {
+                            self?.viewModel.audioCaptureError = error.localizedDescription
+                        }
+                    }
+                }
+            }
+
+            socket.connect()
+
+            // Set up microphone capture callback (source 0x01).
+            self.audioCapture.onAudioBuffer = { [weak socket] pcmData in
+                socket?.sendAudio(pcmData: pcmData, source: 0x01)
+            }
+
+            // Set up system audio (loopback) capture callback (source 0x02).
+            self.systemAudio.onAudioBuffer = { [weak socket] pcmData in
+                socket?.sendAudio(pcmData: pcmData, source: 0x02)
+            }
+
+            do {
+                // Start both captures in parallel.
+                async let micResult: () = self.audioCapture.start()
+                async let sysResult: () = self.systemAudio.start()
+                try await micResult
+                try await sysResult
+            } catch {
+                await MainActor.run {
+                    self.viewModel.audioCaptureError = error.localizedDescription
+                }
+                socket.disconnect()
+            }
+        }
+    }
+
+    private func stopAudioCapture() {
+        audioCapture.onAudioBuffer = nil
+        audioCapture.stop()
+        systemAudio.onAudioBuffer = nil
+        systemAudio.stop()
+        audioSocket?.disconnect()
+        audioSocket = nil
+        audioTask?.cancel()
+        audioTask = nil
+        viewModel.isCapturingAudio = false
+    }
+
     private func endSession() {
+        // Stop audio capture before saving.
+        stopAudioCapture()
+
         // Capture pre-snapshot state as a safety-net fallback.
         guard let authToken = viewModel.authToken,
               let initialRequest = viewModel.endSessionRequest()

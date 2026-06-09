@@ -8,7 +8,7 @@ struct UserInterviewNotetakerMain {
         let delegate = AppDelegate()
         app.delegate = delegate
         // NSApplication.delegate is a strong reference — delegate outlives this scope.
-        app.setActivationPolicy(.accessory)
+        app.setActivationPolicy(.regular)
         app.run()
     }
 }
