@@ -405,6 +405,7 @@ class RealtimeBridge:
         if event_type == "error":
             error = event.get("error") or {}
             self._on_status("error", error.get("message") or "Realtime API error")
+            self._response_done.set()
             return
 
         if event_type in {
@@ -484,6 +485,33 @@ class RealtimeBridge:
         async with self._send_lock:
             await self._ws.send(json.dumps(event, separators=(",", ":")))
 
+    async def _send_user_message_and_create_response(self, text: str) -> None:
+        await self._response_done.wait()
+        self._response_done.clear()
+        await self._send(
+            {
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": text,
+                        }
+                    ],
+                },
+            }
+        )
+        await self._send(
+            {
+                "type": "response.create",
+                "response": {
+                    "output_modalities": ["text"],
+                },
+            }
+        )
+
     async def send_labeled_turn(self, turn: NormalizedTurn) -> bool:
         text = " ".join(turn.text.strip().split())
         if not text:
@@ -536,32 +564,7 @@ class RealtimeBridge:
         while not self._stop.is_set():
             turn: NormalizedTurn = await self._turn_queue.get()
             try:
-                await self._response_done.wait()
-                self._response_done.clear()
-                labeled_text = turn.to_labeled_line()
-                await self._send(
-                    {
-                        "type": "conversation.item.create",
-                        "item": {
-                            "type": "message",
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "input_text",
-                                    "text": labeled_text,
-                                }
-                            ],
-                        },
-                    }
-                )
-                await self._send(
-                    {
-                        "type": "response.create",
-                        "response": {
-                            "output_modalities": ["text"],
-                        },
-                    }
-                )
+                await self._send_user_message_and_create_response(turn.to_labeled_line())
                 self._turns_sent += 1
                 turns_since_reval += 1
                 if self._turns_sent in {1, 5, 25} or self._turns_sent % 100 == 0:
@@ -605,24 +608,7 @@ class RealtimeBridge:
                             "clearly covered by the transcript above, call "
                             "mark_item_covered or mark_items_covered."
                         )
-                        await self._send(
-                            {
-                                "type": "conversation.item.create",
-                                "item": {
-                                    "type": "message",
-                                    "role": "user",
-                                    "content": [
-                                        {"type": "input_text", "text": reval_msg}
-                                    ],
-                                },
-                            }
-                        )
-                        await self._send(
-                            {
-                                "type": "response.create",
-                                "response": {"output_modalities": ["text"]},
-                            }
-                        )
+                        await self._send_user_message_and_create_response(reval_msg)
                         logger.warning(
                             "Re-evaluation sent session=%s unchecked=%s",
                             self.session.session_id,

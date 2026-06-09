@@ -3,6 +3,9 @@
 .tabBar {
   display: flex;
   gap: 6px;
+  height: 57px;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 16px 28px 0;
   background: #f8f2ea;
   border-bottom: 1px solid rgba(102, 74, 48, 0.12);
@@ -35,8 +38,10 @@
 }
 
 .page {
-  min-height: 100%;
-  overflow: auto;
+  height: calc(100% - 57px);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 28px;
   background: #f8f2ea;
 }
@@ -117,9 +122,12 @@
 .primaryPanel,
 .sidePanel,
 .discoveryPanel,
+.coachPanel,
 .summaryPanel,
 .themeCard,
-.assumptionRow {
+.assumptionRow,
+.transcriptInsightCard,
+.evidenceQualityPanel {
   border: 1px solid rgba(102, 74, 48, 0.14);
   border-radius: 8px;
 }
@@ -191,6 +199,84 @@
   color: #4f4032;
   font-size: 14px;
   line-height: 1.55;
+}
+
+.coachPanel {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  background: #fffdf8;
+}
+
+.coachLead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.coachTitle {
+  margin: 8px 0 0;
+  color: #2d241b;
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 560;
+  letter-spacing: 0;
+}
+
+.coachGrid,
+.evidenceQualityGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.coachSummary,
+.coachIssueSection,
+.coachIssueList {
+  display: grid;
+  gap: 9px;
+}
+
+.coachText {
+  margin: 7px 0 0;
+  color: #4f4032;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.coachPattern {
+  display: grid;
+  gap: 7px;
+  padding: 13px;
+  border-radius: 8px;
+  background: #f5f1e9;
+}
+
+.coachPatternTitle {
+  margin: 0;
+  color: #2d241b;
+  font-size: 15px;
+  font-weight: 560;
+  letter-spacing: 0;
+}
+
+.coachPattern p,
+.coachExample,
+.coachFix {
+  margin: 0;
+  color: #5f4d3b;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.coachExample {
+  color: #7c3029;
+}
+
+.coachFix {
+  color: #315f56;
+  font-weight: 520;
 }
 
 .primaryPanel {
@@ -334,7 +420,8 @@
 
 .evidencePill,
 .strengthPill,
-.statusPill {
+.statusPill,
+.reliabilityPill {
   display: inline-flex;
   align-items: center;
   width: fit-content;
@@ -368,6 +455,21 @@
 .weakening {
   color: #7c3029;
   background: #f2d8d3;
+}
+
+.lowReliability {
+  color: #7c3029;
+  background: #f2d8d3;
+}
+
+.mediumReliability {
+  color: #76521f;
+  background: #f4e0bb;
+}
+
+.highReliability {
+  color: #275332;
+  background: #dff0d8;
 }
 
 .summaryGrid {
@@ -470,6 +572,46 @@
   font-style: normal;
 }
 
+.evidenceQualityPanel {
+  padding: 18px;
+  background: #fffdf8;
+}
+
+.cautionList {
+  display: grid;
+  gap: 8px;
+}
+
+.cautionItem {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-left: 3px solid #c97c64;
+  border-radius: 6px;
+  background: #fbebe8;
+}
+
+.cautionQuote,
+.cautionConcern,
+.cautionProbe {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.cautionQuote {
+  color: #2d241b;
+  font-weight: 520;
+}
+
+.cautionConcern {
+  color: #7c3029;
+}
+
+.cautionProbe {
+  color: #315f56;
+}
+
 .assumptionList {
   display: grid;
   gap: 12px;
@@ -525,6 +667,312 @@
   color: #2d241b;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.transcriptInsightList {
+  display: grid;
+  gap: 14px;
+}
+
+.interviewExplorer {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(102, 74, 48, 0.14);
+  border-radius: 8px;
+  background: #fffdf8;
+  overflow: hidden;
+}
+
+.interviewGroup {
+  display: grid;
+}
+
+.interviewGroup + .interviewGroup {
+  border-top: 1px solid rgba(102, 74, 48, 0.12);
+}
+
+.interviewGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 8px 12px;
+  color: #756553;
+  background: #f5f1e9;
+  font-size: 12px;
+  font-weight: 560;
+  text-transform: uppercase;
+}
+
+.interviewGroupHeader small {
+  color: #8a7865;
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.interviewRowList {
+  display: grid;
+}
+
+.interviewRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-top: 1px solid rgba(102, 74, 48, 0.08);
+}
+
+.interviewRow:first-child {
+  border-top: 0;
+}
+
+.interviewRow:hover {
+  background: #faf5ee;
+}
+
+.interviewRowName {
+  min-width: 0;
+  overflow: hidden;
+  color: #2d241b;
+  font-size: 14px;
+  font-weight: 520;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.interviewRowDate {
+  color: #756553;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.transcriptInsightCard {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  background: #fffdf8;
+}
+
+.transcriptInsightHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.transcriptPerson {
+  margin: 0;
+  color: #2d241b;
+  font-size: 18px;
+  font-weight: 560;
+  letter-spacing: 0;
+}
+
+.transcriptMetaLine {
+  margin: 5px 0 0;
+  color: #756553;
+  font-size: 13px;
+}
+
+.transcriptSource {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: #315f56;
+  background: #dceee9;
+  font-size: 12px;
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+.transcriptPillRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.transcriptSummary {
+  margin: 0;
+  color: #2d241b;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.transcriptBlock {
+  display: grid;
+  gap: 8px;
+}
+
+.transcriptBlockLabel {
+  color: #756553;
+  font-size: 12px;
+  font-weight: 560;
+  text-transform: uppercase;
+}
+
+.compactList {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: #5f4d3b;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.momentList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.momentList li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f5f1e9;
+}
+
+.momentList span {
+  color: #2d241b;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.momentList small {
+  color: #756553;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.flagList {
+  display: grid;
+  gap: 8px;
+}
+
+.questionFlag {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.coachIssue {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.coachConversation {
+  margin: 0;
+  color: #756553;
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.problemFlag {
+  border: 1px solid rgba(124, 48, 41, 0.22);
+  background: #fbebe8;
+}
+
+.watchFlag {
+  border: 1px solid rgba(118, 82, 31, 0.22);
+  background: #f8ecd2;
+}
+
+.flagQuestion,
+.flagIssue,
+.flagSuggestion,
+.noFlags {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.flagQuestion {
+  color: #2d241b;
+  font-weight: 560;
+}
+
+.flagIssue {
+  color: #7c3029;
+}
+
+.flagSuggestion {
+  color: #315f56;
+}
+
+.noFlags {
+  color: #5f4d3b;
+}
+
+.missedProbeList {
+  display: grid;
+  gap: 8px;
+}
+
+.missedProbe {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: #f2f7f5;
+}
+
+.probeContext,
+.probeQuestion {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.probeContext {
+  color: #4f4032;
+}
+
+.probeQuestion {
+  color: #315f56;
+  font-weight: 520;
+}
+
+.transcriptDetails {
+  border-top: 1px solid rgba(102, 74, 48, 0.12);
+  padding-top: 12px;
+}
+
+.transcriptDetails summary {
+  width: fit-content;
+  cursor: pointer;
+  color: #315f56;
+  font-size: 14px;
+  font-weight: 560;
+}
+
+.transcriptText {
+  max-height: 360px;
+  overflow: auto;
+  margin: 12px 0 0;
+  padding: 12px;
+  border-radius: 8px;
+  color: #332a21;
+  background: #f5f1e9;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 /* ── Outreach Insights ─────────────────────────────────────────────────── */
@@ -741,6 +1189,8 @@
 @media (max-width: 900px) {
   .dataHeader,
   .summaryGrid,
+  .coachGrid,
+  .evidenceQualityGrid,
   .themeGrid,
   .assumptionRow {
     grid-template-columns: 1fr;
@@ -796,6 +1246,24 @@
   .discoveryHeader {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .coachLead {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transcriptInsightHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transcriptPillRow {
+    justify-content: flex-start;
+  }
+
+  .transcriptSource {
+    width: fit-content;
   }
 
   .discoveryLink {

@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { interactions, people, person_events, transcripts } from '@/lib/db/schema';
 import { getDesktopUser } from '@/lib/desktop-auth';
 import { buildDesktopSessionNotesRaw, type DesktopSessionTopicInput } from '@/lib/desktop-session-summary';
+import { cleanTranscriptHistoryContent } from '@/lib/transcript-cleanup';
 import { matchEventMetadata, refreshProjectMatchProfileFromSignals } from '@/lib/match-profile';
 import { getOwnedPersonForLocalUser } from '@/lib/person-ownership';
 
@@ -41,58 +42,68 @@ async function fetchBackendTranscript(body: EndSessionInput) {
 }
 
 export async function POST(request: Request) {
-  const user = await getDesktopUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  let body: EndSessionInput;
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
+    const user = await getDesktopUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!body.personId) {
-    return NextResponse.json({ error: 'personId required' }, { status: 400 });
-  }
-  const personId = body.personId;
-
-  const owned = await getOwnedPersonForLocalUser(personId, user.id);
-  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  const topics = Array.isArray(body.topics)
-    ? body.topics.filter((topic) => typeof topic.label === 'string' && topic.label.trim())
-    : [];
-  const userNotes = body.notesRaw?.trim() ?? '';
-  const notesRaw = buildDesktopSessionNotesRaw(topics, userNotes);
-  const transcriptRaw = body.transcriptRaw?.trim() ?? '';
-  const completedAt = body.endedAt ? new Date(body.endedAt) : new Date();
-
-  if (Number.isNaN(completedAt.getTime())) {
-    return NextResponse.json({ error: 'endedAt invalid' }, { status: 400 });
-  }
-
-  if (body.liveSessionId) {
-    const [existing] = await db
-      .select()
-      .from(interactions)
-      .where(eq(interactions.live_session_id, body.liveSessionId))
-      .limit(1);
-    if (existing) {
-      return NextResponse.json({ ok: true, interaction: existing, idempotent: true }, { status: 200 });
+    let body: EndSessionInput;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
     }
-  }
 
-  const backendTranscriptRaw = (await fetchBackendTranscript(body))?.trim() ?? '';
-  const finalTranscriptRaw = backendTranscriptRaw || transcriptRaw;
+    if (!body.personId) {
+      return NextResponse.json({ error: 'personId required' }, { status: 400 });
+    }
+    const personId = body.personId;
 
-  const checkedTopics = topics.filter((topic) => topic.checked);
-  const autoCheckedTopics = checkedTopics.filter((topic) => topic.checkedBy === 'gpt_realtime');
-  const created = await db.transaction(async (tx) => {
-    const [inserted] = await tx
+    // Normalize empty-string liveSessionId to null so the unique partial
+    // index (WHERE live_session_id IS NOT NULL) doesn't treat "" as a
+    // non-null value that would cause a collision on a second save.
+    const liveSessionId = body.liveSessionId?.trim() || null;
+    const liveToken = body.liveToken?.trim() || null;
+
+    const owned = await getOwnedPersonForLocalUser(personId, user.id);
+    if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const topics = Array.isArray(body.topics)
+      ? body.topics.filter((topic) => typeof topic.label === 'string' && topic.label.trim())
+      : [];
+    const userNotes = body.notesRaw?.trim() ?? '';
+    const notesRaw = buildDesktopSessionNotesRaw(topics, userNotes);
+    const hasSubmittedTranscript = typeof body.transcriptRaw === 'string';
+    const transcriptRaw = cleanTranscriptHistoryContent(body.transcriptRaw);
+    const completedAt = body.endedAt ? new Date(body.endedAt) : new Date();
+
+    if (Number.isNaN(completedAt.getTime())) {
+      return NextResponse.json({ error: 'endedAt invalid' }, { status: 400 });
+    }
+
+    if (liveSessionId) {
+      const [existing] = await db
+        .select()
+        .from(interactions)
+        .where(eq(interactions.live_session_id, liveSessionId))
+        .limit(1);
+      if (existing) {
+        return NextResponse.json({ ok: true, interaction: existing, idempotent: true }, { status: 200 });
+      }
+    }
+
+    const backendTranscriptRaw = liveSessionId && liveToken && !hasSubmittedTranscript
+      ? cleanTranscriptHistoryContent(await fetchBackendTranscript({ liveSessionId, liveToken }))
+      : '';
+    const finalTranscriptRaw = hasSubmittedTranscript ? transcriptRaw : backendTranscriptRaw;
+
+    const checkedTopics = topics.filter((topic) => topic.checked);
+    const autoCheckedTopics = checkedTopics.filter((topic) => topic.checkedBy === 'gpt_realtime');
+    const [created] = await db
       .insert(interactions)
       .values({
         person_id: personId,
-        live_session_id: body.liveSessionId ?? null,
+        outreach_project_id: owned.person.outreach_project_id,
+        live_session_id: liveSessionId,
         type: 'call',
         notes_raw: notesRaw,
         transcript_raw: finalTranscriptRaw,
@@ -100,7 +111,7 @@ export async function POST(request: Request) {
       })
       .returning();
 
-    await tx
+    await db
       .update(people)
       .set({
         board_status: 'completed',
@@ -112,19 +123,20 @@ export async function POST(request: Request) {
 
     const transcriptContent = finalTranscriptRaw || userNotes;
     if (transcriptContent) {
-      await tx.insert(transcripts).values({
+      await db.insert(transcripts).values({
         person_id: personId,
+        outreach_project_id: owned.person.outreach_project_id,
         content: transcriptContent,
         type: 'call',
       });
     }
 
-    await tx.insert(person_events).values({
+    await db.insert(person_events).values({
       person_id: personId,
       type: 'desktop_call_session_saved',
       metadata: {
-        interaction_id: inserted.id,
-        live_session_id: body.liveSessionId ?? null,
+        interaction_id: created.id,
+        live_session_id: liveSessionId,
         started_at: body.startedAt ?? null,
         ended_at: completedAt.toISOString(),
         topic_count: topics.length,
@@ -141,10 +153,19 @@ export async function POST(request: Request) {
         ...matchEventMetadata(owned.person, {}, 4),
       },
     });
-    return inserted;
-  });
 
-  if (owned.person.project_id) await refreshProjectMatchProfileFromSignals(owned.person.project_id, null);
+    if (owned.person.project_id) {
+      refreshProjectMatchProfileFromSignals(owned.person.project_id, null).catch((error) => {
+        console.error('[end-session] Failed to refresh match profile:', error);
+      });
+    }
 
-  return NextResponse.json({ ok: true, interaction: created }, { status: 201 });
+    return NextResponse.json({ ok: true, interaction: created }, { status: 201 });
+  } catch (error) {
+    console.error('[end-session] Unhandled error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 },
+    );
+  }
 }

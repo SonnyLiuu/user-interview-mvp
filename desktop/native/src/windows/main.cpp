@@ -930,9 +930,7 @@ Json saveEndSession(foundry::AppState& appState,
         refreshLiveSessionSnapshot(appState, true);
     }
 
-    std::wstring finalTranscriptRaw = appState.liveTranscriptRaw.empty()
-                                          ? transcriptRaw
-                                          : appState.liveTranscriptRaw;
+    std::wstring finalTranscriptRaw = transcriptRaw;
     std::wstring url = apiBaseNoSlash(appState) + L"/api/desktop/sessions/end";
     auto response = foundry::windows::http::postJson(
         url,
@@ -1238,22 +1236,34 @@ bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
         : Json::object();
 
     if (type == "session_snapshot") {
+        bool changed = false;
         std::wstring realtimeStatus =
             foundry::json::wideValue(data, "realtimeStatus");
         std::wstring realtimeError =
             foundry::json::wideValue(data, "realtimeError");
         if (!realtimeStatus.empty()) {
-            appState.realtimeStatus = realtimeStatus;
+            if (appState.realtimeStatus != realtimeStatus) {
+                appState.realtimeStatus = realtimeStatus;
+                changed = true;
+            }
             std::wcout << L"[live] realtime status: "
                        << realtimeStatus << L"\n";
             g_liveRealtimeConnected.store(realtimeStatus == L"connected");
         }
         if (!realtimeError.empty()) {
-            appState.realtimeError = realtimeError;
+            if (appState.realtimeError != realtimeError) {
+                appState.realtimeError = realtimeError;
+                changed = true;
+            }
             std::wcout << L"[live] realtime error: "
                        << realtimeError << L"\n";
+        } else if (!realtimeStatus.empty() && realtimeStatus != L"error") {
+            if (!appState.realtimeError.empty()) {
+                appState.realtimeError.clear();
+                changed = true;
+            }
         }
-        bool changed = applyTranscriptRaw(appState, data);
+        changed = applyTranscriptRaw(appState, data) || changed;
         if (data.contains("topics")) {
             loadTopicsFromJson(appState, data["topics"], true);
             applyRealtimeTopicSnapshot(appState, data["topics"]);
@@ -1278,24 +1288,42 @@ bool applyLiveEvent(foundry::AppState& appState, const Json& event) {
         return applyTopicUpdate(appState, topic);
     }
     if (type == "realtime_error") {
+        bool changed = false;
         std::wstring message = foundry::json::wideValue(data, "message");
         if (!message.empty()) {
-            appState.realtimeError = message;
+            if (appState.realtimeError != message) {
+                appState.realtimeError = message;
+                changed = true;
+            }
             std::wcout << L"[live] realtime error: " << message << L"\n";
         }
+        return changed;
     }
     if (type == "realtime_status") {
+        bool changed = false;
         std::wstring status = foundry::json::wideValue(data, "status");
         std::wstring message = foundry::json::wideValue(data, "message");
         if (!status.empty()) {
-            appState.realtimeStatus = status;
+            if (appState.realtimeStatus != status) {
+                appState.realtimeStatus = status;
+                changed = true;
+            }
             std::wcout << L"[live] realtime status: " << status << L"\n";
             g_liveRealtimeConnected.store(status == L"connected");
         }
         if (!message.empty()) {
-            appState.realtimeError = message;
+            if (appState.realtimeError != message) {
+                appState.realtimeError = message;
+                changed = true;
+            }
             std::wcout << L"[live] realtime error: " << message << L"\n";
+        } else if (!status.empty() && status != L"error") {
+            if (!appState.realtimeError.empty()) {
+                appState.realtimeError.clear();
+                changed = true;
+            }
         }
+        return changed;
     }
     if (type == "transcript_turn") {
         return applyTranscriptRaw(appState, data);

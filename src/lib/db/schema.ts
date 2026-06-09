@@ -106,7 +106,28 @@ export type ProjectMatchProfileJson = {
   calibrationNotes?: string[];
 };
 
+export type InsightEvidenceMoment = {
+  personName: string;
+  quote: string;
+  reason: string;
+};
+
+export type InsightCautionArea = {
+  personName: string;
+  quote: string;
+  concern: string;
+  betterProbe: string;
+};
+
+export type InsightCoachingPattern = {
+  pattern: string;
+  whyItMatters: string;
+  example: string;
+  fix: string;
+};
+
 export type InsightContent = {
+  schemaVersion?: number;
   learningSummary: {
     headline: string;
     summary: string;
@@ -132,6 +153,14 @@ export type InsightContent = {
     evidence: string[];
     nextQuestion: string;
   }[];
+  interviewCoach: {
+    verdict: string;
+    reliability: 'low' | 'medium' | 'high';
+    mainRisk: string;
+    recurringPatterns: InsightCoachingPattern[];
+    trustworthyEvidence: InsightEvidenceMoment[];
+    cautionAreas: InsightCautionArea[];
+  };
 };
 
 export type OutreachContent = {
@@ -363,6 +392,7 @@ export const call_prep = pgTable('call_prep', {
 export const interactions = pgTable('interactions', {
   id: uuid('id').primaryKey().defaultRandom(),
   person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
+  outreach_project_id: uuid('outreach_project_id').references(() => outreach_projects.id, { onDelete: 'set null' }),
   live_session_id: text('live_session_id'),
   type: text('type').default('call'),
   notes_raw: text('notes_raw'),
@@ -371,6 +401,7 @@ export const interactions = pgTable('interactions', {
   completed_at: timestamp('completed_at', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 }, (table) => [
+  index('interactions_outreach_project_completed_idx').on(table.outreach_project_id, table.completed_at),
   uniqueIndex('interactions_live_session_id_unique_idx')
     .on(table.live_session_id)
     .where(sql`${table.live_session_id} is not null`),
@@ -539,11 +570,13 @@ export const project_match_profiles = pgTable('project_match_profiles', {
 export const transcripts = pgTable('transcripts', {
   id: uuid('id').primaryKey().defaultRandom(),
   person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
+  outreach_project_id: uuid('outreach_project_id').references(() => outreach_projects.id, { onDelete: 'set null' }),
   content: text('content').notNull(),
   type: text('type').notNull().default('call'), // 'call' | 'message'
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 }, (table) => [
   index('transcripts_person_created_at_idx').on(table.person_id, table.created_at),
+  index('transcripts_outreach_project_created_at_idx').on(table.outreach_project_id, table.created_at),
 ]);
 
 // ── person_events ─────────────────────────────────────────────────────────────

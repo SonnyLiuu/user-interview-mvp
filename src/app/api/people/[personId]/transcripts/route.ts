@@ -4,6 +4,7 @@ import { eq, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { transcripts, person_events } from '@/lib/db/schema';
 import { getOwnedPerson } from '@/lib/person-ownership';
+import { cleanTranscriptHistoryContent } from '@/lib/transcript-cleanup';
 
 type Params = { params: Promise<{ personId: string }> };
 
@@ -12,7 +13,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { personId } = await params;
-  if (!await getOwnedPerson(personId, clerkUserId)) {
+  const ownedPerson = await getOwnedPerson(personId, clerkUserId);
+  if (!ownedPerson) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
@@ -30,16 +32,23 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { personId } = await params;
-  if (!await getOwnedPerson(personId, clerkUserId)) {
+  const ownedPerson = await getOwnedPerson(personId, clerkUserId);
+  if (!ownedPerson) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const body = await req.json() as { content: string; type?: 'call' | 'message' };
-  if (!body.content?.trim()) return NextResponse.json({ error: 'content required' }, { status: 400 });
+  const content = cleanTranscriptHistoryContent(body.content);
+  if (!content) return NextResponse.json({ error: 'content required' }, { status: 400 });
 
   const [created] = await db
     .insert(transcripts)
-    .values({ person_id: personId, content: body.content.trim(), type: body.type ?? 'call' })
+    .values({
+      person_id: personId,
+      outreach_project_id: ownedPerson.outreach_project_id,
+      content,
+      type: body.type ?? 'call',
+    })
     .returning();
 
   await db.insert(person_events).values({

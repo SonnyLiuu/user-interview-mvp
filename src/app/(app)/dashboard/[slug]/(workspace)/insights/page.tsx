@@ -5,6 +5,7 @@ import { getProjectInsightsState } from '@/lib/ai/synthesize-insights';
 import { getOutreachStats } from '@/lib/outreach-insights';
 import { getNotetakerDownloadHref } from '@/lib/notetaker-download';
 import type { InsightContent } from '@/lib/db/schema';
+import type { TranscriptInsightRecord } from '@/lib/ai/synthesize-insights';
 import type { InformationDiscoveryBrief } from '@/lib/backend-types';
 import { OutreachInsightsEmpty, OutreachInsightsData } from './OutreachInsights';
 import styles from './InsightsPage.module.css';
@@ -35,6 +36,11 @@ function formatDate(value: Date | null) {
     day: 'numeric',
     year: 'numeric',
   }).format(value);
+}
+
+function formatTranscriptDate(value: Date | null) {
+  if (!value) return 'Date unavailable';
+  return formatDate(value);
 }
 
 function DiscoveryContextPanel({
@@ -164,14 +170,16 @@ function DataInsights({
   installerHref,
   activeDiscoveryBrief,
   startupPath,
+  transcriptInsights,
 }: {
   content: InsightContent;
   generatedAt: Date | null;
   installerHref: string;
   activeDiscoveryBrief: InformationDiscoveryBrief | null;
   startupPath: string | null;
+  transcriptInsights: TranscriptInsightRecord[];
 }) {
-  const { learningSummary, recurringThemes, assumptionTracker } = content;
+  const { learningSummary, recurringThemes, assumptionTracker, interviewCoach } = content;
 
   return (
     <main className={styles.page}>
@@ -202,6 +210,8 @@ function DataInsights({
 
         <DiscoveryContextPanel brief={activeDiscoveryBrief} startupPath={startupPath} />
 
+        <InterviewCoachPanel coach={interviewCoach} transcriptInsights={transcriptInsights} />
+
         <section className={styles.summaryGrid}>
           <article className={styles.summaryPanel}>
             <h2 className={styles.sectionTitle}>Top takeaway</h2>
@@ -212,6 +222,8 @@ function DataInsights({
             <p className={styles.takeaway}>{learningSummary.nextFocus}</p>
           </article>
         </section>
+
+        <EvidenceReliabilitySection coach={interviewCoach} />
 
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
@@ -293,8 +305,197 @@ function DataInsights({
             ))}
           </div>
         </section>
+
+        <TranscriptInsightsSection transcriptInsights={transcriptInsights} />
       </div>
     </main>
+  );
+}
+
+function InterviewCoachPanel({
+  coach,
+  transcriptInsights,
+}: {
+  coach: InsightContent['interviewCoach'];
+  transcriptInsights: TranscriptInsightRecord[];
+}) {
+  const coachingIssues = transcriptInsights.flatMap((record) => {
+    const conversation = `${record.personName} · ${record.source === 'interaction' ? 'Completed call' : 'Transcript'} · ${formatTranscriptDate(record.completedAt)}`;
+    const questionIssues = record.review.questionFlags.map((flag, index) => ({
+      id: `${record.id}-question-${index}-${flag.question}`,
+      severity: flag.severity,
+      conversation,
+      exactMoment: flag.question,
+      issue: flag.issue,
+      betterProbe: flag.suggestion,
+    }));
+    const missedProbeIssues = record.review.missedProbes.map((probe, index) => ({
+      id: `${record.id}-probe-${index}-${probe.context}`,
+      severity: 'watch' as const,
+      conversation,
+      exactMoment: probe.context,
+      issue: 'Missed follow-up. The interviewee gave a potentially useful signal, but the next question did not pin it to a concrete recent example.',
+      betterProbe: probe.suggestedQuestion,
+    }));
+    return [...questionIssues, ...missedProbeIssues];
+  }).slice(0, 6);
+
+  return (
+    <section className={styles.coachPanel}>
+      <div className={styles.coachLead}>
+        <div>
+          <p className={styles.eyebrow}>Interview coach</p>
+          <h2 className={styles.coachTitle}>{coach.verdict}</h2>
+        </div>
+        <span className={`${styles.reliabilityPill} ${styles[`${coach.reliability}Reliability`]}`}>
+          {coach.reliability} reliability
+        </span>
+      </div>
+      <div className={styles.coachSummary}>
+        <div>
+          <span className={styles.discoveryLabel}>Main risk</span>
+          <p className={styles.coachText}>{coach.mainRisk}</p>
+        </div>
+      </div>
+      <div className={styles.coachIssueSection}>
+        <span className={styles.discoveryLabel}>Needs coaching</span>
+        {coachingIssues.length > 0 ? (
+          <div className={styles.coachIssueList}>
+            {coachingIssues.map((issue) => (
+              <article
+                key={issue.id}
+                className={`${styles.coachIssue} ${issue.severity === 'problem' ? styles.problemFlag : styles.watchFlag}`}
+              >
+                <p className={styles.coachConversation}>{issue.conversation}</p>
+                <p className={styles.flagQuestion}>{issue.exactMoment}</p>
+                <p className={styles.flagIssue}>{issue.issue}</p>
+                <p className={styles.flagSuggestion}>{issue.betterProbe}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className={styles.noFlags}>No major interview-technique issues detected in the reviewed conversations.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function EvidenceReliabilitySection({
+  coach,
+}: {
+  coach: InsightContent['interviewCoach'];
+}) {
+  if (coach.trustworthyEvidence.length === 0 && coach.cautionAreas.length === 0) return null;
+
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionHeader}>
+        <div>
+          <p className={styles.eyebrow}>Evidence quality</p>
+          <h2 className={styles.sectionHeading}>What to trust, and what to treat carefully</h2>
+        </div>
+      </div>
+      <div className={styles.evidenceQualityGrid}>
+        <article className={styles.evidenceQualityPanel}>
+          <h3 className={styles.sectionTitle}>Trustworthy evidence</h3>
+          {coach.trustworthyEvidence.length > 0 ? (
+            <div className={styles.quoteList}>
+              {coach.trustworthyEvidence.map((moment) => (
+                <blockquote
+                  key={`trust-${moment.personName}-${moment.quote}`}
+                  className={styles.quote}
+                >
+                  <p>{moment.quote}</p>
+                  <cite>{moment.personName} · {moment.reason}</cite>
+                </blockquote>
+              ))}
+            </div>
+          ) : (
+            <p className={styles.emptyNote}>No high-confidence behavioral evidence yet.</p>
+          )}
+        </article>
+        <article className={styles.evidenceQualityPanel}>
+          <h3 className={styles.sectionTitle}>Needs caution</h3>
+          {coach.cautionAreas.length > 0 ? (
+            <div className={styles.cautionList}>
+              {coach.cautionAreas.map((area) => (
+                <div
+                  key={`caution-${area.personName}-${area.quote}-${area.concern}`}
+                  className={styles.cautionItem}
+                >
+                  {area.quote && <p className={styles.cautionQuote}>{area.quote}</p>}
+                  <p className={styles.cautionConcern}>{area.concern}</p>
+                  <p className={styles.cautionProbe}>{area.betterProbe}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className={styles.emptyNote}>No major evidence-quality cautions detected.</p>
+          )}
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function TranscriptInsightsSection({
+  transcriptInsights,
+}: {
+  transcriptInsights: TranscriptInsightRecord[];
+}) {
+  if (transcriptInsights.length === 0) return null;
+  const groups = transcriptInsights.reduce<{
+    type: string;
+    label: string;
+    records: TranscriptInsightRecord[];
+  }[]>((acc, record) => {
+    let group = acc.find((item) => item.type === record.outreachProjectType);
+    if (!group) {
+      group = {
+        type: record.outreachProjectType,
+        label: record.outreachProjectLabel,
+        records: [],
+      };
+      acc.push(group);
+    }
+    group.records.push(record);
+    return acc;
+  }, []).map((group) => ({
+    ...group,
+    records: group.records.toSorted((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0)),
+  }));
+
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionHeader}>
+        <div>
+          <p className={styles.eyebrow}>Interviewees</p>
+          <h2 className={styles.sectionHeading}>Interviews by project type</h2>
+        </div>
+      </div>
+      <div className={styles.interviewExplorer}>
+        {groups.map((group) => (
+          <section key={group.type} className={styles.interviewGroup}>
+            <div className={styles.interviewGroupHeader}>
+              <span>{group.label}</span>
+              <small>{group.records.length}</small>
+            </div>
+            <div className={styles.interviewRowList}>
+              {group.records.map((record) => (
+                <div
+                  key={`${record.outreachProjectType}-${record.source}-${record.id}`}
+                  className={styles.interviewRow}
+                >
+                  <span className={styles.interviewRowName}>{record.personName}</span>
+                  <span className={styles.interviewRowDate}>{formatTranscriptDate(record.completedAt)}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -365,6 +566,7 @@ export default async function InsightsPage({
             installerHref={installerHref}
             activeDiscoveryBrief={state.activeDiscoveryBrief}
             startupPath={startupPath}
+            transcriptInsights={state.transcriptInsights}
           />
         )}
       </>

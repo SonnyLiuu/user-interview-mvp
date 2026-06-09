@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -154,6 +155,23 @@ _bridges: dict[str, RealtimeBridge | RestChecklistBridge] = {}
 _transcription_bridges: dict[str, SourceTranscriptionBridge] = {}
 _event_queues: dict[str, list[asyncio.Queue[LiveSessionEvent]]] = {}
 
+_DIAGNOSTIC_TRANSCRIPT_LINE_RE = re.compile(
+    r"""
+    ^\s*
+    (?:[A-Za-z]+:\s*)?
+    (?:
+        (?:Realtime|REST|Transcription|Desktop\ audio|Sent\ transcription|Starting\ (?:source\ transcription|realtime|REST|mock\ realtime)|Signal\ auto-detected|Emitting\ topic_checked|Transcript\ turn)
+        \b.*\bsession=[0-9a-f-]{8,}.*
+      |
+        INFO:\s+\d{1,3}(?:\.\d{1,3}){3}:\d+\s+-\s+".*?/v1/desktop/live-sessions/.*
+      |
+        HTTP/\d(?:\.\d)?"?\s+\d{3}\s+\w+
+    )
+    \s*$
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
 
 def sign_live_session_token(session: LiveSessionState) -> str:
     settings = get_settings()
@@ -202,12 +220,14 @@ async def _session_for_token(token: str) -> LiveSessionState:
     payload = _verify_live_session_token_payload(token)
     session = _sessions.get(payload.get("sid") or "")
     if session and session.user_id == payload.get("sub"):
+        _ensure_active_session_runtime(session)
         return session
 
     session = await _load_session_from_db(payload.get("sid") or "", payload.get("sub") or "")
     if not session:
         raise UnauthorizedError("Live session not found")
     _sessions[session.session_id] = session
+    _ensure_active_session_runtime(session)
     return session
 
 
@@ -231,6 +251,15 @@ def verify_live_session_token(token: str) -> LiveSessionState:
     if not session or session.user_id != payload.get("sub"):
         raise UnauthorizedError("Live session not found")
     return session
+
+
+def _ensure_active_session_runtime(session: LiveSessionState) -> None:
+    if session.status != "active":
+        return
+    if session.session_id not in _bridges:
+        _start_realtime_bridge(session)
+    if session.audio_capture_enabled and session.session_id not in _transcription_bridges:
+        _start_transcription_bridge(session)
 
 
 def _topics_from_call_brief(content: dict) -> list[LiveTopicState]:
@@ -628,20 +657,21 @@ async def ingest_live_transcript_turn(
 ) -> dict[str, Any]:
     session = await _require_session_for_token(session_id, live_token, active=True)
 
-    before = len(session.transcript_turns)
-    text_was_recorded = await _handle_transcript_turn(
+    recorded_turn = await _handle_transcript_turn(
         session,
         source,
         transcript,
         speaker=speaker,
         external_turn_id=external_turn_id,
     )
-    if len(session.transcript_turns) == before and not text_was_recorded:
+    if recorded_turn is None and external_turn_id:
+        recorded_turn = _transcript_turn_by_external_id(session, external_turn_id)
+    if recorded_turn is None:
         raise BadRequestError("Transcript text is required")
 
     return {
         "sessionId": session.session_id,
-        "turn": session.transcript_turns[-1].to_dict(),
+        "turn": recorded_turn.to_dict(),
         "transcriptRaw": format_transcript(session),
     }
 
@@ -666,15 +696,15 @@ async def ingest_transcript_upload(
     ingested: list[dict[str, Any]] = []
     for i, turn in enumerate(turns):
         external_id = f"upload_{filename}_{i + 1}"
-        text_was_recorded = await _handle_transcript_turn(
+        recorded_turn = await _handle_transcript_turn(
             session,
             source="manual_upload",
             transcript=turn.text,
             speaker=turn.speaker,
             external_turn_id=external_id,
         )
-        if text_was_recorded and session.transcript_turns:
-            ingested.append(session.transcript_turns[-1].to_dict())
+        if recorded_turn is not None:
+            ingested.append(recorded_turn.to_dict())
 
     logger.info(
         "Transcript upload session=%s file=%s turns_parsed=%s turns_ingested=%s",
@@ -765,6 +795,7 @@ async def ingest_rtms_transcript_turn(
     if session.status != "active":
         return
     _sessions[session.session_id] = session
+    _ensure_active_session_runtime(session)
     await _handle_transcript_turn(
         session,
         "zoom_rtms",
@@ -827,12 +858,15 @@ async def bind_zoom_rtms_stream(
             """,
             str(row["id"]),
         )
-    session = _session_from_row(row, [_turn_from_row(turn) for turn in turn_rows])
+    session = _sessions.get(str(row["id"]))
+    if not session:
+        session = _session_from_row(row, [_turn_from_row(turn) for turn in turn_rows])
     session.zoom_meeting_id = normalized_id or session.zoom_meeting_id
     session.zoom_meeting_uuid = zoom_meeting_uuid or session.zoom_meeting_uuid
     session.rtms_stream_id = rtms_stream_id or session.rtms_stream_id
     session.metadata = {**session.metadata, **(metadata or {})}
     _sessions[session.session_id] = session
+    _ensure_active_session_runtime(session)
     return session
 
 
@@ -963,10 +997,10 @@ async def _handle_transcript_turn(
     *,
     speaker: str | None = None,
     external_turn_id: str | None = None,
-) -> bool:
-    text = _clean_arg(transcript)
+) -> LiveTranscriptTurn | None:
+    text = _clean_transcript_text(transcript)
     if not text:
-        return False
+        return None
     speaker_label = _clean_arg(speaker) or _speaker_for_source(source)
     turn = LiveTranscriptTurn(
         speaker=speaker_label,
@@ -976,7 +1010,7 @@ async def _handle_transcript_turn(
         created_at=_now_iso(),
     )
     if not await _persist_transcript_turn(session, turn):
-        return True
+        return None
     session.transcript_turns.append(turn)
     logger.warning(
         "Transcript turn session=%s source=%s speaker=%s text=%s",
@@ -1002,7 +1036,20 @@ async def _handle_transcript_turn(
     # --- Signal auto-detection: simple keyword matching for signal topics ---
     await _detect_signals(session, text)
 
-    return True
+    return turn
+
+
+def _transcript_turn_by_external_id(
+    session: LiveSessionState,
+    external_turn_id: str | None,
+) -> LiveTranscriptTurn | None:
+    external_id = _clean_arg(external_turn_id)
+    if not external_id:
+        return None
+    for turn in session.transcript_turns:
+        if turn.external_turn_id == external_id:
+            return turn
+    return None
 
 
 def _normalize_turn(
@@ -1226,6 +1273,18 @@ def _clean_arg(value: Any) -> str:
     return " ".join(value.strip().split())
 
 
+def _clean_transcript_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    lines = []
+    for line in value.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        cleaned = " ".join(line.strip().split())
+        if not cleaned or _DIAGNOSTIC_TRANSCRIPT_LINE_RE.match(cleaned):
+            continue
+        lines.append(cleaned)
+    return " ".join(lines)
+
+
 def _append_event(session: LiveSessionState, event_type: str, data: dict[str, Any]) -> LiveSessionEvent:
     event = LiveSessionEvent(
         id=str(len(session.events) + 1),
@@ -1296,14 +1355,14 @@ async def _ingest_provider_turns(
         text = _clean_arg(turn.get("text"))
         if not text:
             continue
-        recorded = await _handle_transcript_turn(
+        recorded_turn = await _handle_transcript_turn(
             session,
             source=source,
             transcript=text,
             speaker=_clean_arg(turn.get("speaker")) or "Speaker",
             external_turn_id=turn.get("external_turn_id"),
         )
-        if recorded:
+        if recorded_turn is not None:
             ingested += 1
     return ingested
 

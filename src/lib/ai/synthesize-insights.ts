@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   insights,
@@ -20,11 +20,15 @@ import {
   applyInformationDiscoveryBrief,
   normalizeInformationDiscoveryBrief,
 } from '@/lib/information-discovery-context-core';
+import { getOutreachProjectTypeConfig } from '@/lib/outreach-projects';
 import {
+  CURRENT_INSIGHT_SCHEMA_VERSION,
+  analyzeTranscriptTechnique,
   evidenceLevelForCalls,
   hasInterviewData,
   isInsightFresh,
   normalizeInsightContent,
+  type TranscriptTechniqueReview,
 } from '@/lib/insights-core';
 
 const MAX_RECORDS = 20;
@@ -35,6 +39,7 @@ type CompletedInteractionRow = {
   personId: string | null;
   personName: string;
   personaType: string | null;
+  outreachProjectType: string | null;
   notesRaw: string | null;
   transcriptRaw: string | null;
   completedAt: Date | null;
@@ -46,6 +51,7 @@ type TranscriptRow = {
   personId: string | null;
   personName: string;
   personaType: string | null;
+  outreachProjectType: string | null;
   content: string;
   createdAt: Date | null;
 };
@@ -64,6 +70,8 @@ type InsightSourceRecord = {
   source: 'interaction' | 'transcript';
   personName: string;
   personaType: string | null;
+  outreachProjectType: string;
+  outreachProjectLabel: string;
   completedAt: Date | null;
   notes: string;
   transcript: string;
@@ -84,6 +92,22 @@ type InsightDataSet = {
   contextUpdatedAt: Date | null;
 };
 
+export type TranscriptInsightRecord = {
+  id: string;
+  source: 'interaction' | 'transcript';
+  personName: string;
+  personaType: string | null;
+  outreachProjectType: string;
+  outreachProjectLabel: string;
+  completedAt: Date | null;
+  transcript: string;
+  notes: string;
+  checkedLabels: string[];
+  checkedCount: number | null;
+  topicCount: number | null;
+  review: TranscriptTechniqueReview;
+};
+
 export type ProjectInsightsState =
   | {
       kind: 'empty';
@@ -98,12 +122,14 @@ export type ProjectInsightsState =
       callsAnalyzed: number;
       latestDataAt: Date | null;
       activeDiscoveryBrief: InformationDiscoveryBrief | null;
+      transcriptInsights: TranscriptInsightRecord[];
     };
 
 const insightSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    schemaVersion: { type: 'number' },
     learningSummary: {
       type: 'object',
       additionalProperties: false,
@@ -167,8 +193,70 @@ const insightSchema = {
         required: ['assumption', 'status', 'confidence', 'evidence', 'nextQuestion'],
       },
     },
+    interviewCoach: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        verdict: { type: 'string' },
+        reliability: { type: 'string', enum: ['low', 'medium', 'high'] },
+        mainRisk: { type: 'string' },
+        recurringPatterns: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 4,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              pattern: { type: 'string' },
+              whyItMatters: { type: 'string' },
+              example: { type: 'string' },
+              fix: { type: 'string' },
+            },
+            required: ['pattern', 'whyItMatters', 'example', 'fix'],
+          },
+        },
+        trustworthyEvidence: {
+          type: 'array',
+          maxItems: 6,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              personName: { type: 'string' },
+              quote: { type: 'string' },
+              reason: { type: 'string' },
+            },
+            required: ['personName', 'quote', 'reason'],
+          },
+        },
+        cautionAreas: {
+          type: 'array',
+          maxItems: 6,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              personName: { type: 'string' },
+              quote: { type: 'string' },
+              concern: { type: 'string' },
+              betterProbe: { type: 'string' },
+            },
+            required: ['personName', 'quote', 'concern', 'betterProbe'],
+          },
+        },
+      },
+      required: [
+        'verdict',
+        'reliability',
+        'mainRisk',
+        'recurringPatterns',
+        'trustworthyEvidence',
+        'cautionAreas',
+      ],
+    },
   },
-  required: ['learningSummary', 'recurringThemes', 'assumptionTracker'],
+  required: ['schemaVersion', 'learningSummary', 'recurringThemes', 'assumptionTracker', 'interviewCoach'],
 };
 
 function cleanString(value: unknown) {
@@ -250,11 +338,14 @@ function buildInteractionRecords(
 ) {
   return rows.map((row): InsightSourceRecord => {
     const metadata = events.get(row.id) ?? {};
+    const outreachConfig = getOutreachProjectTypeConfig(row.outreachProjectType);
     return {
       id: row.id,
       source: 'interaction',
       personName: row.personName,
       personaType: row.personaType,
+      outreachProjectType: outreachConfig.type,
+      outreachProjectLabel: outreachConfig.label,
       completedAt: row.completedAt ?? row.createdAt,
       notes: truncateText(row.notesRaw ?? '', 2500),
       transcript: truncateText(row.transcriptRaw ?? ''),
@@ -277,26 +368,45 @@ function buildTranscriptOnlyRecords(
 
   return transcriptRows
     .filter((row) => !duplicateKeys.has(`${row.personId}:${row.content.trim()}`))
-    .map((row): InsightSourceRecord => ({
-      id: row.id,
-      source: 'transcript',
-      personName: row.personName,
-      personaType: row.personaType,
-      completedAt: row.createdAt,
-      notes: '',
-      transcript: truncateText(row.content),
-      checkedLabels: [],
-      checkedCount: null,
-      topicCount: null,
-    }));
+    .map((row): InsightSourceRecord => {
+      const outreachConfig = getOutreachProjectTypeConfig(row.outreachProjectType);
+      return {
+        id: row.id,
+        source: 'transcript',
+        personName: row.personName,
+        personaType: row.personaType,
+        outreachProjectType: outreachConfig.type,
+        outreachProjectLabel: outreachConfig.label,
+        completedAt: row.createdAt,
+        notes: '',
+        transcript: truncateText(row.content),
+        checkedLabels: [],
+        checkedCount: null,
+        topicCount: null,
+      };
+    });
 }
 
 function buildPrompt(data: InsightDataSet) {
   const records = data.records.slice(0, MAX_RECORDS).map((record, index) => ({
+    ...(() => {
+      const review = analyzeTranscriptTechnique(record.transcript, record.notes);
+      return {
+        deterministicCoachingSignals: {
+          reliability: review.reliability,
+          questionFlags: review.questionFlags,
+          missedProbes: review.missedProbes,
+          strongEvidenceMoments: review.strongEvidenceMoments,
+          weakEvidenceMoments: review.weakEvidenceMoments,
+        },
+      };
+    })(),
     number: index + 1,
     source: record.source,
     personName: record.personName,
     personaType: record.personaType,
+    outreachProjectType: record.outreachProjectType,
+    outreachProjectLabel: record.outreachProjectLabel,
     completedAt: record.completedAt?.toISOString() ?? null,
     checkedTopics: record.checkedLabels,
     checklistCoverage: record.checkedCount !== null && record.topicCount !== null
@@ -308,9 +418,13 @@ function buildPrompt(data: InsightDataSet) {
 
   return [
     'You synthesize customer discovery interview evidence for a founder.',
-    'Return only the structured output. Be specific, skeptical, and grounded in the interview data.',
+    `Return only the structured output with schemaVersion ${CURRENT_INSIGHT_SCHEMA_VERSION}. Be specific, skeptical, and grounded in the interview data.`,
     'Do not invent quotes. Supporting quotes must be short direct excerpts from transcript or notes.',
     'If evidence is thin, say so plainly. Prefer practical next questions over generic advice.',
+    'Be strict about interview quality: call out leading, hypothetical solution-validation questions, especially questions that describe a tool or benefit and ask whether it would help.',
+    'When a founder asks a leading product-validation question, recommend a recent-behavior question that does not reveal the proposed solution.',
+    'Separate trustworthy evidence from caution areas. Trustworthy evidence comes from concrete past or current behavior. Caution areas include polite agreement, hypotheticals, vague claims, or answers following leading questions.',
+    'The Interview Coach should name concrete interview-quality risks. Any coaching claim should point to a specific interview record/person and the exact question or exchange when possible.',
     '',
     `Calls/interview records analyzed: ${data.interviewCount}`,
     `Evidence level: ${evidenceLevelForCalls(data.interviewCount)}`,
@@ -324,6 +438,40 @@ function buildPrompt(data: InsightDataSet) {
     'Interview records:',
     JSON.stringify(records, null, 2),
   ].join('\n');
+}
+
+function buildTranscriptInsights(records: InsightSourceRecord[]): TranscriptInsightRecord[] {
+  return records
+    .filter((record) => record.transcript.trim() || record.notes.trim())
+    .map((record) => {
+      const review = analyzeTranscriptTechnique(record.transcript, record.notes);
+      return {
+        id: record.id,
+        source: record.source,
+        personName: record.personName,
+        personaType: record.personaType,
+        outreachProjectType: record.outreachProjectType,
+        outreachProjectLabel: record.outreachProjectLabel,
+        completedAt: record.completedAt,
+        transcript: record.transcript,
+        notes: record.notes,
+        checkedLabels: record.checkedLabels,
+        checkedCount: record.checkedCount,
+        topicCount: record.topicCount,
+        review,
+      };
+    })
+    .sort((a, b) => {
+      const urgencyA = a.review.questionFlags.filter((flag) => flag.severity === 'problem').length * 3 +
+        a.review.questionFlags.length +
+        a.review.missedProbes.length * 2 +
+        a.review.weakEvidenceMoments.length;
+      const urgencyB = b.review.questionFlags.filter((flag) => flag.severity === 'problem').length * 3 +
+        b.review.questionFlags.length +
+        b.review.missedProbes.length * 2 +
+        b.review.weakEvidenceMoments.length;
+      return urgencyB - urgencyA;
+    });
 }
 
 async function loadInsightData(projectId: string): Promise<InsightDataSet> {
@@ -342,6 +490,7 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
         personId: interactions.person_id,
         personName: people.name,
         personaType: people.persona_type,
+        outreachProjectType: outreach_projects.type,
         notesRaw: interactions.notes_raw,
         transcriptRaw: interactions.transcript_raw,
         completedAt: interactions.completed_at,
@@ -349,6 +498,10 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
       })
       .from(interactions)
       .innerJoin(people, eq(interactions.person_id, people.id))
+      .leftJoin(
+        outreach_projects,
+        eq(outreach_projects.id, sql`coalesce(${interactions.outreach_project_id}, ${people.outreach_project_id})`),
+      )
       .where(and(eq(people.project_id, projectId), isNotNull(interactions.completed_at)))
       .orderBy(desc(interactions.completed_at))
       .limit(MAX_RECORDS),
@@ -358,11 +511,16 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
         personId: transcripts.person_id,
         personName: people.name,
         personaType: people.persona_type,
+        outreachProjectType: outreach_projects.type,
         content: transcripts.content,
         createdAt: transcripts.created_at,
       })
       .from(transcripts)
       .innerJoin(people, eq(transcripts.person_id, people.id))
+      .leftJoin(
+        outreach_projects,
+        eq(outreach_projects.id, sql`coalesce(${transcripts.outreach_project_id}, ${people.outreach_project_id})`),
+      )
       .where(eq(people.project_id, projectId))
       .orderBy(desc(transcripts.created_at))
       .limit(MAX_RECORDS),
@@ -460,6 +618,7 @@ async function synthesizeInsightContent(data: InsightDataSet) {
 
 export async function getProjectInsightsState(projectId: string): Promise<ProjectInsightsState> {
   const data = await loadInsightData(projectId);
+  const transcriptInsights = buildTranscriptInsights(data.records);
   if (!hasInterviewData({
     completedInteractionCount: data.completedInteractionCount,
     transcriptCount: data.transcriptCount,
@@ -479,7 +638,11 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
     .orderBy(desc(insights.generated_at))
     .limit(1);
 
-  if (current && current.content && isInsightFresh(current, {
+  if (current && current.content && isInsightFresh({
+    calls_analyzed: current.calls_analyzed,
+    generated_at: current.generated_at,
+    content: current.content,
+  }, {
     interviewCount: data.interviewCount,
     latestDataAt: latestDate([data.latestDataAt, data.contextUpdatedAt]),
   })) {
@@ -493,6 +656,7 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
       callsAnalyzed: current.calls_analyzed ?? data.interviewCount,
       latestDataAt: data.latestDataAt,
       activeDiscoveryBrief: data.activeDiscoveryBrief,
+      transcriptInsights,
     };
   }
 
@@ -523,5 +687,6 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
     callsAnalyzed: created.calls_analyzed ?? data.interviewCount,
     latestDataAt: data.latestDataAt,
     activeDiscoveryBrief: data.activeDiscoveryBrief,
+    transcriptInsights,
   };
 }
