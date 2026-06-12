@@ -27,10 +27,8 @@ function IconProject() {
 function IconPeople() {
   return (
     <svg viewBox="0 0 22 22" fill="none" aria-hidden="true">
-      <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5"/>
-      <path d="M2 18c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-      <circle cx="16" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.3"/>
-      <path d="M13 18c0-2.21 1.34-4 3-4s3 1.79 3 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+      <circle cx="11" cy="7.4" r="3.2" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M5.2 18c.5-3.6 2.65-5.4 5.8-5.4s5.3 1.8 5.8 5.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
   );
 }
@@ -48,8 +46,8 @@ function IconBoard() {
 function IconInsights() {
   return (
     <svg viewBox="0 0 22 22" fill="none" aria-hidden="true">
-      <polyline points="2,16 7,10 11,13 15,6 20,9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <polyline points="15,6 20,6 20,9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M4 15.5l4.4-5 3.4 3.2L17.5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M14.1 7h3.4v3.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }

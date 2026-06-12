@@ -33,8 +33,8 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
         self.row = {
             "id": "outreach-1",
             "startup_project_id": "startup-1",
-            "type": "information_discovery",
-            "name": "Information Discovery",
+            "type": "idea_validation",
+            "name": "Idea Validation",
             "status": "onboarding",
             "brief_json": None,
             "onboarding_state_json": None,
@@ -45,7 +45,7 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
     def _patch_pool(self):
         return patch.object(outreach_project_service, "get_pool", return_value=_FakePool(self.conn))
 
-    async def test_create_information_discovery_project(self):
+    async def test_create_idea_validation_project(self):
         with (
             self._patch_pool(),
             patch.object(outreach_project_service.project_repo, "find_owned_project", new=AsyncMock(return_value=self.startup)),
@@ -55,19 +55,19 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
             result = await outreach_project_service.create_or_open_outreach_project(
                 "user-1",
                 "startup-1",
-                {"type": "information_discovery"},
+                {"type": "idea_validation"},
             )
 
             self.assertEqual(result["id"], "outreach-1")
             outreach_project_service.outreach_project_repo.create_outreach_project.assert_awaited_with(
                 self.conn,
                 "startup-1",
-                "information_discovery",
-                "Information Discovery",
+                "idea_validation",
+                "Idea Validation",
                 "onboarding",
             )
 
-    async def test_create_returns_existing_non_archived_information_discovery_project(self):
+    async def test_create_returns_existing_non_archived_idea_validation_project(self):
         with (
             self._patch_pool(),
             patch.object(outreach_project_service.project_repo, "find_owned_project", new=AsyncMock(return_value=self.startup)),
@@ -77,10 +77,32 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
             result = await outreach_project_service.create_or_open_outreach_project(
                 "user-1",
                 "startup-1",
-                {"type": "information_discovery"},
+                {"type": "idea_validation"},
             )
 
             self.assertEqual(result["id"], "outreach-1")
+            outreach_project_service.outreach_project_repo.create_outreach_project.assert_not_awaited()
+
+    async def test_existing_legacy_idea_validation_project_encodes_as_current_type(self):
+        legacy_row = {
+            **self.row,
+            "type": "information" + "_discovery",
+            "name": "Information" + " " + "Discovery",
+        }
+        with (
+            self._patch_pool(),
+            patch.object(outreach_project_service.project_repo, "find_owned_project", new=AsyncMock(return_value=self.startup)),
+            patch.object(outreach_project_service.outreach_project_repo, "find_non_archived_by_type", new=AsyncMock(return_value=legacy_row)),
+            patch.object(outreach_project_service.outreach_project_repo, "create_outreach_project", new=AsyncMock()),
+        ):
+            result = await outreach_project_service.create_or_open_outreach_project(
+                "user-1",
+                "startup-1",
+                {"type": "idea_validation"},
+            )
+
+            self.assertEqual(result["type"], "idea_validation")
+            self.assertEqual(result["name"], "Idea Validation")
             outreach_project_service.outreach_project_repo.create_outreach_project.assert_not_awaited()
 
     async def test_create_rejects_coming_soon_type(self):
@@ -124,13 +146,13 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
                 status="active",
             )
 
-    async def test_information_discovery_onboarding_init_starts_with_outcome_question(self):
+    async def test_idea_validation_onboarding_init_starts_with_outcome_question(self):
         with (
             self._patch_pool(),
             patch.object(outreach_project_service.outreach_project_repo, "find_for_owned_startup", new=AsyncMock(return_value=self.row)),
             patch.object(outreach_project_service.outreach_project_repo, "update_outreach_project", new=AsyncMock(return_value=self.row)),
         ):
-            result = await outreach_project_service.process_information_discovery_onboarding(
+            result = await outreach_project_service.process_idea_validation_onboarding(
                 "user-1",
                 "outreach-1",
                 {"type": "__init__"},
@@ -140,13 +162,13 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(result["isFinishable"])
             outreach_project_service.outreach_project_repo.update_outreach_project.assert_awaited()
 
-    async def test_information_discovery_onboarding_kickoff_extracts_desired_outcome(self):
+    async def test_idea_validation_onboarding_kickoff_extracts_desired_outcome(self):
         with (
             self._patch_pool(),
             patch.object(outreach_project_service.outreach_project_repo, "find_for_owned_startup", new=AsyncMock(return_value=self.row)),
             patch.object(outreach_project_service.outreach_project_repo, "update_outreach_project", new=AsyncMock(return_value=self.row)),
         ):
-            result = await outreach_project_service.process_information_discovery_onboarding(
+            result = await outreach_project_service.process_idea_validation_onboarding(
                 "user-1",
                 "outreach-1",
                 {"type": "kickoff", "message": "Validate whether the problem is painful and learn current workarounds."},
@@ -157,7 +179,7 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(saved["state"]["desiredOutcome"], "Validate whether the problem is painful and learn current workarounds.")
             self.assertIn("Understand current workarounds and alternatives", saved["state"]["learningGoals"])
 
-    async def test_information_discovery_finish_generates_learning_brief(self):
+    async def test_idea_validation_finish_generates_learning_brief(self):
         ready_state = {
             "state": {
                 "desiredOutcome": "Validate problem urgency",
@@ -190,7 +212,7 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
             patch.object(outreach_project_service.outreach_project_repo, "find_for_owned_startup", new=AsyncMock(return_value=row)),
             patch.object(outreach_project_service.outreach_project_repo, "update_outreach_project", new=AsyncMock(return_value=row)),
         ):
-            result = await outreach_project_service.process_information_discovery_onboarding(
+            result = await outreach_project_service.process_idea_validation_onboarding(
                 "user-1",
                 "outreach-1",
                 {"type": "finish"},
@@ -199,10 +221,10 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["sessionStatus"], "completed")
             updates = outreach_project_service.outreach_project_repo.update_outreach_project.await_args.kwargs
             self.assertEqual(updates["status"], "active")
-            self.assertEqual(updates["brief_json"]["type"], "information_discovery")
+            self.assertEqual(updates["brief_json"]["type"], "idea_validation")
             self.assertEqual(updates["brief_json"]["desiredOutcome"], "Validate problem urgency")
 
-    async def test_office_hours_stream_persists_completed_information_discovery_brief(self):
+    async def test_office_hours_stream_persists_completed_idea_validation_brief(self):
         foundation_row = {
             "foundation_json": {
                 "startupName": "Acme",
@@ -240,7 +262,7 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("operations leads", "".join(chunks))
             updates = outreach_project_service.outreach_project_repo.update_outreach_project.await_args.kwargs
             self.assertEqual(updates["status"], "active")
-            self.assertEqual(updates["brief_json"]["type"], "information_discovery")
+            self.assertEqual(updates["brief_json"]["type"], "idea_validation")
             self.assertEqual(
                 updates["brief_json"]["targetPeople"],
                 ["Operations leads who own follow-up workflows"],

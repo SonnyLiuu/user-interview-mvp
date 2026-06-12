@@ -144,11 +144,10 @@ export function LandingPage() {
       <section className={styles.hero}>
         <div className={styles.container}>
           <h1 className={styles.heroHeadline}>
-            Your AI-powered customer interview workspace.
+            Your AI-native startup outreach workspace.
           </h1>
           <p className={styles.heroSub}>
-            Pressure-test your idea, find the right people to interview, reach out intelligently,
-            and synthesize insights across conversations to build a smarter, more connected founder.
+            Automate the research, keep your human touch. Pressure-test ideas, find the right people to talk to, and get help preparing and debriefing every conversation. All in one place. 
           </p>
           <Link href="/signup" className={styles.ctaButton}>
             Get started for free

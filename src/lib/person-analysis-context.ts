@@ -103,7 +103,7 @@ export function foundationToAnalysisContext(
           foundation.summary,
           foundation.painPoint ? `Pain point: ${foundation.painPoint}` : null,
           foundation.valueProp ? `Value proposition: ${foundation.valueProp}` : null,
-          foundation.desiredOutcome ? `Information Discovery outcome: ${foundation.desiredOutcome}` : null,
+          foundation.desiredOutcome ? `Idea Validation outcome: ${foundation.desiredOutcome}` : null,
           foundation.learningGoals?.length ? `Learning goals: ${foundation.learningGoals.join('; ')}` : null,
           foundation.messageBoundaries?.length ? `Conversation boundaries: ${foundation.messageBoundaries.join('; ')}` : null,
         ].filter(Boolean).join('\n')

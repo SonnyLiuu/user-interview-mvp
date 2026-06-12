@@ -9,7 +9,7 @@ CREATE TABLE "outreach_projects" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "outreach_projects_type_check" CHECK ("type" in (
-		'information_discovery',
+		'idea_validation',
 		'customer_acquisition',
 		'beta_users',
 		'investor',
@@ -34,4 +34,4 @@ CREATE INDEX "outreach_projects_startup_created_at_idx" ON "outreach_projects" U
 --> statement-breakpoint
 CREATE INDEX "outreach_projects_startup_status_idx" ON "outreach_projects" USING btree ("startup_project_id","status");
 --> statement-breakpoint
-CREATE UNIQUE INDEX "outreach_projects_one_active_information_discovery_idx" ON "outreach_projects" USING btree ("startup_project_id","type") WHERE "type" = 'information_discovery' and "status" <> 'archived';
+CREATE UNIQUE INDEX "outreach_projects_one_active_idea_validation_idx" ON "outreach_projects" USING btree ("startup_project_id","type") WHERE "type" = 'idea_validation' and "status" <> 'archived';

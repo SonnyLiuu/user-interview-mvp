@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Callable
 
-from .project_modes import OUTREACH_TYPE_INFORMATION_DISCOVERY
+from .project_modes import OUTREACH_TYPE_IDEA_VALIDATION
 
 
 OUTREACH_UPDATE_MARKER = '{"outreach_onboarding_update":'
@@ -162,9 +162,9 @@ def strip_outreach_update(content: str) -> str:
     return content[:idx].strip()
 
 
-def _build_information_discovery_prompt(foundation: dict, state: dict) -> str:
+def _build_idea_validation_prompt(foundation: dict, state: dict) -> str:
     return "\n".join([
-        "You are an experienced startup advisor running a focused Information Discovery office hours session.",
+        "You are an experienced startup advisor running a focused Idea Validation office hours session.",
         "Your job is to help the founder set up a learning-oriented outreach project before they sell or pitch.",
         "",
         "Use the startup foundation to infer a strong default plan when the founder asks you to decide.",
@@ -174,7 +174,7 @@ def _build_information_discovery_prompt(foundation: dict, state: dict) -> str:
         "Startup foundation:",
         _foundation_summary(foundation),
         "",
-        "Information Discovery state captured so far:",
+        "Idea Validation state captured so far:",
         _state_summary(state),
         "",
         "Fields to capture:",
@@ -199,7 +199,7 @@ def _build_information_discovery_prompt(foundation: dict, state: dict) -> str:
     ])
 
 
-def _build_information_discovery_brief(state: dict) -> dict:
+def _build_idea_validation_brief(state: dict) -> dict:
     learning_goals = _clean_list(state.get("learningGoals")) or [
         _clean_text(state.get("desiredOutcome")) or "Clarify the most important startup unknowns",
     ]
@@ -212,8 +212,8 @@ def _build_information_discovery_brief(state: dict) -> dict:
         "Do not ask for a demo, purchase, or sales conversation.",
     ]
     return {
-        "type": OUTREACH_TYPE_INFORMATION_DISCOVERY,
-        "label": "Information Discovery",
+        "type": OUTREACH_TYPE_IDEA_VALIDATION,
+        "label": "Idea Validation",
         "desiredOutcome": _clean_text(state.get("desiredOutcome")) or None,
         "learningGoals": learning_goals,
         "targetPeople": target_people,
@@ -230,19 +230,19 @@ def _build_information_discovery_brief(state: dict) -> dict:
     }
 
 
-INFORMATION_DISCOVERY_MODE = OutreachOnboardingMode(
-    type=OUTREACH_TYPE_INFORMATION_DISCOVERY,
-    label="Information Discovery",
-    kickoff_user_message="Help me set up an Information Discovery learning brief.",
+IDEA_VALIDATION_MODE = OutreachOnboardingMode(
+    type=OUTREACH_TYPE_IDEA_VALIDATION,
+    label="Idea Validation",
+    kickoff_user_message="Help me set up an Idea Validation learning brief.",
     required_fields=("desiredOutcome", "targetPeople", "assumptionsToTest"),
     array_fields=("targetPeople", "assumptionsToTest", "learningGoals", "conversationBoundaries"),
-    build_system_prompt=_build_information_discovery_prompt,
-    build_brief=_build_information_discovery_brief,
+    build_system_prompt=_build_idea_validation_prompt,
+    build_brief=_build_idea_validation_brief,
 )
 
 
 OUTREACH_ONBOARDING_MODES = {
-    INFORMATION_DISCOVERY_MODE.type: INFORMATION_DISCOVERY_MODE,
+    IDEA_VALIDATION_MODE.type: IDEA_VALIDATION_MODE,
 }
 
 

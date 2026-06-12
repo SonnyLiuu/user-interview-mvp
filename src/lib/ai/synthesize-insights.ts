@@ -14,12 +14,12 @@ import {
   transcripts,
   type InsightContent,
 } from '@/lib/db/schema';
-import type { Foundation, InformationDiscoveryBrief } from '@/lib/backend-types';
+import type { Foundation, IdeaValidationBrief } from '@/lib/backend-types';
 import { generateObject } from '@/lib/ai/provider';
 import {
-  applyInformationDiscoveryBrief,
-  normalizeInformationDiscoveryBrief,
-} from '@/lib/information-discovery-context-core';
+  applyIdeaValidationBrief,
+  normalizeIdeaValidationBrief,
+} from '@/lib/idea-validation-context-core';
 import { getOutreachProjectTypeConfig } from '@/lib/outreach-projects';
 import {
   CURRENT_INSIGHT_SCHEMA_VERSION,
@@ -68,6 +68,7 @@ type EventMetadata = {
 type InsightSourceRecord = {
   id: string;
   source: 'interaction' | 'transcript';
+  personId: string | null;
   personName: string;
   personaType: string | null;
   outreachProjectType: string;
@@ -88,13 +89,14 @@ type InsightDataSet = {
   records: InsightSourceRecord[];
   assumptions: string[];
   foundation: Foundation | null;
-  activeDiscoveryBrief: InformationDiscoveryBrief | null;
+  activeIdeaValidationBrief: IdeaValidationBrief | null;
   contextUpdatedAt: Date | null;
 };
 
 export type TranscriptInsightRecord = {
   id: string;
   source: 'interaction' | 'transcript';
+  personId: string | null;
   personName: string;
   personaType: string | null;
   outreachProjectType: string;
@@ -113,7 +115,7 @@ export type ProjectInsightsState =
       kind: 'empty';
       completedInteractionCount: number;
       transcriptCount: number;
-      activeDiscoveryBrief: InformationDiscoveryBrief | null;
+      activeIdeaValidationBrief: IdeaValidationBrief | null;
     }
   | {
       kind: 'ready';
@@ -121,7 +123,7 @@ export type ProjectInsightsState =
       generatedAt: Date | null;
       callsAnalyzed: number;
       latestDataAt: Date | null;
-      activeDiscoveryBrief: InformationDiscoveryBrief | null;
+      activeIdeaValidationBrief: IdeaValidationBrief | null;
       transcriptInsights: TranscriptInsightRecord[];
     };
 
@@ -302,7 +304,7 @@ function dedupe(values: string[], limit = 12) {
 
 function assumptionsFromFoundation(foundation: Foundation | null): string[] {
   if (!foundation) return [];
-  const activeDiscovery = foundation.activeOutreachProject;
+  const activeIdeaValidation = foundation.activeOutreachProject;
   return dedupe([
     cleanString(foundation.painPoint) ? `The problem is painful: ${cleanString(foundation.painPoint)}` : '',
     cleanString(foundation.targetUser) ? `The target user is correct: ${cleanString(foundation.targetUser)}` : '',
@@ -312,11 +314,11 @@ function assumptionsFromFoundation(foundation: Foundation | null): string[] {
     cleanString(foundation.sharedContext) ? `Shared context is relevant: ${cleanString(foundation.sharedContext)}` : '',
     cleanString(foundation.desiredOutcome) ? `The desired outcome is useful: ${cleanString(foundation.desiredOutcome)}` : '',
     ...cleanList(foundation.learningGoals).map((goal) => `Learning goal: ${goal}`),
-    ...cleanList(foundation.keyAssumptions).map((assumption) => `Information Discovery assumption: ${assumption}`),
-    ...(activeDiscovery ? cleanList(activeDiscovery.assumptionsToTest).map((assumption) => `Information Discovery assumption: ${assumption}`) : []),
-    ...(activeDiscovery ? cleanList(activeDiscovery.learningGoals).map((goal) => `Learning goal: ${goal}`) : []),
+    ...cleanList(foundation.keyAssumptions).map((assumption) => `Idea Validation assumption: ${assumption}`),
+    ...(activeIdeaValidation ? cleanList(activeIdeaValidation.assumptionsToTest).map((assumption) => `Idea Validation assumption: ${assumption}`) : []),
+    ...(activeIdeaValidation ? cleanList(activeIdeaValidation.learningGoals).map((goal) => `Learning goal: ${goal}`) : []),
     ...cleanList(foundation.lowFitSignals).map((signal) => `Low-fit signal to watch: ${signal}`),
-    ...cleanList(foundation.messageBoundaries).map((boundary) => `Keep discovery grounded: ${boundary}`),
+    ...cleanList(foundation.messageBoundaries).map((boundary) => `Keep Idea Validation grounded: ${boundary}`),
   ]);
 }
 
@@ -342,6 +344,7 @@ function buildInteractionRecords(
     return {
       id: row.id,
       source: 'interaction',
+      personId: row.personId,
       personName: row.personName,
       personaType: row.personaType,
       outreachProjectType: outreachConfig.type,
@@ -373,6 +376,7 @@ function buildTranscriptOnlyRecords(
       return {
         id: row.id,
         source: 'transcript',
+        personId: row.personId,
         personName: row.personName,
         personaType: row.personaType,
         outreachProjectType: outreachConfig.type,
@@ -417,7 +421,7 @@ function buildPrompt(data: InsightDataSet) {
   }));
 
   return [
-    'You synthesize customer discovery interview evidence for a founder.',
+    'You synthesize idea validation interview evidence for a founder.',
     `Return only the structured output with schemaVersion ${CURRENT_INSIGHT_SCHEMA_VERSION}. Be specific, skeptical, and grounded in the interview data.`,
     'Do not invent quotes. Supporting quotes must be short direct excerpts from transcript or notes.',
     'If evidence is thin, say so plainly. Prefer practical next questions over generic advice.',
@@ -448,6 +452,7 @@ function buildTranscriptInsights(records: InsightSourceRecord[]): TranscriptInsi
       return {
         id: record.id,
         source: record.source,
+        personId: record.personId,
         personName: record.personName,
         personaType: record.personaType,
         outreachProjectType: record.outreachProjectType,
@@ -482,7 +487,7 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
     [brief],
     [intake],
     [foundationRow],
-    [activeDiscoveryRow],
+    [activeIdeaValidationRow],
   ] = await Promise.all([
     db
       .select({
@@ -554,7 +559,7 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
       .from(outreach_projects)
       .where(and(
         eq(outreach_projects.startup_project_id, projectId),
-        eq(outreach_projects.type, 'information_discovery'),
+        eq(outreach_projects.type, 'idea_validation'),
         eq(outreach_projects.status, 'active'),
       ))
       .orderBy(desc(outreach_projects.updated_at))
@@ -568,9 +573,9 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
     .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0))
     .slice(0, MAX_RECORDS);
   const baseFoundation = foundationRow?.foundation_json as Foundation | null | undefined ?? null;
-  const activeDiscoveryBrief = normalizeInformationDiscoveryBrief(activeDiscoveryRow?.brief) ?? null;
-  const foundation = activeDiscoveryBrief
-    ? applyInformationDiscoveryBrief(baseFoundation, activeDiscoveryBrief)
+  const activeIdeaValidationBrief = normalizeIdeaValidationBrief(activeIdeaValidationRow?.brief) ?? null;
+  const foundation = activeIdeaValidationBrief
+    ? applyIdeaValidationBrief(baseFoundation, activeIdeaValidationBrief)
     : baseFoundation;
   const briefAssumptions = Array.isArray(brief?.assumptions)
     ? brief.assumptions.map((item) => cleanString(item?.assumption)).filter(Boolean)
@@ -592,8 +597,107 @@ async function loadInsightData(projectId: string): Promise<InsightDataSet> {
     records,
     assumptions,
     foundation,
-    activeDiscoveryBrief,
-    contextUpdatedAt: activeDiscoveryRow?.updatedAt ?? null,
+    activeIdeaValidationBrief,
+    contextUpdatedAt: activeIdeaValidationRow?.updatedAt ?? null,
+  };
+}
+
+export async function getProjectTranscriptInsight(
+  projectId: string,
+  source: TranscriptInsightRecord['source'],
+  recordId: string,
+): Promise<TranscriptInsightRecord | null> {
+  if (source === 'interaction') {
+    const [row] = await db
+      .select({
+        id: interactions.id,
+        personId: interactions.person_id,
+        personName: people.name,
+        personaType: people.persona_type,
+        outreachProjectType: outreach_projects.type,
+        notesRaw: interactions.notes_raw,
+        transcriptRaw: interactions.transcript_raw,
+        completedAt: interactions.completed_at,
+        createdAt: interactions.created_at,
+      })
+      .from(interactions)
+      .innerJoin(people, eq(interactions.person_id, people.id))
+      .leftJoin(
+        outreach_projects,
+        eq(outreach_projects.id, sql`coalesce(${interactions.outreach_project_id}, ${people.outreach_project_id})`),
+      )
+      .where(and(eq(people.project_id, projectId), eq(interactions.id, recordId)))
+      .limit(1);
+
+    if (!row) return null;
+
+    const eventRows = row.personId
+      ? await db
+        .select({ metadata: person_events.metadata })
+        .from(person_events)
+        .where(and(eq(person_events.person_id, row.personId), eq(person_events.type, 'desktop_call_session_saved')))
+      : [];
+    const metadata = eventMetadataByInteraction(eventRows).get(row.id) ?? {};
+    const outreachConfig = getOutreachProjectTypeConfig(row.outreachProjectType);
+    const transcript = row.transcriptRaw ?? '';
+    const notes = row.notesRaw ?? '';
+
+    return {
+      id: row.id,
+      source: 'interaction',
+      personId: row.personId,
+      personName: row.personName,
+      personaType: row.personaType,
+      outreachProjectType: outreachConfig.type,
+      outreachProjectLabel: outreachConfig.label,
+      completedAt: row.completedAt ?? row.createdAt,
+      transcript,
+      notes,
+      checkedLabels: cleanList(metadata.checked_labels),
+      checkedCount: metadataNumber(metadata.checked_count),
+      topicCount: metadataNumber(metadata.topic_count),
+      review: analyzeTranscriptTechnique(transcript, notes),
+    };
+  }
+
+  const [row] = await db
+    .select({
+      id: transcripts.id,
+      personId: transcripts.person_id,
+      personName: people.name,
+      personaType: people.persona_type,
+      outreachProjectType: outreach_projects.type,
+      content: transcripts.content,
+      createdAt: transcripts.created_at,
+    })
+    .from(transcripts)
+    .innerJoin(people, eq(transcripts.person_id, people.id))
+    .leftJoin(
+      outreach_projects,
+      eq(outreach_projects.id, sql`coalesce(${transcripts.outreach_project_id}, ${people.outreach_project_id})`),
+    )
+    .where(and(eq(people.project_id, projectId), eq(transcripts.id, recordId)))
+    .limit(1);
+
+  if (!row) return null;
+
+  const outreachConfig = getOutreachProjectTypeConfig(row.outreachProjectType);
+
+  return {
+    id: row.id,
+    source: 'transcript',
+    personId: row.personId,
+    personName: row.personName,
+    personaType: row.personaType,
+    outreachProjectType: outreachConfig.type,
+    outreachProjectLabel: outreachConfig.label,
+    completedAt: row.createdAt,
+    transcript: row.content,
+    notes: '',
+    checkedLabels: [],
+    checkedCount: null,
+    topicCount: null,
+    review: analyzeTranscriptTechnique(row.content),
   };
 }
 
@@ -627,7 +731,7 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
       kind: 'empty',
       completedInteractionCount: data.completedInteractionCount,
       transcriptCount: data.transcriptCount,
-      activeDiscoveryBrief: data.activeDiscoveryBrief,
+      activeIdeaValidationBrief: data.activeIdeaValidationBrief,
     };
   }
 
@@ -655,7 +759,7 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
       generatedAt: current.generated_at,
       callsAnalyzed: current.calls_analyzed ?? data.interviewCount,
       latestDataAt: data.latestDataAt,
-      activeDiscoveryBrief: data.activeDiscoveryBrief,
+      activeIdeaValidationBrief: data.activeIdeaValidationBrief,
       transcriptInsights,
     };
   }
@@ -686,7 +790,7 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
     generatedAt: created.generated_at,
     callsAnalyzed: created.calls_analyzed ?? data.interviewCount,
     latestDataAt: data.latestDataAt,
-    activeDiscoveryBrief: data.activeDiscoveryBrief,
+    activeIdeaValidationBrief: data.activeIdeaValidationBrief,
     transcriptInsights,
   };
 }

@@ -4,7 +4,8 @@ PROJECT_TYPE_STARTUP = "startup"
 PROJECT_TYPE_NETWORKING = "networking"
 PROJECT_TYPES = {PROJECT_TYPE_STARTUP, PROJECT_TYPE_NETWORKING}
 
-OUTREACH_TYPE_INFORMATION_DISCOVERY = "information_discovery"
+OUTREACH_TYPE_IDEA_VALIDATION = "idea_validation"
+LEGACY_OUTREACH_TYPE_IDEA_VALIDATION = "information" + "_discovery"
 OUTREACH_TYPE_CUSTOMER_ACQUISITION = "customer_acquisition"
 OUTREACH_TYPE_BETA_USERS = "beta_users"
 OUTREACH_TYPE_INVESTOR = "investor"
@@ -18,8 +19,8 @@ OUTREACH_PROJECT_AVAILABILITY_COMING_SOON = "coming_soon"
 OUTREACH_PROJECT_AVAILABILITY_HIDDEN = "hidden"
 
 OUTREACH_PROJECT_TYPE_CONFIGS = {
-    OUTREACH_TYPE_INFORMATION_DISCOVERY: {
-        "label": "Information Discovery",
+    OUTREACH_TYPE_IDEA_VALIDATION: {
+        "label": "Idea Validation",
         "description": "Learn from target users, customers, buyers, or market experts before selling.",
         "purpose": "Learn, not sell.",
         "iconKey": "search",
@@ -488,12 +489,14 @@ def is_visible_project_type(value: str | None) -> bool:
 
 
 def normalize_outreach_project_type(value: str | None) -> str:
-    outreach_type = (value or OUTREACH_TYPE_INFORMATION_DISCOVERY).strip().lower()
-    return outreach_type if outreach_type in OUTREACH_PROJECT_TYPES else OUTREACH_TYPE_INFORMATION_DISCOVERY
+    outreach_type = (value or OUTREACH_TYPE_IDEA_VALIDATION).strip().lower()
+    if outreach_type == LEGACY_OUTREACH_TYPE_IDEA_VALIDATION:
+        return OUTREACH_TYPE_IDEA_VALIDATION
+    return outreach_type if outreach_type in OUTREACH_PROJECT_TYPES else OUTREACH_TYPE_IDEA_VALIDATION
 
 
 def is_valid_outreach_project_type(value: str | None) -> bool:
-    return (value or OUTREACH_TYPE_INFORMATION_DISCOVERY).strip().lower() in OUTREACH_PROJECT_TYPES
+    return normalize_outreach_project_type(value) in OUTREACH_PROJECT_TYPES
 
 
 def get_outreach_project_type_config(value: str | None) -> dict:

@@ -157,7 +157,7 @@ class OnboardingServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response["sessionStatus"], "completed")
             onboarding_service.onboarding_repo.insert_foundation.assert_awaited()
             inserted_foundation = onboarding_service.onboarding_repo.insert_foundation.await_args.args[2]
-            self.assertEqual(inserted_foundation["recommendedOutreachProject"]["type"], "information_discovery")
+            self.assertEqual(inserted_foundation["recommendedOutreachProject"]["type"], "idea_validation")
             self.assertNotIn("biggestBottleneck", inserted_foundation)
             self.assertIn("Need to validate urgency", inserted_foundation["recommendedOutreachProject"]["reason"])
             onboarding_service.onboarding_repo.complete_session.assert_awaited()

@@ -121,32 +121,31 @@
 
 .primaryPanel,
 .sidePanel,
-.discoveryPanel,
+.ideaValidationPanel,
 .coachPanel,
 .summaryPanel,
 .themeCard,
-.assumptionRow,
 .transcriptInsightCard,
 .evidenceQualityPanel {
   border: 1px solid rgba(102, 74, 48, 0.14);
   border-radius: 8px;
 }
 
-.discoveryPanel {
+.ideaValidationPanel {
   display: grid;
   gap: 16px;
   padding: 20px;
   background: #fffdf8;
 }
 
-.discoveryHeader {
+.ideaValidationHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
 }
 
-.discoveryTitle {
+.ideaValidationTitle {
   margin: 6px 0 0;
   color: #2d241b;
   font-size: 20px;
@@ -155,7 +154,7 @@
   letter-spacing: 0;
 }
 
-.discoveryLink {
+.ideaValidationLink {
   flex-shrink: 0;
   min-height: 36px;
   display: inline-flex;
@@ -172,21 +171,21 @@
   white-space: nowrap;
 }
 
-.discoveryLink:hover {
+.ideaValidationLink:hover {
   background: #f5e2d0;
 }
 
-.discoveryGrid {
+.ideaValidationGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
-.discoveryWide {
+.ideaValidationWide {
   grid-column: 1 / -1;
 }
 
-.discoveryLabel {
+.ideaValidationLabel {
   display: block;
   color: #756553;
   font-size: 12px;
@@ -194,7 +193,7 @@
   text-transform: uppercase;
 }
 
-.discoveryText {
+.ideaValidationText {
   margin: 7px 0 0;
   color: #4f4032;
   font-size: 14px;
@@ -614,14 +613,18 @@
 
 .assumptionList {
   display: grid;
-  gap: 12px;
+  gap: 1px;
+  background: #e8d9c4;
+  border: 1px solid #e8d9c4;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .assumptionRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
-  gap: 18px;
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
   background: #fffdf8;
 }
 
@@ -633,40 +636,20 @@
 }
 
 .assumptionTitle {
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 520;
   line-height: 1.4;
+  color: #2e2115;
 }
 
 .evidenceList {
   display: grid;
-  gap: 6px;
-  margin: 12px 0 0;
+  gap: 4px;
+  margin: 0;
   padding-left: 18px;
   color: #5f4d3b;
-  font-size: 14px;
-  line-height: 1.45;
-}
-
-.nextQuestion {
-  padding: 12px;
-  border-radius: 8px;
-  background: #f5f1e9;
-}
-
-.nextLabel,
-.confidence {
-  display: block;
-  color: #756553;
-  font-size: 12px;
-  font-weight: 560;
-  text-transform: uppercase;
-}
-
-.nextQuestion p {
-  margin: 7px 0 12px;
-  color: #2d241b;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .transcriptInsightList {
@@ -723,6 +706,7 @@
   min-height: 34px;
   padding: 6px 12px;
   border-top: 1px solid rgba(102, 74, 48, 0.08);
+  text-decoration: none;
 }
 
 .interviewRow:first-child {
@@ -754,6 +738,38 @@
   gap: 14px;
   padding: 18px;
   background: #fffdf8;
+}
+
+.topInsightGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.topInsightCard {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.strongInsight {
+  border: 1px solid rgba(49, 95, 86, 0.22);
+  background: #eef6f3;
+}
+
+.topInsightBody {
+  margin: 0;
+  color: #2d241b;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.topInsightMeta {
+  margin: 0;
+  color: #5f4d3b;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .transcriptInsightHeader {
@@ -975,6 +991,22 @@
   white-space: pre-wrap;
 }
 
+.fullTranscriptText {
+  min-height: 320px;
+  max-height: none;
+  overflow: visible;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid rgba(102, 74, 48, 0.12);
+  border-radius: 8px;
+  color: #332a21;
+  background: #fffdf8;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 /* ── Outreach Insights ─────────────────────────────────────────────────── */
 
 .emptyNote {
@@ -1189,10 +1221,10 @@
 @media (max-width: 900px) {
   .dataHeader,
   .summaryGrid,
+  .topInsightGrid,
   .coachGrid,
   .evidenceQualityGrid,
-  .themeGrid,
-  .assumptionRow {
+  .themeGrid {
     grid-template-columns: 1fr;
   }
 
@@ -1201,7 +1233,7 @@
     flex-direction: column;
   }
 
-  .discoveryGrid {
+  .ideaValidationGrid {
     grid-template-columns: 1fr;
   }
 
@@ -1243,7 +1275,7 @@
     grid-template-columns: 1fr;
   }
 
-  .discoveryHeader {
+  .ideaValidationHeader {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1266,7 +1298,7 @@
     width: fit-content;
   }
 
-  .discoveryLink {
+  .ideaValidationLink {
     width: 100%;
   }
 

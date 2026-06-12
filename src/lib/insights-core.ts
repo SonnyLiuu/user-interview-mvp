@@ -466,7 +466,7 @@ export function normalizeInsightContent(
       mainRisk: cleanString(coach.mainRisk, DEFAULT_MAIN_RISK),
       recurringPatterns: recurringPatterns.length ? recurringPatterns : [{
         pattern: 'Push from opinion into behavior',
-        whyItMatters: 'Founder discovery is most reliable when answers describe what already happened.',
+        whyItMatters: 'Founder learning is most reliable when answers describe what already happened.',
         example: 'The founder asks whether something would help instead of asking what the interviewee did last time.',
         fix: 'Ask for the last specific instance, current workaround, time spent, and consequence.',
       }],

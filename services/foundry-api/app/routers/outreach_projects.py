@@ -14,7 +14,7 @@ from ..services.outreach_projects import (
     create_or_open_outreach_project,
     get_outreach_project_for_user,
     list_outreach_projects_for_startup,
-    process_information_discovery_onboarding,
+    process_idea_validation_onboarding,
     stream_outreach_project_office_hours,
     update_outreach_project_for_user,
 )
@@ -56,7 +56,7 @@ async def outreach_project_onboarding_chat(
     body: OnboardingChatRequest,
     auth: AuthContext = Depends(get_auth_context),
 ):
-    return await process_information_discovery_onboarding(auth.user_id, outreach_project_id, body)
+    return await process_idea_validation_onboarding(auth.user_id, outreach_project_id, body)
 
 
 @router.post("/v1/outreach-projects/{outreach_project_id}/office-hours/chat")

@@ -8,7 +8,7 @@ export type ProjectNavItem = {
 export type ProjectType = 'startup' | 'networking';
 
 export type OutreachProjectType =
-  | 'information_discovery'
+  | 'idea_validation'
   | 'customer_acquisition'
   | 'beta_users'
   | 'investor'
@@ -30,8 +30,8 @@ export type OutreachProjectTypeConfig = {
 
 export type OutreachProjectStatus = 'draft' | 'onboarding' | 'active' | 'paused' | 'completed' | 'archived';
 
-export type InformationDiscoveryBrief = {
-  type?: 'information_discovery';
+export type IdeaValidationBrief = {
+  type?: 'idea_validation';
   label?: string;
   desiredOutcome?: string | null;
   learningGoals?: string[];
@@ -48,7 +48,7 @@ export type OutreachProjectRecord = {
   type: OutreachProjectType;
   name: string;
   status: OutreachProjectStatus;
-  brief_json?: InformationDiscoveryBrief | Record<string, unknown> | null;
+  brief_json?: IdeaValidationBrief | Record<string, unknown> | null;
   onboarding_state_json?: Record<string, unknown> | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -87,11 +87,11 @@ export type StartupFoundation = {
   differentiation?: string | null;
   biggestUnknown?: string | null;
   recommendedOutreachProject?: {
-    type: 'information_discovery';
-    label: 'Information Discovery';
+    type: 'idea_validation';
+    label: 'Idea Validation';
     reason: string;
   } | null;
-  activeOutreachProject?: InformationDiscoveryBrief | null;
+  activeOutreachProject?: IdeaValidationBrief | null;
   desiredOutcome?: string | null;
   learningGoals?: string[];
   keyAssumptions?: string[];

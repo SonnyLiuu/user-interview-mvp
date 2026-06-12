@@ -8,10 +8,10 @@ The new product model is:
 
 - A founder creates or onboards a **Startup** first.
 - Each startup can contain **Outreach Projects**.
-- V1 supports only **Information Discovery** outreach.
+- V1 supports only **Idea Validation** outreach.
 - Other outreach types may be shown, but they are disabled as **coming soon**.
 
-Information Discovery is the product-facing name for the active V1 outreach project type. Its purpose is founder learning: help the founder learn from the market, not sell to it.
+Idea Validation is the product-facing name for the active V1 outreach project type. Its purpose is founder learning: help the founder learn from the market, not sell to it.
 
 V1 may still map these concepts onto the existing project infrastructure internally, but product language should say "startup" and "outreach project."
 
@@ -37,7 +37,7 @@ The experience should feel like a founder context interview, not a form. The ass
 
 ### Outreach project onboarding
 
-After startup onboarding, the product recommends creating an Information Discovery outreach project inside the startup.
+After startup onboarding, the product recommends creating an Idea Validation outreach project inside the startup.
 
 The recommendation should include clear reasoning tied to the founder's current bottleneck, for example:
 
@@ -46,7 +46,7 @@ The recommendation should include clear reasoning tied to the founder's current 
 - The founder has early traction but needs to understand buying or adoption friction.
 - The founder needs better interview targets before building or selling more.
 
-When creating an outreach project, the user first sees outreach type options. Only Information Discovery is selectable in V1.
+When creating an outreach project, the user first sees outreach type options. Only Idea Validation is selectable in V1.
 
 ---
 
@@ -76,7 +76,7 @@ When startup onboarding is finishable:
 
 - Show a finish action.
 - Generate the startup Foundation from onboarding state.
-- Recommend starting an Information Discovery outreach project.
+- Recommend starting an Idea Validation outreach project.
 - Redirect to the startup workspace or Foundation page until the final startup/outreach destination exists.
 
 ---
@@ -109,7 +109,7 @@ When startup onboarding is finishable:
 
 The assistant may ask about stage or traction when:
 
-- The answer would materially change the Information Discovery recommendation.
+- The answer would materially change the Idea Validation recommendation.
 - The founder's bottleneck depends on company maturity.
 - Traction would help identify better interview targets or avoid overly generic advice.
 
@@ -127,7 +127,7 @@ Outreach projects are created inside each startup.
 
 | Type | V1 status | Purpose |
 |---|---|---|
-| Information Discovery | Active | Learn from target users, customers, buyers, or market experts |
+| Idea Validation | Active | Learn from target users, customers, buyers, or market experts |
 | Customer Acquisition | Coming soon | Book qualified demos or sales calls |
 | Finding Beta Users | Coming soon | Find early users or design partners who will shape the product |
 | Investor Outreach | Coming soon | Get meetings with relevant investors |
@@ -146,9 +146,9 @@ type OutreachProjectAvailability = 'active' | 'coming_soon' | 'hidden';
 
 ---
 
-## Information Discovery Outreach Onboarding
+## Idea Validation Outreach Onboarding
 
-Information Discovery is for learning, not selling.
+Idea Validation is for learning, not selling.
 
 ### First question
 
@@ -177,7 +177,7 @@ Follow-up questions should focus on:
 
 ### Positioning rules
 
-Information Discovery outputs should:
+Idea Validation outputs should:
 
 - Support interview targeting, conversation prep, and insight collection.
 - Avoid sales-heavy language by default.
@@ -202,7 +202,7 @@ type StartupStage =
   | 'scaling';
 
 type OutreachProjectType =
-  | 'information_discovery'
+  | 'idea_validation'
   | 'customer_acquisition'
   | 'beta_users'
   | 'investor'
@@ -224,7 +224,7 @@ type StartupOnboardingState = {
   differentiation: string | null;
 
   recommendedOutreachProject: {
-    type: 'information_discovery';
+    type: 'idea_validation';
     reason: string | null;
   } | null;
 
@@ -232,8 +232,8 @@ type StartupOnboardingState = {
   followUpCounts: Record<string, number>;
 };
 
-type CustomerDiscoveryOutreachState = {
-  outreachProjectType: 'information_discovery';
+type IdeaValidationOutreachState = {
+  outreachProjectType: 'idea_validation';
   desiredOutcome: string | null;
   learningGoals: string[];
   targetPeople: string[];
@@ -259,7 +259,7 @@ Recommended stronger threshold:
 
 - `startupName`, `ideaSummary`, `targetUser`, `painPoint`, and `biggestBottleneck` should be solid before recommending an outreach project.
 
-Information Discovery onboarding is finishable when:
+Idea Validation onboarding is finishable when:
 
 - `desiredOutcome` is not missing.
 - The project has enough context to produce interview targeting and learning-oriented outreach guidance.
@@ -280,7 +280,7 @@ Outreach projects are persisted separately from startup `projects`.
 |---|---|---|
 | id | uuid | |
 | startup_project_id | uuid | References the startup project |
-| type | text | `information_discovery`, `customer_acquisition`, `beta_users`, `investor`, `partnership`, `recruiting`, `advisor`, or `press_creator` |
+| type | text | `idea_validation`, `customer_acquisition`, `beta_users`, `investor`, `partnership`, `recruiting`, `advisor`, or `press_creator` |
 | name | text | Human-readable outreach project name |
 | status | text | `draft`, `onboarding`, `active`, `paused`, `completed`, or `archived` |
 | brief_json | jsonb | Generated outreach project brief |
@@ -288,7 +288,7 @@ Outreach projects are persisted separately from startup `projects`.
 | created_at | timestamp | |
 | updated_at | timestamp | |
 
-V1 enforces one non-archived `information_discovery` outreach project per startup.
+V1 enforces one non-archived `idea_validation` outreach project per startup.
 
 ### `onboarding_sessions`
 
@@ -386,7 +386,7 @@ Generates the next question and 3-5 choices for a given slot.
 {
   targetSlot: string;
   recentMessages: Message[];
-  onboardingState: StartupOnboardingState | CustomerDiscoveryOutreachState;
+  onboardingState: StartupOnboardingState | IdeaValidationOutreachState;
 }
 
 // Output
@@ -417,7 +417,7 @@ Interprets typed text for a slot. Selected suggestions may be included as suppor
   targetSlot: string;
   customText: string;
   recentMessages: Message[];
-  onboardingState: StartupOnboardingState | CustomerDiscoveryOutreachState;
+  onboardingState: StartupOnboardingState | IdeaValidationOutreachState;
 }
 
 // Output
@@ -453,8 +453,8 @@ Generates the startup Foundation after startup onboarding completes.
     traction?: string[];
     differentiation?: string | null;
     recommendedOutreachProject: {
-      type: 'information_discovery';
-      label: 'Information Discovery';
+      type: 'idea_validation';
+      label: 'Idea Validation';
       reason: string;
     };
   };
@@ -474,8 +474,8 @@ This may be implemented as a separate AI task or as part of Foundation generatio
 
 // Output
 {
-  type: 'information_discovery';
-  label: 'Information Discovery';
+  type: 'idea_validation';
+  label: 'Idea Validation';
   reason: string;
 }
 ```
@@ -524,7 +524,7 @@ On failure: regenerate once. If still invalid, use the static fallback turn for 
 
 1. Mark startup onboarding session complete.
 2. Run `generateFoundationFromOnboarding`.
-3. Generate or attach an Information Discovery recommendation.
+3. Generate or attach an Idea Validation recommendation.
 4. Save Foundation.
 5. Redirect to the existing Foundation/workspace destination until the startup/outreach route is implemented.
 
@@ -532,10 +532,10 @@ On failure: regenerate once. If still invalid, use the static fallback turn for 
 
 1. Load outreach type registry.
 2. Show active and coming-soon types.
-3. Allow selection only for `information_discovery`.
+3. Allow selection only for `idea_validation`.
 4. Reject or disable coming-soon types.
 
-### Information Discovery kickoff
+### Idea Validation kickoff
 
 1. Ask: "What outcome do you want from this outreach?"
 2. Save user response.
@@ -603,7 +603,7 @@ services/foundry-api/app/
 
 Expected implementation direction:
 
-- Rename product-facing copy from project/startup discovery to startup and Information Discovery.
+- Rename product-facing copy from startup validation to startup and Idea Validation.
 - Extend startup slots in `project_modes.py`.
 - Add outreach type registry metadata with `active`, `coming_soon`, and `hidden`.
 - Keep coming-soon outreach types non-creatable.
@@ -619,11 +619,11 @@ Expected implementation direction:
 - Stage and traction are extracted when present.
 - Stage and traction are skipped when absent and not needed.
 - Biggest bottleneck is captured before completion or confidently inferred from prior context.
-- Completion creates a startup Foundation with an Information Discovery recommendation.
+- Completion creates a startup Foundation with an Idea Validation recommendation.
 
 ### Outreach type selection
 
-- Information Discovery is selectable.
+- Idea Validation is selectable.
 - Customer Acquisition is visible as coming soon and cannot be selected.
 - Finding Beta Users is visible as coming soon and cannot be selected.
 - Investor Outreach is visible as coming soon and cannot be selected.
@@ -632,7 +632,7 @@ Expected implementation direction:
 - Advisor Outreach is visible as coming soon and cannot be selected.
 - Press / Creator Outreach is visible as coming soon and cannot be selected.
 
-### Information Discovery
+### Idea Validation
 
 - First question asks what outcome the founder wants from outreach.
 - Follow-up turns focus on learning goals, target people, assumptions, and unknowns.
@@ -662,10 +662,10 @@ Expected implementation direction:
 ## Not Built Yet
 
 - [ ] Startup-specific slots: `startupName`, `startupStage`, `traction`, `biggestBottleneck`
-- [ ] Information Discovery as the active outreach project type
+- [ ] Idea Validation as the active outreach project type
 - [ ] Outreach type selection UI with coming-soon disabled options
 - [ ] Startup Foundation recommendation for first outreach project
-- [ ] Information Discovery onboarding flow
+- [ ] Idea Validation onboarding flow
 - [ ] Separate startup and outreach project data model
 - [ ] Re-run or refine onboarding after completion
 - [ ] Live Foundation preview during onboarding
@@ -679,7 +679,7 @@ Expected implementation direction:
 
 ## Assumptions
 
-- "Information Discovery" is the V1 active name.
+- "Idea Validation" is the V1 active name.
 - Coming-soon outreach types are visible but non-creatable in V1.
 - Startup and outreach project concepts may initially reuse existing project infrastructure.
 - The spec describes the intended pivot and should not preserve the old single-project mental model.

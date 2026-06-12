@@ -266,7 +266,7 @@ async def generate_foundation(messages: list[dict], state: dict, project_type: s
         task = "Generate a startup Foundation document based on the onboarding conversation and collected state.\n\n"
         extra_rules = (
             "- startupName should preserve the founder's chosen startup, product, company, or working name.\n"
-            "- recommendedOutreachProject must always recommend Information Discovery.\n"
+            "- recommendedOutreachProject must always recommend Idea Validation.\n"
             "- Use the collected state's biggestBottleneck only to write recommendedOutreachProject.reason.\n"
             "- Do not include biggestBottleneck as a Foundation field; it is only recommendation context.\n"
             "- recommendedOutreachProject.reason must explain why learning-oriented outreach is valuable now.\n"
@@ -277,7 +277,7 @@ async def generate_foundation(messages: list[dict], state: dict, project_type: s
             '"painPoint":"string","valueProp":"string","idealPeopleTypes":["string"],'
             '"startupStage":"string|null","traction":["string"],'
             '"differentiation":"string|null","recommendedOutreachProject":'
-            '{"type":"information_discovery","label":"Information Discovery","reason":"string"}}}'
+            '{"type":"idea_validation","label":"Idea Validation","reason":"string"}}}'
         )
     prompt = (
         task
@@ -323,7 +323,7 @@ async def generate_call_brief(person: dict, project_context: dict) -> dict:
         if is_networking
         else
         (
-            "You are helping a first-time founder prepare for a customer discovery call. "
+            "You are helping a first-time founder prepare for a idea validation call. "
             "This is not sales enablement. The goal is founder learning: sharper hypotheses, "
             "better market judgment, and clearer next steps.\n\n"
         )
@@ -372,7 +372,7 @@ async def generate_outreach_message(person: dict, project_context: dict) -> dict
             "Generate a short LinkedIn-native outreach message, less than 300 characters. "
             "Use the sender background, outreach goal, required mentions, desired response, tone, and composition rules first. "
             "Use recipient background only as optional personalization. Include at most one recipient-specific detail unless the project explicitly asks for deep personalization. "
-            "Do not summarize the recipient's career. Do not invent facts. Do not frame this as customer discovery, startup validation, a pitch, or a 20 minute call unless explicitly requested. "
+            "Do not summarize the recipient's career. Do not invent facts. Do not frame this as idea validation, startup validation, a pitch, or a 20 minute call unless explicitly requested. "
             "Do not mention selectivity stats like '6 out of 45' unless they appear in Required mentions. "
             "Do not say 'your talk' unless the recipient context clearly says they are a speaker or have a talk; for organizers, refer to the workshop or their organizing role instead.\n\n"
             "OUTREACH PROJECT CONTEXT:\n"

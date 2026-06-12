@@ -13,12 +13,12 @@ function cleanText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function discoveryRecommendation(foundation: Foundation) {
+function ideaValidationRecommendation(foundation: Foundation) {
   const rawRecommendation = foundation.recommendedOutreachProject;
   const recommendation = rawRecommendation && typeof rawRecommendation === 'object'
     ? rawRecommendation
     : null;
-  const label = cleanText(recommendation?.label) || 'Information Discovery';
+  const label = cleanText(recommendation?.label) || 'Idea Validation';
   const reason = cleanText(recommendation?.reason)
     || 'This is a good first outreach project because it helps turn the startup context into focused learning conversations.';
   return { label, reason };
@@ -31,10 +31,10 @@ function outreachProjectActionLabel(project?: OutreachProjectRecord) {
   return 'Open project';
 }
 
-function isFullyCreatedInformationDiscoveryProject(project?: OutreachProjectRecord) {
+function isFullyCreatedIdeaValidationProject(project?: OutreachProjectRecord) {
   return Boolean(
     project
-    && project.type === 'information_discovery'
+    && project.type === 'idea_validation'
     && project.status !== 'archived'
     && project.brief_json,
   );
@@ -51,12 +51,12 @@ function StartupRecommendationPanel({
   startupPath: string;
   startupProjectId: string;
 }) {
-  const recommendation = discoveryRecommendation(foundation);
-  const informationDiscoveryProject = outreachProjects.find((project) => (
-    project.type === 'information_discovery' && project.status !== 'archived'
+  const recommendation = ideaValidationRecommendation(foundation);
+  const ideaValidationProject = outreachProjects.find((project) => (
+    project.type === 'idea_validation' && project.status !== 'archived'
   ));
-  const showInformationDiscoveryRecommendation = !isFullyCreatedInformationDiscoveryProject(informationDiscoveryProject);
-  const projectActionLabel = outreachProjectActionLabel(informationDiscoveryProject);
+  const showIdeaValidationRecommendation = !isFullyCreatedIdeaValidationProject(ideaValidationProject);
+  const projectActionLabel = outreachProjectActionLabel(ideaValidationProject);
   const alerts: RecommendationBandAlert[] = [
     {
       id: 'ongoing-advisor-first-run',
@@ -69,7 +69,7 @@ function StartupRecommendationPanel({
     },
   ];
 
-  if (showInformationDiscoveryRecommendation) {
+  if (showIdeaValidationRecommendation) {
     alerts.push({
       id: 'recommended-outreach-project',
       eyebrow: 'Recommended first outreach project',
@@ -79,8 +79,8 @@ function StartupRecommendationPanel({
       outreachAction: {
         startupProjectId,
         startupPath,
-        type: 'information_discovery',
-        projectId: informationDiscoveryProject?.id,
+        type: 'idea_validation',
+        projectId: ideaValidationProject?.id,
       },
     });
   }

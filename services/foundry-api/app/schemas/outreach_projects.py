@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 OutreachProjectType = Literal[
-    "information_discovery",
+    "idea_validation",
     "customer_acquisition",
     "beta_users",
     "investor",
@@ -41,7 +41,7 @@ class OutreachProjectRecord(BaseModel):
 class CreateOutreachProjectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type: OutreachProjectType = "information_discovery"
+    type: OutreachProjectType = "idea_validation"
     name: str | None = Field(default=None, max_length=120)
 
 

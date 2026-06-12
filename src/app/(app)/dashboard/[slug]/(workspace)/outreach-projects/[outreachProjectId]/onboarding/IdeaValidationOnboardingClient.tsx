@@ -3,9 +3,9 @@
 import { useRouter } from 'next/navigation';
 import OutreachOfficeHoursChat from '@/components/onboarding/OutreachOfficeHoursChat';
 import type { OutreachProjectStatus } from '@/lib/backend-types';
-import styles from './information-discovery-onboarding.module.css';
+import styles from './idea-validation-onboarding.module.css';
 
-export default function InformationDiscoveryOnboardingClient({
+export default function IdeaValidationOnboardingClient({
   outreachProjectId,
   startupPath,
   initialStatus,
@@ -32,11 +32,11 @@ export default function InformationDiscoveryOnboardingClient({
           ←
         </button>
         <div className={styles.headerCenter}>
-          <p className={styles.eyebrow}>Information Discovery</p>
+          <p className={styles.eyebrow}>Idea Validation</p>
           <h1 className={styles.title}>Set up the learning brief.</h1>
         </div>
       </header>
-      <section className={styles.chatShell} aria-label="Information Discovery onboarding">
+      <section className={styles.chatShell} aria-label="Idea Validation onboarding">
         {initialStatus === 'active' ? (
           <div className={styles.donePanel}>
             <p className={styles.doneEyebrow}>Brief already generated</p>

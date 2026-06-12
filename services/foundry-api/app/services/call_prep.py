@@ -12,7 +12,7 @@ from ..repositories import call_prep as call_prep_repo
 from ..repositories import foundations as foundation_repo
 from ..repositories import outreach_projects as outreach_project_repo
 from ..repositories import people as people_repo
-from .project_context import apply_information_discovery_brief, foundation_to_project_context, normalize_json
+from .project_context import apply_idea_validation_brief, foundation_to_project_context, normalize_json
 
 
 FALLBACK_CALL_BRIEF = {
@@ -80,7 +80,7 @@ async def refresh_call_brief(user_id: str, person_id: str):
         raw_foundation = foundation_row["foundation_json"] if foundation_row else None
         active_outreach = None
         if person["project_type"] == "startup":
-            active_outreach = await outreach_project_repo.find_active_information_discovery(conn, person["project_id"])
+            active_outreach = await outreach_project_repo.find_active_idea_validation(conn, person["project_id"])
 
     foundation = normalize_json(raw_foundation)
     if not isinstance(foundation, dict):
@@ -91,7 +91,7 @@ async def refresh_call_brief(user_id: str, person_id: str):
 
     outreach_brief = normalize_json(active_outreach["brief_json"]) if active_outreach and active_outreach["brief_json"] else None
     project_context = foundation_to_project_context(
-        apply_information_discovery_brief(foundation, outreach_brief if isinstance(outreach_brief, dict) else None),
+        apply_idea_validation_brief(foundation, outreach_brief if isinstance(outreach_brief, dict) else None),
         person["project_type"],
     )
     content = normalize_call_brief_content(

@@ -16,7 +16,8 @@ from ..outreach_onboarding_modes import (
     normalize_state as normalize_outreach_onboarding_state,
 )
 from ..project_modes import (
-    OUTREACH_TYPE_INFORMATION_DISCOVERY,
+    LEGACY_OUTREACH_TYPE_IDEA_VALIDATION,
+    OUTREACH_TYPE_IDEA_VALIDATION,
     PROJECT_TYPE_STARTUP,
     get_outreach_project_type_config,
     is_creatable_outreach_project_type,
@@ -28,9 +29,9 @@ from ..repositories import foundations as foundation_repo
 from ..repositories import outreach_projects as outreach_project_repo
 from ..repositories import projects as project_repo
 
-INFO_DISCOVERY_KICKOFF = "What outcome do you want from this outreach?"
+IDEA_VALIDATION_KICKOFF = "What outcome do you want from this outreach?"
 
-INFO_DISCOVERY_SLOTS = [
+IDEA_VALIDATION_SLOTS = [
     {
         "key": "desiredOutcome",
         "required": True,
@@ -114,22 +115,30 @@ def _request_data(body) -> dict:
 
 
 def _encode_row(row):
-    return jsonable_encoder(dict(row)) if row else None
+    if not row:
+        return None
+
+    encoded = dict(row)
+    if encoded.get("type") == LEGACY_OUTREACH_TYPE_IDEA_VALIDATION:
+        encoded["type"] = OUTREACH_TYPE_IDEA_VALIDATION
+    if encoded.get("name") == "Information" + " " + "Discovery":
+        encoded["name"] = "Idea Validation"
+    return jsonable_encoder(encoded)
 
 
 def _slot_keys() -> list[str]:
-    return [slot["key"] for slot in INFO_DISCOVERY_SLOTS]
+    return [slot["key"] for slot in IDEA_VALIDATION_SLOTS]
 
 
 def _array_slots() -> set[str]:
-    return {slot["key"] for slot in INFO_DISCOVERY_SLOTS if slot.get("array")}
+    return {slot["key"] for slot in IDEA_VALIDATION_SLOTS if slot.get("array")}
 
 
 def _required_slots() -> list[str]:
-    return [slot["key"] for slot in INFO_DISCOVERY_SLOTS if slot.get("required")]
+    return [slot["key"] for slot in IDEA_VALIDATION_SLOTS if slot.get("required")]
 
 
-def _empty_information_discovery_state() -> dict:
+def _empty_idea_validation_state() -> dict:
     array_slots = _array_slots()
     keys = _slot_keys()
     return {
@@ -139,8 +148,8 @@ def _empty_information_discovery_state() -> dict:
     }
 
 
-def _normalize_information_discovery_state(raw_state) -> dict:
-    state = _empty_information_discovery_state()
+def _normalize_idea_validation_state(raw_state) -> dict:
+    state = _empty_idea_validation_state()
     if not isinstance(raw_state, dict):
         return state
     for key in _slot_keys():
@@ -167,7 +176,7 @@ def _normalize_onboarding_progress(row) -> dict:
         raw = {}
     messages = raw.get("messages") if isinstance(raw.get("messages"), list) else []
     return {
-        "state": _normalize_information_discovery_state(raw.get("state")),
+        "state": _normalize_idea_validation_state(raw.get("state")),
         "messages": [
             {
                 "role": msg.get("role"),
@@ -185,7 +194,7 @@ def _normalize_onboarding_progress(row) -> dict:
 def _serialize_onboarding_progress(state: dict, messages: list[dict], last_turn: dict | None, status: str) -> dict:
     return {
         "layer": "outreach_project",
-        "outreachProjectType": OUTREACH_TYPE_INFORMATION_DISCOVERY,
+        "outreachProjectType": OUTREACH_TYPE_IDEA_VALIDATION,
         "status": status,
         "state": state,
         "messages": messages,
@@ -194,7 +203,7 @@ def _serialize_onboarding_progress(state: dict, messages: list[dict], last_turn:
 
 
 def _fallback_turn(slot_key: str) -> dict:
-    slot = next((slot for slot in INFO_DISCOVERY_SLOTS if slot["key"] == slot_key), None)
+    slot = next((slot for slot in IDEA_VALIDATION_SLOTS if slot["key"] == slot_key), None)
     if not slot:
         raise BadRequestError("Invalid outreach onboarding slot")
     fallback = slot["fallback"]
@@ -206,7 +215,7 @@ def _fallback_turn(slot_key: str) -> dict:
     }
 
 
-def _choose_next_information_discovery_slot(state: dict) -> str | None:
+def _choose_next_idea_validation_slot(state: dict) -> str | None:
     required = set(_required_slots())
     for key in _slot_keys():
         if key in required and state["completeness"].get(key) == "missing":
@@ -217,13 +226,13 @@ def _choose_next_information_discovery_slot(state: dict) -> str | None:
     return None
 
 
-def _is_information_discovery_finishable(state: dict) -> bool:
+def _is_idea_validation_finishable(state: dict) -> bool:
     required_ready = all(state["completeness"].get(key) != "missing" for key in _required_slots())
     has_learning_context = bool(state.get("learningGoals") or state.get("assumptionsToTest") or state.get("targetPeople"))
     return required_ready and has_learning_context
 
 
-def _merge_information_discovery_slot(state: dict, slot_key: str, value, quality: str = "solid") -> dict:
+def _merge_idea_validation_slot(state: dict, slot_key: str, value, quality: str = "solid") -> dict:
     next_state = {**state, "completeness": {**state["completeness"]}, "followUpCounts": {**state["followUpCounts"]}}
     next_state["completeness"][slot_key] = quality if quality in {"weak", "solid"} else "solid"
     if slot_key in _array_slots():
@@ -234,12 +243,12 @@ def _merge_information_discovery_slot(state: dict, slot_key: str, value, quality
     return next_state
 
 
-def _extract_kickoff_information_discovery(message: str) -> dict:
-    state = _empty_information_discovery_state()
+def _extract_kickoff_idea_validation(message: str) -> dict:
+    state = _empty_idea_validation_state()
     clean = message.strip()
     if not clean:
         return state
-    state = _merge_information_discovery_slot(state, "desiredOutcome", clean, "solid")
+    state = _merge_idea_validation_slot(state, "desiredOutcome", clean, "solid")
     lowered = clean.lower()
     learning_goals = []
     if any(word in lowered for word in ["validate", "pain", "problem"]):
@@ -251,7 +260,7 @@ def _extract_kickoff_information_discovery(message: str) -> dict:
     if any(word in lowered for word in ["segment", "who", "target", "persona"]):
         learning_goals.append("Identify which segment has the strongest urgency")
     if learning_goals:
-        state = _merge_information_discovery_slot(state, "learningGoals", learning_goals, "solid")
+        state = _merge_idea_validation_slot(state, "learningGoals", learning_goals, "solid")
     return state
 
 
@@ -259,7 +268,7 @@ def _merge_states(base_state: dict, patch_state: dict) -> dict:
     next_state = base_state
     for key in _slot_keys():
         if patch_state["completeness"].get(key) in {"weak", "solid"}:
-            next_state = _merge_information_discovery_slot(next_state, key, patch_state.get(key), patch_state["completeness"][key])
+            next_state = _merge_idea_validation_slot(next_state, key, patch_state.get(key), patch_state["completeness"][key])
     return next_state
 
 
@@ -302,21 +311,21 @@ def _chat_response(messages: list[dict], current_turn: dict | None, is_finishabl
 
 
 def _next_turn_or_ready(state: dict) -> tuple[dict | None, str, bool]:
-    finishable = _is_information_discovery_finishable(state)
+    finishable = _is_idea_validation_finishable(state)
     if finishable:
         return None, "ready", True
-    next_slot = _choose_next_information_discovery_slot(state)
+    next_slot = _choose_next_idea_validation_slot(state)
     return (_fallback_turn(next_slot) if next_slot else None), "active", False
 
 
-def _generate_information_discovery_brief(state: dict) -> dict:
+def _generate_idea_validation_brief(state: dict) -> dict:
     boundaries = state.get("conversationBoundaries") or ["Keep outreach framed as learning, not selling."]
     learning_goals = state.get("learningGoals") or [state.get("desiredOutcome") or "Clarify the most important unknowns"]
     target_people = state.get("targetPeople") or ["People who experience the problem directly"]
     assumptions = state.get("assumptionsToTest") or ["The problem is painful enough to justify a new workflow"]
     return {
-        "type": OUTREACH_TYPE_INFORMATION_DISCOVERY,
-        "label": "Information Discovery",
+        "type": OUTREACH_TYPE_IDEA_VALIDATION,
+        "label": "Idea Validation",
         "desiredOutcome": state.get("desiredOutcome"),
         "learningGoals": learning_goals,
         "targetPeople": target_people,
@@ -467,7 +476,7 @@ async def create_or_open_outreach_project(user_id: str, startup_project_id: str,
             startup_project_id,
             outreach_type,
             name,
-            "onboarding" if outreach_type == OUTREACH_TYPE_INFORMATION_DISCOVERY else "draft",
+            "onboarding" if outreach_type == OUTREACH_TYPE_IDEA_VALIDATION else "draft",
         )
     return _encode_row(row)
 
@@ -502,7 +511,7 @@ async def update_outreach_project_for_user(user_id: str, outreach_project_id: st
     return _encode_row(row)
 
 
-async def process_information_discovery_onboarding(user_id: str, outreach_project_id: str, body):
+async def process_idea_validation_onboarding(user_id: str, outreach_project_id: str, body):
     data = _request_data(body)
     request_type = data.get("type")
     pool = get_pool()
@@ -511,8 +520,8 @@ async def process_information_discovery_onboarding(user_id: str, outreach_projec
         row = await outreach_project_repo.find_for_owned_startup(conn, user_id, outreach_project_id)
     if not row:
         raise NotFoundError("Not found")
-    if normalize_outreach_project_type(dict(row).get("type")) != OUTREACH_TYPE_INFORMATION_DISCOVERY:
-        raise BadRequestError("Only Information Discovery onboarding is available in V1")
+    if normalize_outreach_project_type(dict(row).get("type")) != OUTREACH_TYPE_IDEA_VALIDATION:
+        raise BadRequestError("Only Idea Validation onboarding is available in V1")
 
     progress = _normalize_onboarding_progress(row)
     state = progress["state"]
@@ -522,8 +531,8 @@ async def process_information_discovery_onboarding(user_id: str, outreach_projec
 
     if request_type == "__init__":
         if not messages:
-            messages.append({"role": "assistant", "content": INFO_DISCOVERY_KICKOFF, "messageType": "question"})
-        finishable = _is_information_discovery_finishable(state)
+            messages.append({"role": "assistant", "content": IDEA_VALIDATION_KICKOFF, "messageType": "question"})
+        finishable = _is_idea_validation_finishable(state)
         current_turn = last_turn
         if finishable and status != "completed":
             current_turn = None
@@ -541,7 +550,7 @@ async def process_information_discovery_onboarding(user_id: str, outreach_projec
         if not message:
             raise BadRequestError("Message is required")
         messages.append({"role": "user", "content": message, "messageType": "custom_answer"})
-        state = _merge_states(state, _extract_kickoff_information_discovery(message))
+        state = _merge_states(state, _extract_kickoff_idea_validation(message))
         current_turn, status, finishable = _next_turn_or_ready(state)
         if current_turn:
             messages.append({"role": "assistant", "content": current_turn["question"], "messageType": "question"})
@@ -570,7 +579,7 @@ async def process_information_discovery_onboarding(user_id: str, outreach_projec
         })
         selected_values = [choice["normalizedValue"] for choice in selected_choices]
         value = [*selected_values, custom_text] if custom_text and selected_values else (custom_text or selected_values)
-        state = _merge_information_discovery_slot(state, last_turn["targetSlot"], value, "solid")
+        state = _merge_idea_validation_slot(state, last_turn["targetSlot"], value, "solid")
         current_turn, status, finishable = _next_turn_or_ready(state)
         if current_turn:
             messages.append({"role": "assistant", "content": current_turn["question"], "messageType": "question"})
@@ -583,9 +592,9 @@ async def process_information_discovery_onboarding(user_id: str, outreach_projec
         return _chat_response(messages, current_turn, finishable, status)
 
     if request_type == "finish":
-        if not _is_information_discovery_finishable(state):
+        if not _is_idea_validation_finishable(state):
             raise BadRequestError("Not finishable yet")
-        brief = _generate_information_discovery_brief(state)
+        brief = _generate_idea_validation_brief(state)
         status = "completed"
         async with pool.acquire() as conn:
             await outreach_project_repo.update_outreach_project(

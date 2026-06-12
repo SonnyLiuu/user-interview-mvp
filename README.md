@@ -1,6 +1,6 @@
 # User Interview MVP
 
-A discovery workspace for early-stage founders. The app turns a rough startup idea into a structured project foundation, helps evaluate people to talk to, generates call prep and outreach drafts, and tracks conversations through a lightweight CRM board.
+An idea validation workspace for early-stage founders. The app turns a rough startup idea into a structured project foundation, helps evaluate people to talk to, generates call prep and outreach drafts, and tracks conversations through a lightweight CRM board.
 
 The product is built around one loop:
 

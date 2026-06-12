@@ -227,11 +227,11 @@ export const outreach_projects = pgTable('outreach_projects', {
 }, (table) => [
   index('outreach_projects_startup_created_at_idx').on(table.startup_project_id, table.created_at),
   index('outreach_projects_startup_status_idx').on(table.startup_project_id, table.status),
-  uniqueIndex('outreach_projects_one_active_information_discovery_idx')
+  uniqueIndex('outreach_projects_one_active_idea_validation_idx')
     .on(table.startup_project_id, table.type)
-    .where(sql`${table.type} = 'information_discovery' and ${table.status} <> 'archived'`),
+    .where(sql`${table.type} = 'idea_validation' and ${table.status} <> 'archived'`),
   check('outreach_projects_type_check', sql`${table.type} in (
-    'information_discovery',
+    'idea_validation',
     'customer_acquisition',
     'beta_users',
     'investor',

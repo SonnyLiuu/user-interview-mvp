@@ -14,7 +14,7 @@ function ProjectBriefMockup() {
       <div className={styles.mockupSection}>
         <span className={styles.mockupLabel}>Idea summary</span>
         <p className={styles.mockupRow} style={{ display: 'block', lineHeight: 1.5 }}>
-          AI-assisted discovery for early-stage founders. Enters before outreach.
+          AI-assisted idea validation for early-stage founders. Enters before outreach.
         </p>
       </div>
       <div className={styles.mockupSection}>
@@ -86,20 +86,20 @@ function ConversationPrepMockup() {
       <div className={styles.mockupSection}>
         <span className={styles.mockupLabel}>Outreach draft</span>
         <p className={styles.mockupRow} style={{ display: 'block', lineHeight: 1.5 }}>
-          Hi Sarah,<br />I&apos;m exploring how early-stage founders manage discovery. Your experience at Stripe seems directly relevant. Would you be open to a 15-min call?
+          Hi Sarah,<br />I&apos;m exploring how early-stage founders manage idea validation. Your experience at Stripe seems directly relevant. Would you be open to a 15-min call?
         </p>
       </div>
       <div className={styles.mockupSection}>
         <span className={styles.mockupLabel}>Call objective</span>
         <p className={styles.mockupRow} style={{ display: 'block', lineHeight: 1.5 }}>
-          Understand her discovery workflow and pain points with current tools.
+          Understand her validation workflow and pain points with current tools.
         </p>
       </div>
       <div className={styles.mockupSection}>
         <span className={styles.mockupLabel}>Top questions</span>
         <div className={`${styles.mockupRow} ${styles.mockupRowMuted}`} style={{ alignItems: 'flex-start' }}>
           <span style={{ flexShrink: 0 }}>1.</span>
-          <span>Walk me through your last discovery sprint. What tools did you use?</span>
+          <span>Walk me through your last validation sprint. What tools did you use?</span>
         </div>
         <div className={`${styles.mockupRow} ${styles.mockupRowMuted}`} style={{ alignItems: 'flex-start' }}>
           <span style={{ flexShrink: 0 }}>2.</span>
@@ -122,7 +122,7 @@ function ConversationInsightsMockup() {
       <div className={styles.mockupSection}>
         <span className={styles.mockupLabel}>What you learned</span>
         <p className={styles.mockupRow} style={{ display: 'block', lineHeight: 1.5 }}>
-          Discovery workflow is manual and fragmented. No single tool handles both outreach and synthesis.
+          Validation workflow is manual and fragmented. No single tool handles both outreach and synthesis.
         </p>
       </div>
       <div className={styles.mockupSection}>

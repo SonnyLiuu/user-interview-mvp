@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..project_modes import LEGACY_OUTREACH_TYPE_IDEA_VALIDATION, OUTREACH_TYPE_IDEA_VALIDATION
+
 
 async def list_for_startup(conn, startup_project_id: str):
     return await conn.fetch(
@@ -46,33 +48,38 @@ async def find_for_owned_startup(conn, user_id: str, outreach_project_id: str):
 
 
 async def find_non_archived_by_type(conn, startup_project_id: str, outreach_type: str):
+    type_values = [outreach_type]
+    if outreach_type == OUTREACH_TYPE_IDEA_VALIDATION:
+        type_values.append(LEGACY_OUTREACH_TYPE_IDEA_VALIDATION)
+
     return await conn.fetchrow(
         """
         select *
         from outreach_projects
         where startup_project_id = $1
-          and type = $2
+          and type = any($2::text[])
           and status <> 'archived'
         order by created_at desc
         limit 1
         """,
         startup_project_id,
-        outreach_type,
+        type_values,
     )
 
 
-async def find_active_information_discovery(conn, startup_project_id: str):
+async def find_active_idea_validation(conn, startup_project_id: str):
     return await conn.fetchrow(
         """
         select *
         from outreach_projects
         where startup_project_id = $1
-          and type = 'information_discovery'
+          and type = any($2::text[])
           and status = 'active'
         order by updated_at desc
         limit 1
         """,
         startup_project_id,
+        [OUTREACH_TYPE_IDEA_VALIDATION, LEGACY_OUTREACH_TYPE_IDEA_VALIDATION],
     )
 
 

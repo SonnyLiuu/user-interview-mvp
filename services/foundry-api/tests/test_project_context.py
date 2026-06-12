@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.project_context import apply_information_discovery_brief, foundation_to_project_context
+from app.services.project_context import apply_idea_validation_brief, foundation_to_project_context
 
 
 class ProjectContextTests(unittest.TestCase):
-    def test_information_discovery_brief_enriches_startup_context(self):
+    def test_idea_validation_brief_enriches_startup_context(self):
         foundation = {
             "summary": "AI workflow tool",
             "targetUser": "Operations leaders",
@@ -23,7 +23,7 @@ class ProjectContextTests(unittest.TestCase):
             "starterAsk": "Would you share how reporting works today?",
         }
 
-        enriched = apply_information_discovery_brief(foundation, brief)
+        enriched = apply_idea_validation_brief(foundation, brief)
         context = foundation_to_project_context(enriched, "startup")
 
         self.assertEqual(context["ideal_people_types"], ["RevOps leaders", "Finance operators"])

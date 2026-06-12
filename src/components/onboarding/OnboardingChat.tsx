@@ -64,7 +64,7 @@ type OnboardingChatProps = {
   projectType: ProjectType;
   onComplete: () => void;
   endpointPath?: string;
-  variant?: 'startup' | 'networking' | 'information_discovery';
+  variant?: 'startup' | 'networking' | 'idea_validation';
 };
 
 type Phase = 'kickoff' | 'choices' | 'finishing' | 'done';
@@ -87,7 +87,7 @@ const NETWORKING_FINISHING_STATUSES = [
   'Polishing the details',
 ];
 
-const INFORMATION_DISCOVERY_FINISHING_STATUSES = [
+const IDEA_VALIDATION_FINISHING_STATUSES = [
   'Re-reading your learning goals',
   'Clarifying who to talk to first',
   'Turning assumptions into interview focus',
@@ -122,9 +122,9 @@ export default function OnboardingChat({
   const shouldStickToBottomRef = useRef(true);
   const chatVariant = variant ?? projectType;
   const isNetworking = chatVariant === 'networking';
-  const isInformationDiscovery = chatVariant === 'information_discovery';
-  const finishingStatuses = isInformationDiscovery
-    ? INFORMATION_DISCOVERY_FINISHING_STATUSES
+  const isIdeaValidation = chatVariant === 'idea_validation';
+  const finishingStatuses = isIdeaValidation
+    ? IDEA_VALIDATION_FINISHING_STATUSES
     : isNetworking
       ? NETWORKING_FINISHING_STATUSES
       : STARTUP_FINISHING_STATUSES;
@@ -292,7 +292,7 @@ export default function OnboardingChat({
 
       onComplete();
     } catch {
-      setError(isInformationDiscovery
+      setError(isIdeaValidation
         ? 'We could not generate your outreach project brief yet. Please try again.'
         : 'We could not generate your Foundation yet. Please try again.');
       setPhase(currentTurn || isFinishable ? 'choices' : 'kickoff');
@@ -304,18 +304,18 @@ export default function OnboardingChat({
   const isIntroTurn = phase === 'kickoff' && messages.length <= 1 && !loading;
   const kickoffPlaceholder = isNetworking
     ? 'Describe the goal, recipients, timely context, desired next step, and how the note should feel...'
-    : isInformationDiscovery
+    : isIdeaValidation
       ? 'Describe your goals...'
     : "";
-  const finishLabel = isInformationDiscovery ? 'outreach project brief' : isNetworking ? 'outreach Foundation' : 'Foundation';
-  const finishButtonLabel = isInformationDiscovery ? 'Generate brief ->' : 'Generate Foundation ->';
+  const finishLabel = isIdeaValidation ? 'outreach project brief' : isNetworking ? 'outreach Foundation' : 'Foundation';
+  const finishButtonLabel = isIdeaValidation ? 'Generate brief ->' : 'Generate Foundation ->';
 
   return (
     <div
       className={[
         styles.chat,
         isIntroTurn && styles.chatIntro,
-        isInformationDiscovery && styles.chatInformationDiscovery,
+        isIdeaValidation && styles.chatIdeaValidation,
       ].filter(Boolean).join(' ')}
     >
       {/* Transcript */}

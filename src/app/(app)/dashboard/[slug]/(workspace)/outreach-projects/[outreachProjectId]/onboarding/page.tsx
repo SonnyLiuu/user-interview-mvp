@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation';
 import { getOutreachProject, getProjectBySlugOrId } from '@/lib/backend-server';
 import { getProjectPathSegment } from '@/lib/projects';
-import InformationDiscoveryOnboardingClient from './InformationDiscoveryOnboardingClient';
+import IdeaValidationOnboardingClient from './IdeaValidationOnboardingClient';
 
 export const dynamic = 'force-dynamic';
 
-export default async function InformationDiscoveryOnboardingPage({
+export default async function IdeaValidationOnboardingPage({
   params,
 }: {
   params: Promise<{ slug: string; outreachProjectId: string }>;
@@ -25,12 +25,12 @@ export default async function InformationDiscoveryOnboardingPage({
   if (!outreachProject || outreachProject.startup_project_id !== startup.id) {
     redirect(`/dashboard/${startupPath}/foundation`);
   }
-  if (outreachProject.type !== 'information_discovery') {
+  if (outreachProject.type !== 'idea_validation') {
     redirect(`/dashboard/${startupPath}/foundation`);
   }
 
   return (
-    <InformationDiscoveryOnboardingClient
+    <IdeaValidationOnboardingClient
       outreachProjectId={outreachProject.id}
       startupPath={startupPath}
       initialStatus={outreachProject.status}

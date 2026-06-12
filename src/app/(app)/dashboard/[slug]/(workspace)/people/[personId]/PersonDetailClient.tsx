@@ -253,7 +253,7 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, i
 
           {(projectType === 'networking' || person.match_profile_version) && (matchRank || matchExplanation || matchFactors) && (
             <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>{projectType === 'networking' ? 'Match' : 'Discovery fit'}</h2>
+              <h2 className={styles.sectionTitle}>{projectType === 'networking' ? 'Match' : 'Idea Validation fit'}</h2>
               <div className={styles.matchPanel}>
                 <div className={styles.matchSummaryRow}>
                   {matchRank && (

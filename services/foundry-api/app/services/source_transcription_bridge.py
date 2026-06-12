@@ -302,7 +302,7 @@ class _SourceTranscriber:
         if self.config.mode == _TRANSCRIPTION_MODE_INPUT:
             audio_input["transcription"] = {
                 "model": self.config.model,
-                "prompt": "Customer discovery interview. Expect startup, workflow, pain point, buyer, budget, and product vocabulary.",
+                "prompt": "Idea validation interview. Expect startup, workflow, pain point, buyer, budget, and product vocabulary.",
                 "language": "en",
             }
             audio_input["turn_detection"]["create_response"] = False
@@ -462,7 +462,7 @@ def _extract_response_text(response: dict[str, Any]) -> str:
 def _realtime_text_transcription_instructions(source: str) -> str:
     speaker = "founder using the local microphone" if source == "mic" else "interviewee from system audio"
     return (
-        f"You transcribe one side of a customer discovery call: the {speaker}. "
+        f"You transcribe one side of a idea validation call: the {speaker}. "
         "For each detected speech turn, output only the words spoken in that turn. "
         "Do not answer questions. Do not summarize. Do not add speaker labels. "
         "Do not mention audio quality. If the speech is unintelligible, output nothing."

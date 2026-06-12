@@ -53,8 +53,9 @@ function Icon({ iconKey }: { iconKey: string }) {
   if (iconKey === 'handshake') {
     return (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M7 12l3.5 3.5a2 2 0 0 0 2.8 0L18 10.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M3 11l4-4 3 3M21 11l-4-4-2.5 2.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M9.8 8.2H7.6a3.8 3.8 0 1 0 0 7.6h2.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M14.2 8.2h2.2a3.8 3.8 0 1 1 0 7.6h-2.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M8.8 12h6.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       </svg>
     );
   }

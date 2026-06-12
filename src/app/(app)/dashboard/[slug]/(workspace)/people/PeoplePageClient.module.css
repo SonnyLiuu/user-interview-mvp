@@ -1,7 +1,7 @@
 .wrap {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
   max-width: 980px;
 }
 
@@ -41,11 +41,11 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 14px;
+  position: relative;
 }
 
 .sortWrap {
-  position: relative;
   flex: none;
 }
 
@@ -53,14 +53,15 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 10px;
+  padding: 7px 10px;
   font: inherit;
   font-size: 13px;
   font-weight: 470;
+  line-height: 1.3;
   color: #5f4a39;
   background: #fff;
   border: 1px solid #d8c5ae;
-  border-radius: 8px;
+  border-radius: 16px;
   cursor: pointer;
   transition: border-color 100ms, background 100ms;
 }
@@ -87,7 +88,7 @@
   list-style: none;
   background: #fff;
   border: 1px solid #d8c5ae;
-  border-radius: 10px;
+  border-radius: 16px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.08);
 }
 
@@ -111,16 +112,19 @@
 }
 
 .searchInput {
-  width: min(320px, 100%);
+  width: calc((100% - 28px) / 3);
   min-width: 0;
   padding: 7px 10px;
   font: inherit;
   font-size: 13px;
-  font-weight: 440;
+  line-height: 1.3;
   color: #3d2b1a;
   background: #fff;
   border: 1px solid #d8c5ae;
-  border-radius: 8px;
+  border-radius: 16px;
+  outline: none;
+  box-sizing: border-box;
+  -webkit-appearanc-radius: 16px;
   outline: none;
   transition: border-color 100ms, box-shadow 100ms;
 }

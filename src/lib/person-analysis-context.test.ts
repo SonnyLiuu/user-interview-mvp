@@ -10,7 +10,7 @@ test('sanitizeIdentityField rejects profile dump fragments', () => {
   assert.equal(sanitizeIdentityField('x'.repeat(141)), null);
 });
 
-test('startup analysis context includes discovery brief fields and match profile', () => {
+test('startup analysis context includes idea validation brief fields and match profile', () => {
   const foundation: Foundation = {
     summary: 'AI workflow tool',
     targetUser: 'Operations leaders',

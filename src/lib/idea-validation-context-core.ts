@@ -1,4 +1,4 @@
-import type { Foundation, InformationDiscoveryBrief } from './backend-types';
+import type { Foundation, IdeaValidationBrief } from './backend-types';
 
 function cleanText(value: unknown): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
@@ -18,12 +18,12 @@ function cleanList(value: unknown): string[] {
   return cleaned;
 }
 
-export function normalizeInformationDiscoveryBrief(value: unknown): InformationDiscoveryBrief | null {
+export function normalizeIdeaValidationBrief(value: unknown): IdeaValidationBrief | null {
   if (!value || typeof value !== 'object') return null;
-  const brief = value as InformationDiscoveryBrief;
+  const brief = value as IdeaValidationBrief;
   return {
-    type: 'information_discovery',
-    label: cleanText(brief.label) || 'Information Discovery',
+    type: 'idea_validation',
+    label: cleanText(brief.label) || 'Idea Validation',
     desiredOutcome: cleanText(brief.desiredOutcome) || null,
     learningGoals: cleanList(brief.learningGoals),
     targetPeople: cleanList(brief.targetPeople),
@@ -34,9 +34,9 @@ export function normalizeInformationDiscoveryBrief(value: unknown): InformationD
   };
 }
 
-export function applyInformationDiscoveryBrief(
+export function applyIdeaValidationBrief(
   foundation: Foundation | null | undefined,
-  brief: InformationDiscoveryBrief | null | undefined,
+  brief: IdeaValidationBrief | null | undefined,
 ): Foundation {
   const base: Foundation = { ...(foundation ?? {}) };
   if (!brief) return base;
@@ -50,8 +50,8 @@ export function applyInformationDiscoveryBrief(
   return {
     ...base,
     activeOutreachProject: {
-      type: 'information_discovery',
-      label: cleanText(brief.label) || 'Information Discovery',
+      type: 'idea_validation',
+      label: cleanText(brief.label) || 'Idea Validation',
       desiredOutcome: desiredOutcome || null,
       learningGoals,
       targetPeople,

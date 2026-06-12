@@ -5,6 +5,13 @@ import { useEffect, useState } from 'react';
 
 declare global {
   interface Window {
+    webkit?: {
+      messageHandlers?: {
+        foundryDesktop?: {
+          postMessage: (message: unknown) => void;
+        };
+      };
+    };
     chrome?: {
       webview?: {
         postMessage: (message: unknown) => void;
@@ -14,6 +21,7 @@ declare global {
 }
 
 function postToDesktop(message: unknown) {
+  window.webkit?.messageHandlers?.foundryDesktop?.postMessage(message);
   window.chrome?.webview?.postMessage(message);
 }
 

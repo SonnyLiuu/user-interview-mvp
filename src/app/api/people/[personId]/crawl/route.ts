@@ -4,7 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { eq, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people, project_foundations } from '@/lib/db/schema';
-import { applyInformationDiscoveryBrief, getActiveInformationDiscoveryBrief } from '@/lib/information-discovery-context';
+import { applyIdeaValidationBrief, getActiveIdeaValidationBrief } from '@/lib/idea-validation-context';
 import { getOwnedPersonWithProject } from '@/lib/person-ownership';
 import { hasResearchSourceMaterial, markPersonResearchError, runPersonResearchJob } from '@/lib/person-research';
 import type { Foundation, ProjectType } from '@/lib/backend-types';
@@ -43,13 +43,13 @@ export async function POST(_req: NextRequest, { params }: Params) {
     );
   }
 
-  const activeDiscoveryBrief = projectType === 'startup'
-    ? await getActiveInformationDiscoveryBrief(person.project_id!)
+  const activeIdeaValidationBrief = projectType === 'startup'
+    ? await getActiveIdeaValidationBrief(person.project_id!)
     : null;
-  const contextualFoundation = activeDiscoveryBrief
-    ? applyInformationDiscoveryBrief(foundation, activeDiscoveryBrief)
+  const contextualFoundation = activeIdeaValidationBrief
+    ? applyIdeaValidationBrief(foundation, activeIdeaValidationBrief)
     : foundation;
-  const usesMatchProfile = projectType === 'networking' || !!activeDiscoveryBrief;
+  const usesMatchProfile = projectType === 'networking' || !!activeIdeaValidationBrief;
 
   // Mark as crawling immediately so the UI can show the loading state
   await db

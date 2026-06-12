@@ -17,24 +17,24 @@ WITH startup_projects_with_people AS (
   WHERE p.project_id IS NOT NULL
     AND pr.project_type = 'startup'
 ),
-inserted_information_discovery_projects AS (
+inserted_idea_validation_projects AS (
   INSERT INTO "outreach_projects" ("startup_project_id", "type", "name", "status")
   SELECT
     spp.startup_project_id,
-    'information_discovery',
-    'Information Discovery',
+    'idea_validation',
+    'Idea Validation',
     'active'
   FROM startup_projects_with_people spp
   WHERE NOT EXISTS (
     SELECT 1
     FROM "outreach_projects" op
     WHERE op.startup_project_id = spp.startup_project_id
-      AND op.type = 'information_discovery'
+      AND op.type = 'idea_validation'
       AND op.status <> 'archived'
   )
   RETURNING "startup_project_id", "id"
 ),
-target_information_discovery_projects AS (
+target_idea_validation_projects AS (
   SELECT DISTINCT ON (candidate.startup_project_id)
     candidate.startup_project_id,
     candidate.id
@@ -47,7 +47,7 @@ target_information_discovery_projects AS (
       op.created_at
     FROM "outreach_projects" op
     INNER JOIN startup_projects_with_people spp ON spp.startup_project_id = op.startup_project_id
-    WHERE op.type = 'information_discovery'
+    WHERE op.type = 'idea_validation'
       AND op.status <> 'archived'
     UNION ALL
     SELECT
@@ -56,7 +56,7 @@ target_information_discovery_projects AS (
       'active' AS status,
       now() AS updated_at,
       now() AS created_at
-    FROM inserted_information_discovery_projects inserted
+    FROM inserted_idea_validation_projects inserted
   ) candidate
   ORDER BY
     candidate.startup_project_id,
@@ -76,7 +76,7 @@ UPDATE "people" p
 SET
   "outreach_project_id" = tidp.id,
   "updated_at" = now()
-FROM target_information_discovery_projects tidp
+FROM target_idea_validation_projects tidp
 WHERE p.project_id = tidp.startup_project_id
   AND p.outreach_project_id IS NULL;
 --> statement-breakpoint

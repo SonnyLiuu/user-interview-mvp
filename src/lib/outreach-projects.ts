@@ -5,9 +5,9 @@ import type {
 } from './backend-types';
 
 export const OUTREACH_PROJECT_TYPE_CONFIGS: Record<OutreachProjectType, OutreachProjectTypeConfig> = {
-  information_discovery: {
-    type: 'information_discovery',
-    label: 'Information Discovery',
+  idea_validation: {
+    type: 'idea_validation',
+    label: 'Idea Validation',
     description: 'Learn from target users, customers, buyers, or market experts before selling.',
     purpose: 'Learn, not sell.',
     iconKey: 'search',
@@ -87,7 +87,7 @@ export const VISIBLE_OUTREACH_PROJECT_TYPES = OUTREACH_PROJECT_TYPES.filter(
 export function getOutreachProjectTypeConfig(
   type: OutreachProjectType | string | null | undefined,
 ): OutreachProjectTypeConfig {
-  return OUTREACH_PROJECT_TYPE_CONFIGS[type as OutreachProjectType] ?? OUTREACH_PROJECT_TYPE_CONFIGS.information_discovery;
+  return OUTREACH_PROJECT_TYPE_CONFIGS[type as OutreachProjectType] ?? OUTREACH_PROJECT_TYPE_CONFIGS.idea_validation;
 }
 
 export function isOutreachProjectTypeAvailable(

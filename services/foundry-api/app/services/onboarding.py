@@ -159,13 +159,13 @@ def _ensure_startup_foundation_defaults(state: dict, foundation: dict, project_t
             next_foundation[key] = value
 
     recommendation = next_foundation.get("recommendedOutreachProject")
-    if not isinstance(recommendation, dict) or recommendation.get("type") != "information_discovery":
+    if not isinstance(recommendation, dict) or recommendation.get("type") != "idea_validation":
         bottleneck = state.get("biggestBottleneck") or "your current startup uncertainty"
         next_foundation["recommendedOutreachProject"] = {
-            "type": "information_discovery",
-            "label": "Information Discovery",
+            "type": "idea_validation",
+            "label": "Idea Validation",
             "reason": (
-                "Information Discovery is the right first outreach project because it can turn "
+                "Idea Validation is the right first outreach project because it can turn "
                 f"{bottleneck} into concrete conversations, sharper interview targets, and clearer learning goals."
             ),
         }

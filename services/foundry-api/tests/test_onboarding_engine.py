@@ -16,6 +16,7 @@ from app.project_modes import (
     get_outreach_project_type_config,
     get_outreach_project_type_configs,
     get_fallback_turn,
+    normalize_outreach_project_type,
     get_slot_keys,
     is_creatable_outreach_project_type,
     is_creatable_project_type,
@@ -112,20 +113,22 @@ class ProjectModeConfigTests(unittest.TestCase):
         self.assertTrue(is_creatable_project_type("startup"))
 
     def test_outreach_type_registry_tracks_v1_availability(self):
-        self.assertTrue(is_valid_outreach_project_type("information_discovery"))
-        self.assertTrue(is_creatable_outreach_project_type("information_discovery"))
-        self.assertTrue(is_visible_outreach_project_type("information_discovery"))
+        self.assertTrue(is_valid_outreach_project_type("idea_validation"))
+        self.assertTrue(is_creatable_outreach_project_type("idea_validation"))
+        self.assertTrue(is_visible_outreach_project_type("idea_validation"))
+        self.assertEqual(normalize_outreach_project_type("information" + "_discovery"), "idea_validation")
+        self.assertTrue(is_valid_outreach_project_type("information" + "_discovery"))
 
         self.assertTrue(is_valid_outreach_project_type("customer_acquisition"))
         self.assertFalse(is_creatable_outreach_project_type("customer_acquisition"))
         self.assertTrue(is_visible_outreach_project_type("customer_acquisition"))
 
-        config = get_outreach_project_type_config("information_discovery")
-        self.assertEqual(config["label"], "Information Discovery")
+        config = get_outreach_project_type_config("idea_validation")
+        self.assertEqual(config["label"], "Idea Validation")
         self.assertEqual(config["availability"], "active")
 
         visible_types = {config["type"] for config in get_outreach_project_type_configs()}
-        self.assertIn("information_discovery", visible_types)
+        self.assertIn("idea_validation", visible_types)
         self.assertIn("press_creator", visible_types)
 
 

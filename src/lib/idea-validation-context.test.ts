@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  applyInformationDiscoveryBrief,
-  normalizeInformationDiscoveryBrief,
-} from './information-discovery-context-core.ts';
+  applyIdeaValidationBrief,
+  normalizeIdeaValidationBrief,
+} from './idea-validation-context-core.ts';
 
-test('normalizes and applies information discovery brief to startup foundation', () => {
-  const brief = normalizeInformationDiscoveryBrief({
+test('normalizes and applies idea validation brief to startup foundation', () => {
+  const brief = normalizeIdeaValidationBrief({
     desiredOutcome: '  Validate urgency  ',
     targetPeople: ['Ops leaders', 'Ops leaders', ' Finance operators '],
     learningGoals: ['Understand workarounds'],
@@ -14,7 +14,7 @@ test('normalizes and applies information discovery brief to startup foundation',
     conversationBoundaries: ['Do not pitch'],
   });
 
-  const foundation = applyInformationDiscoveryBrief({
+  const foundation = applyIdeaValidationBrief({
     summary: 'Workflow automation',
     targetUser: 'Operations teams',
     painPoint: 'Manual reporting',
@@ -26,5 +26,5 @@ test('normalizes and applies information discovery brief to startup foundation',
   assert.deepEqual(foundation.idealPeopleTypes, ['Ops leaders', 'Finance operators']);
   assert.deepEqual(foundation.keyAssumptions, ['Manual reporting is painful']);
   assert.deepEqual(foundation.messageBoundaries, ['Do not pitch']);
-  assert.equal(foundation.activeOutreachProject?.type, 'information_discovery');
+  assert.equal(foundation.activeOutreachProject?.type, 'idea_validation');
 });

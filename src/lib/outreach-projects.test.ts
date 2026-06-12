@@ -9,10 +9,10 @@ import {
   isOutreachProjectTypeAvailable,
 } from './outreach-projects.ts';
 
-test('information discovery is the only active v1 outreach project type', () => {
-  assert.deepEqual(ACTIVE_OUTREACH_PROJECT_TYPES, ['information_discovery']);
-  assert.equal(OUTREACH_PROJECT_TYPE_CONFIGS.information_discovery.label, 'Information Discovery');
-  assert.equal(isOutreachProjectTypeAvailable('information_discovery'), true);
+test('idea validation is the only active v1 outreach project type', () => {
+  assert.deepEqual(ACTIVE_OUTREACH_PROJECT_TYPES, ['idea_validation']);
+  assert.equal(OUTREACH_PROJECT_TYPE_CONFIGS.idea_validation.label, 'Idea Validation');
+  assert.equal(isOutreachProjectTypeAvailable('idea_validation'), true);
 });
 
 test('future outreach project types are visible but coming soon', () => {
@@ -23,6 +23,6 @@ test('future outreach project types are visible but coming soon', () => {
   assert.equal(isOutreachProjectTypeAvailable('investor', 'coming_soon'), true);
 });
 
-test('unknown outreach project type falls back to information discovery metadata', () => {
-  assert.equal(getOutreachProjectTypeConfig('unknown').type, 'information_discovery');
+test('unknown outreach project type falls back to idea validation metadata', () => {
+  assert.equal(getOutreachProjectTypeConfig('unknown').type, 'idea_validation');
 });

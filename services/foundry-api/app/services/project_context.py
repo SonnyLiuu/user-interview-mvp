@@ -34,7 +34,7 @@ def _clean_list(value: Any) -> list[str]:
     return cleaned
 
 
-def apply_information_discovery_brief(foundation: dict | None, brief: dict | None) -> dict:
+def apply_idea_validation_brief(foundation: dict | None, brief: dict | None) -> dict:
     base = dict(foundation or {})
     if not isinstance(brief, dict):
         return base
@@ -48,8 +48,8 @@ def apply_information_discovery_brief(foundation: dict | None, brief: dict | Non
     starter_ask = _clean_text(brief.get("starterAsk"))
 
     base["activeOutreachProject"] = {
-        "type": "information_discovery",
-        "label": _clean_text(brief.get("label")) or "Information Discovery",
+        "type": "idea_validation",
+        "label": _clean_text(brief.get("label")) or "Idea Validation",
         "desiredOutcome": desired_outcome or None,
         "learningGoals": learning_goals,
         "targetPeople": target_people,
@@ -160,7 +160,7 @@ def foundation_to_project_context(foundation: dict | None, project_type: str = "
         f"{labels['target']}: {foundation.get('targetUser')}" if foundation.get("targetUser") else None,
         f"{labels['pain']}: {foundation.get('painPoint')}" if foundation.get("painPoint") else None,
         f"{labels['value']}: {foundation.get('valueProp')}" if foundation.get("valueProp") else None,
-        f"Information Discovery outcome: {desired_outcome}" if desired_outcome else None,
+        f"Idea Validation outcome: {desired_outcome}" if desired_outcome else None,
         f"Learning goals: {', '.join(learning_goals)}" if learning_goals else None,
         f"Conversation boundaries: {', '.join(boundaries)}" if boundaries else None,
         f"Startup stage: {foundation.get('startupStage')}" if foundation.get("startupStage") else None,
