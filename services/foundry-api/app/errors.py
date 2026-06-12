@@ -12,6 +12,10 @@ class BadRequestError(Exception):
         self.code = code
 
 
+class DatabaseUnavailableError(Exception):
+    pass
+
+
 class AIServiceError(Exception):
     def __init__(self, message: str, provider: str | None = None):
         super().__init__(message)

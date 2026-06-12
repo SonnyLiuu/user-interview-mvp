@@ -7,11 +7,12 @@ import json
 import time
 from dataclasses import dataclass
 
+import asyncpg
 from fastapi import Depends, Header
 
 from .config import Settings, get_settings
 from .db import get_pool
-from .errors import UnauthorizedError
+from .errors import DatabaseUnavailableError, UnauthorizedError
 
 
 @dataclass
@@ -54,54 +55,57 @@ async def resolve_user(payload: dict) -> AuthContext:
     if not clerk_user_id or not email:
         raise UnauthorizedError("Missing user payload")
 
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        existing = await conn.fetchrow(
-            "select id from users where clerk_user_id = $1 limit 1",
-            clerk_user_id,
-        )
-        if existing:
-            return AuthContext(
-                user_id=str(existing["id"]),
-                clerk_user_id=clerk_user_id,
-                email=email,
-                name=name,
-                avatar_url=avatar_url,
-            )
-
-        by_email = await conn.fetchrow("select id from users where email = $1 limit 1", email)
-        if by_email:
-            await conn.execute(
-                "update users set clerk_user_id = $1 where id = $2",
+    try:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            existing = await conn.fetchrow(
+                "select id from users where clerk_user_id = $1 limit 1",
                 clerk_user_id,
-                by_email["id"],
+            )
+            if existing:
+                return AuthContext(
+                    user_id=str(existing["id"]),
+                    clerk_user_id=clerk_user_id,
+                    email=email,
+                    name=name,
+                    avatar_url=avatar_url,
+                )
+
+            by_email = await conn.fetchrow("select id from users where email = $1 limit 1", email)
+            if by_email:
+                await conn.execute(
+                    "update users set clerk_user_id = $1 where id = $2",
+                    clerk_user_id,
+                    by_email["id"],
+                )
+                return AuthContext(
+                    user_id=str(by_email["id"]),
+                    clerk_user_id=clerk_user_id,
+                    email=email,
+                    name=name,
+                    avatar_url=avatar_url,
+                )
+
+            created = await conn.fetchrow(
+                """
+                insert into users (clerk_user_id, email, name, avatar_url)
+                values ($1, $2, $3, $4)
+                returning id
+                """,
+                clerk_user_id,
+                email,
+                name,
+                avatar_url,
             )
             return AuthContext(
-                user_id=str(by_email["id"]),
+                user_id=str(created["id"]),
                 clerk_user_id=clerk_user_id,
                 email=email,
                 name=name,
                 avatar_url=avatar_url,
             )
-
-        created = await conn.fetchrow(
-            """
-            insert into users (clerk_user_id, email, name, avatar_url)
-            values ($1, $2, $3, $4)
-            returning id
-            """,
-            clerk_user_id,
-            email,
-            name,
-            avatar_url,
-        )
-        return AuthContext(
-            user_id=str(created["id"]),
-            clerk_user_id=clerk_user_id,
-            email=email,
-            name=name,
-            avatar_url=avatar_url,
-        )
+    except (TimeoutError, OSError, asyncpg.PostgresConnectionError) as exc:
+        raise DatabaseUnavailableError("Database connection unavailable") from exc
 
 
 async def get_auth_context(

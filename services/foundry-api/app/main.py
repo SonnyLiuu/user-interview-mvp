@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .config import Settings, get_settings
 from .db import close_pool, init_pool
-from .errors import AIServiceError, BadRequestError, NotFoundError, UnauthorizedError
+from .errors import AIServiceError, BadRequestError, DatabaseUnavailableError, NotFoundError, UnauthorizedError
 from .routers import call_prep, dashboard, fireflies, intake, live_sessions, onboarding, otter, outreach, outreach_projects, projects, recall, workspace, zoom_rtms
 
 import logging
@@ -68,6 +68,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if exc.code:
             body["code"] = exc.code
         return JSONResponse(body, status_code=400)
+
+    @app.exception_handler(DatabaseUnavailableError)
+    async def handle_database_unavailable(_request: Request, exc: DatabaseUnavailableError):
+        logger.warning("Database unavailable: %s", exc)
+        return JSONResponse(
+            {"error": "Database temporarily unavailable", "detail": str(exc)},
+            status_code=503,
+        )
 
     @app.exception_handler(AIServiceError)
     async def handle_ai_service_error(_request: Request, exc: AIServiceError):
