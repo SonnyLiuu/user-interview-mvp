@@ -1,4 +1,5 @@
 import type { InsightContent } from '@/lib/db/schema';
+import { generateObject } from '@/lib/ai/provider';
 
 export const CURRENT_INSIGHT_SCHEMA_VERSION = 3;
 
@@ -32,7 +33,6 @@ export type TranscriptTechniqueReview = {
   questionFlags: InterviewQuestionFlag[];
   missedProbes: MissedProbe[];
   suggestedFollowUps: string[];
-  reliability: 'low' | 'medium' | 'high';
 };
 
 type CurrentInsightSnapshot = {
@@ -124,6 +124,28 @@ function intervieweeEvidenceSignals(transcript: string) {
     .map((text) => clip(text, 180));
 }
 
+function strongEvidenceReason(quote: string): string {
+  const q = quote.toLowerCase();
+
+  const isPast = /\b(last time|yesterday|tried|paid|gave up|stopped|skipped|moved on|abandoned|switched)\b/i.test(q);
+  const isCurrent = /\b(currently|usually|typically|every day|every week|per week|per month|right now|at the moment)\b/i.test(q);
+  const isQuantified = /\b\d+\s*(minutes?|hours?|days?|weeks?|months?|percent|dollars?|people|times?)\b/i.test(q);
+  const isTool = /\b(manual|manually|spreadsheet|linkedin|website|blog|csv|excel|google doc|notion|airtable|trello|asana|slack|email|pdf|chrome)\b/i.test(q);
+  const isFrustration = /\b(gave up|stop there|skipped|moved on|frustrating|painful|waste|hate|annoying|too long)\b/i.test(q);
+
+  if (isPast && isTool) return 'Recounts a specific past situation using a named tool or workaround — real behavior, not opinion.';
+  if (isPast && isQuantified) return 'Describes a concrete past action with quantifiable detail — specific, measurable evidence.';
+  if (isPast) return 'Describes a specific past action or decision — grounded in real experience, not hypotheticals.';
+  if (isCurrent && isTool) return 'Describes their current, day-to-day process using a real tool — habitual behavior is strong evidence.';
+  if (isCurrent && isQuantified) return 'Describes ongoing behavior with measurable frequency — recurring evidence is more reliable.';
+  if (isCurrent) return 'Describes a current habit or routine — what they actually do now is stronger than what they say they would do.';
+  if (isFrustration && isTool) return 'Shows frustration tied to a real tool or process — pain-driven evidence signals a real problem worth solving.';
+  if (isFrustration) return 'Expresses concrete frustration or a breaking point — emotional weight strengthens the signal.';
+  if (isTool) return 'Names a real tool or process they use — anchored in actual behavior, not abstract preference.';
+  if (isQuantified) return 'Includes a specific number, time, or frequency — quantifiable evidence carries more weight than vague claims.';
+  return 'Contains concrete behavioral detail — grounded in action rather than speculation.';
+}
+
 function strongEvidenceMoments(transcript: string): TranscriptEvidenceMoment[] {
   const concretePattern = /\b(last time|yesterday|today|currently|usually|typically|every|per week|per month|\d+\s*(minutes?|hours?|days?)|manual|manually|spreadsheet|linkedin|website|blogs?|gave up|stop there|skipped|moved on|paid|tried|use|using)\b/i;
   return transcriptLines(transcript)
@@ -132,9 +154,24 @@ function strongEvidenceMoments(transcript: string): TranscriptEvidenceMoment[] {
     .filter((text) => concretePattern.test(text) && text.length > 24)
     .map((text) => ({
       quote: clip(text, 180),
-      reason: 'Concrete behavior, timing, current process, or workaround detail.',
+      reason: strongEvidenceReason(text),
     }))
     .slice(0, 5);
+}
+
+function weakEvidenceReason(quote: string): string {
+  const q = quote.toLowerCase();
+  if (/\bsure it would help\b|\bwould help\b|\bcould help\b/i.test(q))
+    return 'Hypothetical endorsement of your idea — describes what they imagine might help, not what they already do.';
+  if (/\bprobably\b|\bmaybe\b|\bperhaps\b/i.test(q))
+    return 'Hedged language suggests uncertainty — they are guessing rather than reporting from experience.';
+  if (/\bi think\b|\bi guess\b|\bi believe\b|\bi feel like\b/i.test(q))
+    return 'Prefaced with "I think" or "I guess" — opinion, not observed behavior. Ask for the last time this actually happened.';
+  if (/\bsounds useful\b|\bsounds good\b|\bcould be helpful\b|\bseems helpful\b/i.test(q))
+    return 'Polite agreement with your description — socially agreeable language, not a sign of real need.';
+  if (/\binteresting\b/i.test(q))
+    return 'Non-committal interest — "interesting" is often polite conversation, not evidence of intent to act.';
+  return 'Opinion-based or hypothetical — treat as low-confidence unless confirmed by a concrete past example.';
 }
 
 function weakEvidenceMoments(transcript: string): TranscriptEvidenceMoment[] {
@@ -145,7 +182,7 @@ function weakEvidenceMoments(transcript: string): TranscriptEvidenceMoment[] {
     .filter((text) => weakPattern.test(text))
     .map((text) => ({
       quote: clip(text, 180),
-      reason: 'Likely opinion or polite agreement; treat as low-confidence evidence unless backed by past behavior.',
+      reason: weakEvidenceReason(text),
     }))
     .slice(0, 4);
 }
@@ -215,6 +252,19 @@ function flagQuestion(question: string): InterviewQuestionFlag | null {
   return null;
 }
 
+function missedProbeQuestion(context: string): string {
+  const q = context.toLowerCase();
+  if (/\btime consuming\b/i.test(q)) return 'How much time did that take last time — what were you unable to do because of it?';
+  if (/\bhard problem\b/i.test(q)) return 'What made it hard specifically? Walk me through the last time you hit that wall.';
+  if (/\bcase.by.case\b/i.test(q)) return 'Give me the most recent example — who was it for and what was different about it?';
+  if (/\bconstraint\b/i.test(q)) return 'What constraint hit you hardest last time? What did you sacrifice to work around it?';
+  if (/\btoo long\b/i.test(q)) return 'How long exactly? And what did you miss out on because of the delay?';
+  if (/\bcannot be automated\b/i.test(q)) return 'What part specifically can\'t be automated — and what do you do manually instead?';
+  if (/\bgive up\b|\bstop there\b/i.test(q)) return 'What made you stop? What did you try before deciding to give up?';
+  if (/\bwear different hats\b/i.test(q)) return 'Which hat takes the most time? When was the last time you had to switch mid-task?';
+  return 'Can you give me a concrete recent example of that?';
+}
+
 function missedProbes(transcript: string): MissedProbe[] {
   const lines = transcriptLines(transcript);
   const out: MissedProbe[] = [];
@@ -231,7 +281,7 @@ function missedProbes(transcript: string): MissedProbe[] {
 
     out.push({
       context: clip(line.text, 180),
-      suggestedQuestion: 'Can you walk me through the last time that happened, step by step?',
+      suggestedQuestion: missedProbeQuestion(line.text),
     });
     if (out.length >= 4) break;
   }
@@ -240,27 +290,78 @@ function missedProbes(transcript: string): MissedProbe[] {
 }
 
 function summarizeTranscript(transcript: string, evidenceSignals: string[]) {
-  if (evidenceSignals.length) return evidenceSignals[0];
-  const firstIntervieweeLine = transcriptLines(transcript).find((line) =>
-    /^(interviewee|participant|customer|user|prospect)$/i.test(line.speaker) && line.text.length > 20
-  );
-  return firstIntervieweeLine
-    ? clip(firstIntervieweeLine.text)
-    : 'Transcript captured for review; look for concrete behavior, urgency, and current workarounds.';
+  if (!transcript.trim()) return 'No transcript text was captured for this interview.';
+
+  const strongMoments = strongEvidenceMoments(transcript);
+  const weakMoments = weakEvidenceMoments(transcript);
+  const signalCount = evidenceSignals.length;
+
+  const parts: string[] = [];
+  const strongestQuote = strongMoments[0]?.quote;
+
+  if (strongMoments.length) {
+    parts.push(`The strongest signal came from a moment where the interviewee described a concrete behavior`);
+    if (strongestQuote) {
+      parts.push(`— "${strongestQuote.slice(0, 120)}${strongestQuote.length > 120 ? '...' : ''}"`);
+    }
+    parts.push(`This is credible because it reflects actual past or current behavior rather than opinion.`);
+  } else if (signalCount) {
+    parts.push(`The interview surfaced ${signalCount} behavioral signal${signalCount === 1 ? '' : 's'}, but none reached the threshold of strong evidence grounded in concrete past behavior.`);
+  }
+
+  if (weakMoments.length) {
+    parts.push(`${weakMoments.length} moment${weakMoments.length === 1 ? '' : 's'} relied on opinion or hypothetical language — treat these as directional, not confirmatory.`);
+  }
+
+  if (!parts.length) {
+    parts.push('Review the transcript for concrete past behavior, current workarounds, and urgency signals.');
+  }
+
+  return parts.join(' ');
 }
 
-function reliabilityForReview(
-  questionFlags: InterviewQuestionFlag[],
-  strongMoments: TranscriptEvidenceMoment[],
-  weakMoments: TranscriptEvidenceMoment[],
-  probes: MissedProbe[],
-): TranscriptTechniqueReview['reliability'] {
-  const problemFlags = questionFlags.filter((flag) => flag.severity === 'problem').length;
-  if (problemFlags > 0) return 'low';
-  if (strongMoments.length >= 3 && problemFlags === 0 && probes.length <= 1) return 'high';
-  if (strongMoments.length >= 1 && problemFlags <= 1 && weakMoments.length <= 2) return 'medium';
-  return 'low';
+export function overarchingAnalysis(review: TranscriptTechniqueReview): string {
+  const parts: string[] = [];
+
+  if (review.evidenceSignals.length) {
+    parts.push(
+      `This interview surfaced ${review.evidenceSignals.length} behavioral signal${review.evidenceSignals.length === 1 ? '' : 's'}` +
+      ` related to the interviewee's real workflow.`,
+    );
+  }
+
+  const strongCount = review.strongEvidenceMoments.length;
+  const weakCount = review.weakEvidenceMoments.length;
+  if (strongCount + weakCount > 0) {
+    const evidenceBits: string[] = [];
+    if (strongCount) evidenceBits.push(`${strongCount} strong evidence moment${strongCount === 1 ? '' : 's'} grounded in concrete behavior`);
+    if (weakCount) evidenceBits.push(`${weakCount} moment${weakCount === 1 ? '' : 's'} of weaker, opinion-based evidence`);
+    parts.push(`The transcript contains ${evidenceBits.join(' and ')}.`);
+  }
+
+  const problemFlags = review.questionFlags.filter((f) => f.severity === 'problem').length;
+  const watchFlags = review.questionFlags.filter((f) => f.severity === 'watch').length;
+  if (problemFlags + watchFlags > 0) {
+    const flagBits: string[] = [];
+    if (problemFlags) flagBits.push(`${problemFlags} leading or hypothetical question${problemFlags === 1 ? '' : 's'} that weaken${problemFlags === 1 ? 's' : ''} reliability`);
+    if (watchFlags) flagBits.push(`${watchFlags} compound or closed question${watchFlags === 1 ? '' : 's'} to tighten`);
+    parts.push(`Interview quality note: ${flagBits.join(' and ')}.`);
+  }
+
+  if (review.missedProbes.length) {
+    parts.push(
+      `${review.missedProbes.length} missed follow-up${review.missedProbes.length === 1 ? '' : 's'} — ` +
+      `the interviewee dropped a useful signal that wasn't probed deeper.`,
+    );
+  }
+
+  if (!parts.length) {
+    parts.push('This interview captured conversation data for review. Look for concrete past behavior, current workarounds, and urgency signals.');
+  }
+
+  return parts.join(' ');
 }
+
 
 export function analyzeTranscriptTechnique(transcript: string, notes = ''): TranscriptTechniqueReview {
   const combined = [transcript, notes].filter(Boolean).join('\n');
@@ -272,7 +373,6 @@ export function analyzeTranscriptTechnique(transcript: string, notes = ''): Tran
     .filter((flag): flag is InterviewQuestionFlag => flag !== null)
     .slice(0, 4);
   const probes = missedProbes(combined);
-  const reliability = reliabilityForReview(questionFlags, strongMoments, weakMoments, probes);
 
   const suggestedFollowUps = dedupeStrings([
     questionFlags.length
@@ -295,7 +395,6 @@ export function analyzeTranscriptTechnique(transcript: string, notes = ''): Tran
     questionFlags,
     missedProbes: probes,
     suggestedFollowUps,
-    reliability,
   };
 }
 
@@ -474,4 +573,127 @@ export function normalizeInsightContent(
       cautionAreas: normalizeCautionAreas(coach.cautionAreas, defaultCautionAreas),
     },
   };
+}
+
+// ── AI-enhanced transcript analysis ──────────────────────────────────────────
+
+const enhancedReviewSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    overarchingAnalysis: { type: 'string' },
+    strongEvidenceMoments: {
+      type: 'array',
+      maxItems: 5,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          quote: { type: 'string' },
+          reason: { type: 'string' },
+        },
+        required: ['quote', 'reason'],
+      },
+    },
+    weakEvidenceMoments: {
+      type: 'array',
+      maxItems: 4,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          quote: { type: 'string' },
+          reason: { type: 'string' },
+        },
+        required: ['quote', 'reason'],
+      },
+    },
+    missedProbes: {
+      type: 'array',
+      maxItems: 4,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          context: { type: 'string' },
+          suggestedQuestion: { type: 'string' },
+        },
+        required: ['context', 'suggestedQuestion'],
+      },
+    },
+  },
+  required: ['overarchingAnalysis', 'strongEvidenceMoments', 'weakEvidenceMoments', 'missedProbes'],
+};
+
+type EnhancedReview = {
+  overarchingAnalysis: string;
+  strongEvidenceMoments: { quote: string; reason: string }[];
+  weakEvidenceMoments: { quote: string; reason: string }[];
+  missedProbes: { context: string; suggestedQuestion: string }[];
+};
+
+function buildEnhancedPrompt(transcript: string, notes: string): string {
+  const combined = [transcript, notes].filter(Boolean).join('\n');
+  const trimmed = combined.length > 8000
+    ? `${combined.slice(0, 8000).trim()}\n[transcript truncated for analysis]`
+    : combined;
+
+  return [
+    'You analyze a single customer-discovery interview transcript for a startup founder.',
+    'Return only structured JSON. Be specific, skeptical, and grounded in what the interviewee actually said.',
+    '',
+    'Rules for overarchingAnalysis (3-5 sentences, single paragraph):',
+    '- Open with the most important thing this interview revealed about the problem space — not a summary of topics discussed.',
+    '- Be opinionated: was the evidence strong or thin? What was the most credible moment vs the weakest?',
+    '- Call out the dominant interview-technique issue if one exists (leading questions, missed probes, hypothetical validation).',
+    '- End with what the founder should prioritize learning next based on this conversation.',
+    '- Never start with "This interview surfaced..." or use sentence templates. Write like a sharp colleague giving you an honest read.',
+    '',
+    'Rules for evidence moments:',
+    '- Each strong evidence moment must include a specific, contextual reason WHY it is strong — mention what makes this particular quote credible (past behavior, named tool, specific timeframe, measurable detail, etc). Never use generic labels.',
+    '- Each weak evidence moment must explain WHY this particular quote is weak — call out the specific hedging, hypothetical, or polite-agreement language in the quote.',
+    '- Each missed probe must have a suggested question tailored to what the interviewee just said — never repeat the same question across probes.',
+    '',
+    'Transcript + notes:',
+    trimmed,
+  ].join('\n');
+}
+
+export async function enhanceTranscriptTechnique(
+  transcript: string,
+  notes: string,
+): Promise<TranscriptTechniqueReview> {
+  // Run deterministic analysis first for question flags and reliability
+  const base = analyzeTranscriptTechnique(transcript, notes);
+
+  if (!transcript.trim() && !notes.trim()) return base;
+
+  try {
+    const enhanced = await generateObject<EnhancedReview>(
+      buildEnhancedPrompt(transcript, notes),
+      enhancedReviewSchema,
+    );
+
+    return {
+      summary: enhanced.overarchingAnalysis,
+      evidenceSignals: base.evidenceSignals,
+      strongEvidenceMoments: enhanced.strongEvidenceMoments.map((m) => ({
+        quote: m.quote,
+        reason: m.reason,
+      })),
+      weakEvidenceMoments: enhanced.weakEvidenceMoments.map((m) => ({
+        quote: m.quote,
+        reason: m.reason,
+      })),
+      questionFlags: base.questionFlags,
+      missedProbes: enhanced.missedProbes.map((p) => ({
+        context: p.context,
+        suggestedQuestion: p.suggestedQuestion,
+      })),
+      suggestedFollowUps: base.suggestedFollowUps,
+    };
+  } catch (error) {
+    console.warn('[insights-core] AI enhancement failed, using deterministic analysis', error);
+    return base;
+  }
 }

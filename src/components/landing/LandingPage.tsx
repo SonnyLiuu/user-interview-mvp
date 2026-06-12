@@ -1,4 +1,9 @@
 import Link from 'next/link';
+import type { ComponentType } from 'react';
+import {
+  OUTREACH_PROJECT_TYPE_CONFIGS,
+  VISIBLE_OUTREACH_PROJECT_TYPES,
+} from '@/lib/outreach-projects';
 import { HeroTabs } from './HeroTabs';
 import styles from './LandingPage.module.css';
 
@@ -76,51 +81,104 @@ function IconTrend({ color }: { color: string }) {
   );
 }
 
-// ── Feature card data ─────────────────────────────────────────────────────────
+function IconTarget({ color }: { color: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <circle cx="9" cy="9" r="6" stroke={color} strokeWidth="1.4"/>
+      <circle cx="9" cy="9" r="2.5" stroke={color} strokeWidth="1.4"/>
+      <line x1="9" y1="1.5" x2="9" y2="4" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="9" y1="14" x2="9" y2="16.5" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="1.5" y1="9" x2="4" y2="9" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="14" y1="9" x2="16.5" y2="9" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  );
+}
 
-const FEATURES = [
-  {
-    title: 'Pressure-test your idea',
-    body: 'Structured intake exposes weak spots and surfaces what\'s actually promising before anyone hears your pitch.',
-    iconColor: '#a4532b',
-    iconBg: '#fce9dc',
-    Icon: IconDocument,
-  },
-  {
-    title: 'Analyze people against your hypothesis',
-    body: 'Paste a URL or profile. AI crawls public sources and scores learning value for your specific research goal.',
-    iconColor: '#2f6b3b',
-    iconBg: '#eef7ea',
-    Icon: IconSearch,
-  },
-  {
-    title: 'Generate outreach that fits the person',
-    body: 'Message, email, and call brief are distinct outputs — each tailored to the channel and persona type.',
-    iconColor: '#1d4ed8',
-    iconBg: '#eff6ff',
-    Icon: IconMail,
-  },
-  {
-    title: 'Build call prep in seconds',
-    body: 'Conversation objective, question sequence, signals to watch, and a closing ask for referrals.',
-    iconColor: '#6d28d9',
-    iconBg: '#f5f3ff',
-    Icon: IconPhone,
-  },
-  {
-    title: 'Debrief and improve after every call',
-    body: 'Paste notes or transcript. Get coaching on what you missed, what you learned, and who to talk to next.',
-    iconColor: '#92400e',
-    iconBg: '#fffbeb',
-    Icon: IconNote,
-  },
-  {
-    title: 'Watch assumptions evolve',
-    body: 'The Project Brief updates after every debrief. See which hypotheses are strengthening and which are weakening.',
-    iconColor: '#1e6a7a',
-    iconBg: '#ecfeff',
-    Icon: IconTrend,
-  },
+function IconUsers({ color }: { color: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <circle cx="6.5" cy="6" r="2.5" stroke={color} strokeWidth="1.4"/>
+      <path d="M2 15c0-2.6 2-4.5 4.5-4.5S11 12.4 11 15" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M11.5 4.2a2.2 2.2 0 0 1 0 4.1" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M12 10.8c2.2.3 3.8 1.9 3.8 4.2" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function IconBriefcase({ color }: { color: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <rect x="2" y="5" width="14" height="10" rx="2" stroke={color} strokeWidth="1.4"/>
+      <path d="M6.5 5V3.8A1.8 1.8 0 0 1 8.3 2h1.4a1.8 1.8 0 0 1 1.8 1.8V5" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M2 8.5h14" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function IconChains({ color }: { color: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M7.2 5.4 8.6 4a3 3 0 0 1 4.2 0l1.2 1.2a3 3 0 0 1 0 4.2l-1.4 1.4" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M10.8 12.6 9.4 14a3 3 0 0 1-4.2 0L4 12.8a3 3 0 0 1 0-4.2l1.4-1.4" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M7.2 10.8 10.8 7.2" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function IconUserPlus({ color }: { color: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <circle cx="7" cy="6" r="3" stroke={color} strokeWidth="1.4"/>
+      <path d="M2 16c0-3 2.2-5 5-5 1.6 0 3 .6 3.9 1.6" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M14 9.5v5" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M11.5 12h5" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function IconSparkles({ color }: { color: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M8.5 2.5 9.8 6l3.7 1.3-3.7 1.3-1.3 3.9-1.3-3.9-3.7-1.3L7.2 6l1.3-3.5z" stroke={color} strokeWidth="1.4" strokeLinejoin="round"/>
+      <path d="M14 11.5l.6 1.5 1.4.5-1.4.5-.6 1.5-.5-1.5-1.5-.5 1.5-.5.5-1.5z" stroke={color} strokeWidth="1.2" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function IconMegaphone({ color }: { color: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M3 10h3l7 3.5v-9L6 8H3a1.5 1.5 0 0 0 0 3z" stroke={color} strokeWidth="1.4" strokeLinejoin="round"/>
+      <path d="M6 10.5 7 15" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M15 7.2c.6.5.9 1.1.9 1.8s-.3 1.3-.9 1.8" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+// ── Project type data ────────────────────────────────────────────────────────
+
+type LandingIcon = ComponentType<{ color: string }>;
+
+const PROJECT_ICON_MAP: Record<string, LandingIcon> = {
+  search: IconSearch,
+  target: IconTarget,
+  users: IconUsers,
+  briefcase: IconBriefcase,
+  handshake: IconChains,
+  'user-plus': IconUserPlus,
+  sparkles: IconSparkles,
+  megaphone: IconMegaphone,
+};
+
+const PROJECT_CARD_COLORS = [
+  { iconColor: '#a4532b', iconBg: '#fce9dc' },
+  { iconColor: '#2f6b3b', iconBg: '#eef7ea' },
+  { iconColor: '#1d4ed8', iconBg: '#eff6ff' },
+  { iconColor: '#6d28d9', iconBg: '#f5f3ff' },
+  { iconColor: '#1e6a7a', iconBg: '#ecfeff' },
+  { iconColor: '#92400e', iconBg: '#fffbeb' },
+  { iconColor: '#9f1239', iconBg: '#fff1f3' },
+  { iconColor: '#365314', iconBg: '#f7fee7' },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -208,17 +266,41 @@ export function LandingPage() {
       {/* ── Feature Cards ────────────────────────────────────────────────── */}
       <section className={styles.featureSection}>
         <div className={styles.container}>
-          <p className={styles.eyebrow}>What it does</p>
+          <div className={styles.featureHeader}>
+            <p className={styles.eyebrow}>What it does</p>
+            <h2 className={styles.featureHeading}>Run the outreach project your startup needs next.</h2>
+            <p className={styles.featureIntro}>
+              Start with Idea Validation today, then use the same research, people analysis, prep, and debrief workflow across every kind of founder outreach.
+            </p>
+          </div>
           <div className={styles.featureGrid}>
-            {FEATURES.map((f) => (
-              <div key={f.title} className={styles.featureCard}>
-                <div className={styles.featureIconWrap} style={{ background: f.iconBg }}>
-                  <f.Icon color={f.iconColor} />
+            {VISIBLE_OUTREACH_PROJECT_TYPES.map((type, index) => {
+              const config = OUTREACH_PROJECT_TYPE_CONFIGS[type];
+              const Icon = PROJECT_ICON_MAP[config.iconKey] ?? IconDocument;
+              const colors = PROJECT_CARD_COLORS[index % PROJECT_CARD_COLORS.length];
+              const isActive = config.availability === 'active';
+
+              return (
+                <div key={config.type} className={styles.featureCard}>
+                  <div className={styles.featureTopRow}>
+                    <div className={styles.featureIconWrap} style={{ background: colors.iconBg }}>
+                      <Icon color={colors.iconColor} />
+                    </div>
+                    <span
+                      className={[
+                        styles.featureStatus,
+                        isActive ? styles.featureStatusActive : styles.featureStatusSoon,
+                      ].join(' ')}
+                    >
+                      {isActive ? 'Available now' : 'Coming soon'}
+                    </span>
+                  </div>
+                  <h3 className={styles.featureTitle}>{config.label}</h3>
+                  <p className={styles.featureBody}>{config.description}</p>
+                  <p className={styles.featurePurpose}>{config.purpose}</p>
                 </div>
-                <h3 className={styles.featureTitle}>{f.title}</h3>
-                <p className={styles.featureBody}>{f.body}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>

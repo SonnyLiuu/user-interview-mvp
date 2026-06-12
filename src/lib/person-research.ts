@@ -7,6 +7,7 @@ import type { Foundation, ProjectType } from '@/lib/backend-types';
 import { db } from '@/lib/db';
 import { people, type DiscoveredUrl, type Person } from '@/lib/db/schema';
 import { crawlUrlsBestEffort, type CrawlDepth, type CrawlUrlOutcome } from '@/lib/firecrawl';
+import { captureGlobalPersonFromResearch } from '@/lib/global-people';
 import { ensureProjectMatchProfile, matchRankForScore, normalizeMatchScore, scoreFromRank } from '@/lib/match-profile';
 import { foundationToAnalysisContext, sanitizeIdentityField } from '@/lib/person-analysis-context';
 
@@ -227,6 +228,21 @@ async function runPersonResearchWork(args: {
       updated_at: new Date(),
     })
     .where(eq(people.id, personId));
+
+  try {
+    await captureGlobalPersonFromResearch({
+      person: {
+        ...person,
+        name: analysis.name ?? person.name,
+        title: sanitizedTitle ?? person.title,
+        company: sanitizedCompany ?? person.company,
+        discovered_urls: discoveredUrls,
+      },
+      analysis,
+    });
+  } catch (err) {
+    console.warn(`Global person capture failed for person ${personId}:`, err instanceof Error ? err.message : err);
+  }
 }
 
 export async function runPersonResearchJob(args: {

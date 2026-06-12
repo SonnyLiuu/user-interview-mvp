@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, boolean, integer, timestamp, uuid, jsonb, index, uniqueIndex, check } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, integer, timestamp, uuid, jsonb, index, uniqueIndex, check, doublePrecision } from 'drizzle-orm/pg-core';
 import { customType } from 'drizzle-orm/pg-core';
 
 // Custom type for text arrays with proper typing
@@ -95,6 +95,15 @@ export type PersonAnalysis = {
   why_they_matter?: string;
   contact_info?: ContactInfo;
   sections?: PersonAnalysisSection[];
+  global_tags?: GlobalPersonTags;
+};
+
+export type GlobalPersonTags = {
+  role_tags?: string[];
+  market_tags?: string[];
+  seniority_tags?: string[];
+  project_fit_tags?: string[];
+  learning_value_tags?: string[];
 };
 
 export type ProjectMatchProfileJson = {
@@ -313,6 +322,54 @@ export const project_briefs = pgTable('project_briefs', {
 ]);
 
 // ── people ────────────────────────────────────────────────────────────────────
+export const global_people = pgTable('global_people', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name_key: text('name_key').notNull(),
+  display_name: text('display_name').notNull(),
+  company_key: text('company_key'),
+  display_company: text('display_company'),
+  title_key: text('title_key'),
+  display_title: text('display_title'),
+  linkedin_key: text('linkedin_key'),
+  website_key: text('website_key'),
+  role_tags: textArray('role_tags').notNull().default(sql`ARRAY[]::text[]`),
+  market_tags: textArray('market_tags').notNull().default(sql`ARRAY[]::text[]`),
+  seniority_tags: textArray('seniority_tags').notNull().default(sql`ARRAY[]::text[]`),
+  project_fit_tags: textArray('project_fit_tags').notNull().default(sql`ARRAY[]::text[]`),
+  learning_value_tags: textArray('learning_value_tags').notNull().default(sql`ARRAY[]::text[]`),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  last_seen_at: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('global_people_name_company_title_idx').on(table.name_key, table.company_key, table.title_key),
+  index('global_people_website_name_idx').on(table.website_key, table.name_key),
+  uniqueIndex('global_people_linkedin_key_idx')
+    .on(table.linkedin_key)
+    .where(sql`${table.linkedin_key} is not null`),
+]);
+
+export const global_person_urls = pgTable('global_person_urls', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  global_person_id: uuid('global_person_id').references(() => global_people.id, { onDelete: 'cascade' }).notNull(),
+  url: text('url').notNull(),
+  normalized_url: text('normalized_url').notNull(),
+  url_kind: text('url_kind').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  last_seen_at: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('global_person_urls_normalized_url_idx').on(table.normalized_url),
+  index('global_person_urls_person_idx').on(table.global_person_id),
+  check('global_person_urls_kind_check', sql`${table.url_kind} in (
+    'linkedin',
+    'website',
+    'github',
+    'twitter_x',
+    'blog',
+    'article',
+    'other'
+  )`),
+]);
+
 export const people = pgTable('people', {
   id: uuid('id').primaryKey().defaultRandom(),
   project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
@@ -360,6 +417,24 @@ export const people = pgTable('people', {
   index('people_outreach_project_updated_at_idx').on(table.outreach_project_id, table.updated_at),
 ]);
 
+export const person_global_links = pgTable('person_global_links', {
+  person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }).primaryKey(),
+  global_person_id: uuid('global_person_id').references(() => global_people.id, { onDelete: 'cascade' }).notNull(),
+  project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  match_method: text('match_method').notNull(),
+  match_confidence: doublePrecision('match_confidence').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('person_global_links_global_person_idx').on(table.global_person_id),
+  index('person_global_links_project_idx').on(table.project_id),
+  check('person_global_links_match_method_check', sql`${table.match_method} in (
+    'linkedin',
+    'website_name',
+    'name_company_title',
+    'new'
+  )`),
+]);
+
 // ── outreach ──────────────────────────────────────────────────────────────────
 export const outreach = pgTable('outreach', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -397,6 +472,7 @@ export const interactions = pgTable('interactions', {
   type: text('type').default('call'),
   notes_raw: text('notes_raw'),
   transcript_raw: text('transcript_raw'),
+  enhanced_review: jsonb('enhanced_review'),
   scheduled_at: timestamp('scheduled_at', { withTimezone: true }),
   completed_at: timestamp('completed_at', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -572,6 +648,7 @@ export const transcripts = pgTable('transcripts', {
   person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }),
   outreach_project_id: uuid('outreach_project_id').references(() => outreach_projects.id, { onDelete: 'set null' }),
   content: text('content').notNull(),
+  enhanced_review: jsonb('enhanced_review'),
   type: text('type').notNull().default('call'), // 'call' | 'message'
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 }, (table) => [
@@ -596,7 +673,10 @@ export type Project = typeof projects.$inferSelect;
 export type OutreachProject = typeof outreach_projects.$inferSelect;
 export type ProjectIntake = typeof project_intake.$inferSelect;
 export type ProjectBrief = typeof project_briefs.$inferSelect;
+export type GlobalPerson = typeof global_people.$inferSelect;
+export type GlobalPersonUrl = typeof global_person_urls.$inferSelect;
 export type Person = typeof people.$inferSelect;
+export type PersonGlobalLink = typeof person_global_links.$inferSelect;
 export type Outreach = typeof outreach.$inferSelect;
 export type CallPrep = typeof call_prep.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;

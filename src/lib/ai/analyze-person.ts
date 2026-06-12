@@ -1,5 +1,6 @@
 import { generateObject } from './provider';
 import type { PersonAnalysis } from '@/lib/db/schema';
+import { GLOBAL_TAG_ALLOWLISTS } from '@/lib/global-people-core';
 import { matchRankForScore, normalizeMatchScore, scoreFromRank } from '@/lib/match-profile';
 import type { PersonAnalysisContext } from '@/lib/person-analysis-context';
 
@@ -18,6 +19,12 @@ export async function analyzePerson(
 ): Promise<PersonAnalysis> {
   const analysisContent = limitSourceMaterial(crawledContent);
   const isNetworking = projectContext.project_type === 'networking';
+  const globalTagInstructions = `For global_tags: assign only tags from these allowlists. Omit tags when unsupported by the source material.
+- role_tags: ${GLOBAL_TAG_ALLOWLISTS.role_tags.join(', ')}
+- market_tags: ${GLOBAL_TAG_ALLOWLISTS.market_tags.join(', ')}
+- seniority_tags: ${GLOBAL_TAG_ALLOWLISTS.seniority_tags.join(', ')}
+- project_fit_tags: ${GLOBAL_TAG_ALLOWLISTS.project_fit_tags.join(', ')}
+- learning_value_tags: ${GLOBAL_TAG_ALLOWLISTS.learning_value_tags.join(', ')}`;
   const prompt = isNetworking ? `You are an expert at helping people prioritize and personalize professional networking outreach.
 
 OUTREACH PROJECT CONTEXT:
@@ -67,6 +74,8 @@ For match_factors: score each factor from 0 to 100:
 - evidence_confidence: confidence based on source quality and amount of usable evidence.
 For match_explanation: write 1-2 concise sentences explaining the score and the main limiter.
 
+${globalTagInstructions}
+
 Important: Do not assign a high match just because someone is generally impressive. Ground the score in this outreach project's rubric and calibration patterns.` : `You are an expert at helping early-stage founders identify the most valuable people to learn from during idea validation.
 
 FOUNDER'S PROJECT CONTEXT:
@@ -97,6 +106,8 @@ For relevance_rank: score against the founder's specific hypothesis, customer ty
 
 For match_score: when an Idea Validation match rubric is provided, return an integer from 0 to 100 that reflects this person's fit for the current Idea Validation outreach project. Derive match_rank from the score: high >= 75, medium >= 45, low < 45.
 For match_explanation: when an Idea Validation match rubric is provided, write 1-2 concise sentences explaining why this person is or is not a strong learning conversation target.
+
+${globalTagInstructions}
 
 Important: Do not assign low relevance solely because the person is not the exact target customer. If the person is a founder, former founder, startup operator, technical builder, accelerator participant, or works closely with early-stage founders, they should usually be medium unless their background has almost no connection to startup formation, idea validation, or founder workflows.`;
 
@@ -216,6 +227,17 @@ Important: Do not assign low relevance solely because the person is not the exac
           website: { type: 'string' },
         },
         description: 'Contact information found in the crawled content. Only include fields that were actually found.',
+      },
+      global_tags: {
+        type: 'object',
+        properties: {
+          role_tags: { type: 'array', items: { type: 'string', enum: GLOBAL_TAG_ALLOWLISTS.role_tags } },
+          market_tags: { type: 'array', items: { type: 'string', enum: GLOBAL_TAG_ALLOWLISTS.market_tags } },
+          seniority_tags: { type: 'array', items: { type: 'string', enum: GLOBAL_TAG_ALLOWLISTS.seniority_tags } },
+          project_fit_tags: { type: 'array', items: { type: 'string', enum: GLOBAL_TAG_ALLOWLISTS.project_fit_tags } },
+          learning_value_tags: { type: 'array', items: { type: 'string', enum: GLOBAL_TAG_ALLOWLISTS.learning_value_tags } },
+        },
+        description: 'Global recommendation tags for future people recommendations. Use only supported tags.',
       },
     },
   });

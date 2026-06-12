@@ -127,6 +127,20 @@
       "when": 1780358400000,
       "tag": "0017_idea_validation_rename",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1780444800000,
+      "tag": "0018_global_people",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1780963200000,
+      "tag": "0019_enhanced_interview_review",
+      "breakpoints": true
     }
   ]
 }

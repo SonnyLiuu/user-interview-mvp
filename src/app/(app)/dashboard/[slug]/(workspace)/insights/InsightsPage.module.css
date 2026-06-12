@@ -37,6 +37,22 @@
   font-weight: 560;
 }
 
+.tabClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  padding: 2px;
+  border-radius: 4px;
+  color: #8b7560;
+  transition: background 80ms, color 80ms;
+}
+
+.tabClose:hover {
+  background: rgba(220, 80, 60, 0.1);
+  color: #c05545;
+}
+
 .page {
   height: calc(100% - 57px);
   min-height: 0;
@@ -493,6 +509,14 @@
   color: #2d241b;
   font-size: 17px;
   line-height: 1.55;
+}
+
+.analysisParagraph {
+  margin: 0;
+  color: #2d241b;
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 680px;
 }
 
 .section {

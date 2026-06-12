@@ -163,7 +163,7 @@ export function AppNav({ slug, projectId, projectName, projectType, initialProje
               <div className={styles.profileMenuDivider} />
               <button
                 className={`${styles.profileMenuItem} ${styles.profileMenuSignOut}`}
-                onClick={() => signOut({ redirectUrl: '/login' })}
+                onClick={() => signOut({ redirectUrl: '/' })}
               >
                 Sign out
               </button>

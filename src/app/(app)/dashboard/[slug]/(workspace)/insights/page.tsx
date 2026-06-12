@@ -1,13 +1,14 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getProjectBySlugOrId } from '@/lib/backend-server';
-import { getProjectInsightsState } from '@/lib/ai/synthesize-insights';
+import { getProjectInsightsState, getProjectTranscriptInsight } from '@/lib/ai/synthesize-insights';
 import { getOutreachStats } from '@/lib/outreach-insights';
 import { getNotetakerDownloadHref } from '@/lib/notetaker-download';
 import type { InsightContent } from '@/lib/db/schema';
 import type { TranscriptInsightRecord } from '@/lib/ai/synthesize-insights';
 import type { IdeaValidationBrief } from '@/lib/backend-types';
 import { OutreachInsightsEmpty, OutreachInsightsData } from './OutreachInsights';
+import { InterviewDetailContent } from './InterviewDetailContent';
 import styles from './InsightsPage.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -181,7 +182,7 @@ function DataInsights({
   transcriptInsights: TranscriptInsightRecord[];
   slug: string;
 }) {
-  const { learningSummary, recurringThemes, assumptionTracker, interviewCoach } = content;
+  const { learningSummary, recurringThemes, assumptionTracker } = content;
 
   return (
     <main className={styles.page}>
@@ -211,21 +212,6 @@ function DataInsights({
         </section>
 
         <IdeaValidationContextPanel brief={activeIdeaValidationBrief} startupPath={startupPath} />
-
-        <InterviewCoachPanel coach={interviewCoach} transcriptInsights={transcriptInsights} />
-
-        <section className={styles.summaryGrid}>
-          <article className={styles.summaryPanel}>
-            <h2 className={styles.sectionTitle}>Top takeaway</h2>
-            <p className={styles.takeaway}>{learningSummary.topTakeaway}</p>
-          </article>
-          <article className={styles.summaryPanel}>
-            <h2 className={styles.sectionTitle}>Next focus</h2>
-            <p className={styles.takeaway}>{learningSummary.nextFocus}</p>
-          </article>
-        </section>
-
-        <EvidenceReliabilitySection coach={interviewCoach} />
 
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
@@ -303,133 +289,6 @@ function DataInsights({
   );
 }
 
-function InterviewCoachPanel({
-  coach,
-  transcriptInsights,
-}: {
-  coach: InsightContent['interviewCoach'];
-  transcriptInsights: TranscriptInsightRecord[];
-}) {
-  const coachingIssues = transcriptInsights.flatMap((record) => {
-    const conversation = `${record.personName} · ${record.source === 'interaction' ? 'Completed call' : 'Transcript'} · ${formatTranscriptDate(record.completedAt)}`;
-    const questionIssues = record.review.questionFlags.map((flag, index) => ({
-      id: `${record.id}-question-${index}-${flag.question}`,
-      severity: flag.severity,
-      conversation,
-      exactMoment: flag.question,
-      issue: flag.issue,
-      betterProbe: flag.suggestion,
-    }));
-    const missedProbeIssues = record.review.missedProbes.map((probe, index) => ({
-      id: `${record.id}-probe-${index}-${probe.context}`,
-      severity: 'watch' as const,
-      conversation,
-      exactMoment: probe.context,
-      issue: 'Missed follow-up. The interviewee gave a potentially useful signal, but the next question did not pin it to a concrete recent example.',
-      betterProbe: probe.suggestedQuestion,
-    }));
-    return [...questionIssues, ...missedProbeIssues];
-  }).slice(0, 6);
-
-  return (
-    <section className={styles.coachPanel}>
-      <div className={styles.coachLead}>
-        <div>
-          <p className={styles.eyebrow}>Interview coach</p>
-          <h2 className={styles.coachTitle}>{coach.verdict}</h2>
-        </div>
-        <span className={`${styles.reliabilityPill} ${styles[`${coach.reliability}Reliability`]}`}>
-          {coach.reliability} reliability
-        </span>
-      </div>
-      <div className={styles.coachSummary}>
-        <div>
-          <span className={styles.ideaValidationLabel}>Main risk</span>
-          <p className={styles.coachText}>{coach.mainRisk}</p>
-        </div>
-      </div>
-      <div className={styles.coachIssueSection}>
-        <span className={styles.ideaValidationLabel}>Needs coaching</span>
-        {coachingIssues.length > 0 ? (
-          <div className={styles.coachIssueList}>
-            {coachingIssues.map((issue) => (
-              <article
-                key={issue.id}
-                className={`${styles.coachIssue} ${issue.severity === 'problem' ? styles.problemFlag : styles.watchFlag}`}
-              >
-                <p className={styles.coachConversation}>{issue.conversation}</p>
-                <p className={styles.flagQuestion}>{issue.exactMoment}</p>
-                <p className={styles.flagIssue}>{issue.issue}</p>
-                <p className={styles.flagSuggestion}>{issue.betterProbe}</p>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className={styles.noFlags}>No major interview-technique issues detected in the reviewed conversations.</p>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function EvidenceReliabilitySection({
-  coach,
-}: {
-  coach: InsightContent['interviewCoach'];
-}) {
-  if (coach.trustworthyEvidence.length === 0 && coach.cautionAreas.length === 0) return null;
-
-  return (
-    <section className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <div>
-          <p className={styles.eyebrow}>Evidence quality</p>
-          <h2 className={styles.sectionHeading}>What to trust, and what to treat carefully</h2>
-        </div>
-      </div>
-      <div className={styles.evidenceQualityGrid}>
-        <article className={styles.evidenceQualityPanel}>
-          <h3 className={styles.sectionTitle}>Trustworthy evidence</h3>
-          {coach.trustworthyEvidence.length > 0 ? (
-            <div className={styles.quoteList}>
-              {coach.trustworthyEvidence.map((moment) => (
-                <blockquote
-                  key={`trust-${moment.personName}-${moment.quote}`}
-                  className={styles.quote}
-                >
-                  <p>{moment.quote}</p>
-                  <cite>{moment.personName} · {moment.reason}</cite>
-                </blockquote>
-              ))}
-            </div>
-          ) : (
-            <p className={styles.emptyNote}>No high-confidence behavioral evidence yet.</p>
-          )}
-        </article>
-        <article className={styles.evidenceQualityPanel}>
-          <h3 className={styles.sectionTitle}>Needs caution</h3>
-          {coach.cautionAreas.length > 0 ? (
-            <div className={styles.cautionList}>
-              {coach.cautionAreas.map((area) => (
-                <div
-                  key={`caution-${area.personName}-${area.quote}-${area.concern}`}
-                  className={styles.cautionItem}
-                >
-                  {area.quote && <p className={styles.cautionQuote}>{area.quote}</p>}
-                  <p className={styles.cautionConcern}>{area.concern}</p>
-                  <p className={styles.cautionProbe}>{area.betterProbe}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className={styles.emptyNote}>No major evidence-quality cautions detected.</p>
-          )}
-        </article>
-      </div>
-    </section>
-  );
-}
-
 function TranscriptInsightsSection({
   transcriptInsights,
   slug,
@@ -455,7 +314,7 @@ function TranscriptInsightsSection({
         {sorted.map((record) => (
           <Link
             key={`${record.source}-${record.id}`}
-            href={`/dashboard/${slug}/insights/interviews/${record.source}/${record.id}`}
+            href={`/dashboard/${slug}/insights?tab=insights&interview=${record.source}:${record.id}`}
             className={styles.interviewRow}
           >
             <span className={styles.interviewRowName}>{record.personName}</span>
@@ -469,10 +328,18 @@ function TranscriptInsightsSection({
 
 // ── Tab bar ────────────────────────────────────────────────────────────────────
 
-function TabBar({ active, slug }: { active: 'outreach' | 'insights'; slug: string }) {
+function TabBar({
+  active,
+  slug,
+  interviewTab,
+}: {
+  active: 'outreach' | 'insights';
+  slug: string;
+  interviewTab?: { label: string; closeHref: string } | null;
+}) {
   const tabs = [
     { key: 'outreach' as const, label: 'Outreach' },
-    { key: 'insights' as const, label: 'Insights' },
+    { key: 'insights' as const, label: 'Interview' },
   ];
 
   return (
@@ -481,11 +348,25 @@ function TabBar({ active, slug }: { active: 'outreach' | 'insights'; slug: strin
         <Link
           key={tab.key}
           href={`/dashboard/${slug}/insights${tab.key === 'insights' ? '?tab=insights' : ''}`}
-          className={`${styles.tabPill} ${active === tab.key ? styles.tabPillActive : ''}`}
+          className={`${styles.tabPill} ${active === tab.key && !interviewTab ? styles.tabPillActive : ''}`}
         >
           {tab.label}
         </Link>
       ))}
+      {interviewTab ? (
+        <span className={`${styles.tabPill} ${styles.tabPillActive}`}>
+          {interviewTab.label}
+          <Link
+            href={interviewTab.closeHref}
+            className={styles.tabClose}
+            aria-label={`Close ${interviewTab.label}`}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </Link>
+        </span>
+      ) : null}
     </nav>
   );
 }
@@ -495,11 +376,25 @@ export default async function InsightsPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; interview?: string }>;
 }) {
   const { slug } = await params;
-  const { tab } = await searchParams;
+  const { tab, interview } = await searchParams;
   const activeTab = tab === 'insights' ? 'insights' : 'outreach';
+
+  // Parse interview param: "transcript:recordId" or "interaction:recordId"
+  let interviewSource: 'interaction' | 'transcript' | null = null;
+  let interviewRecordId: string | null = null;
+  if (interview) {
+    const colon = interview.indexOf(':');
+    if (colon > 0) {
+      const source = interview.slice(0, colon);
+      if (source === 'interaction' || source === 'transcript') {
+        interviewSource = source;
+        interviewRecordId = interview.slice(colon + 1);
+      }
+    }
+  }
 
   const installerHref = getNotetakerDownloadHref();
   const lookup = await getProjectBySlugOrId(slug);
@@ -509,11 +404,36 @@ export default async function InsightsPage({
 
   const startupPath = project.project_type === 'startup' ? slug : null;
 
-  // Fetch both data sets — cheap queries, fine to run in parallel
-  const [state, outreachStats] = await Promise.all([
+  // Fetch data — include interview record if opening an interview tab
+  const [state, outreachStats, interviewRecord] = await Promise.all([
     getProjectInsightsState(project.id),
     getOutreachStats(project.id),
+    interviewSource && interviewRecordId
+      ? getProjectTranscriptInsight(project.id, interviewSource, interviewRecordId)
+      : null,
   ]);
+
+  const interviewTab = interviewRecord
+    ? {
+        label: interviewRecord.personName,
+        closeHref: `/dashboard/${slug}/insights?tab=insights`,
+      }
+    : null;
+
+  // ── Interview detail (inline tab) ─────────────────────────────────────
+
+  if (interviewTab) {
+    return (
+      <>
+        <TabBar active="insights" slug={slug} interviewTab={interviewTab} />
+        <main className={styles.page}>
+          <div className={styles.shellWide}>
+            <InterviewDetailContent record={interviewRecord!} />
+          </div>
+        </main>
+      </>
+    );
+  }
 
   // ── Outreach tab (default) ────────────────────────────────────────────
 

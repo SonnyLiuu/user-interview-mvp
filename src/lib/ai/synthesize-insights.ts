@@ -24,6 +24,7 @@ import { getOutreachProjectTypeConfig } from '@/lib/outreach-projects';
 import {
   CURRENT_INSIGHT_SCHEMA_VERSION,
   analyzeTranscriptTechnique,
+  enhanceTranscriptTechnique,
   evidenceLevelForCalls,
   hasInterviewData,
   isInsightFresh,
@@ -195,70 +196,8 @@ const insightSchema = {
         required: ['assumption', 'status', 'confidence', 'evidence', 'nextQuestion'],
       },
     },
-    interviewCoach: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        verdict: { type: 'string' },
-        reliability: { type: 'string', enum: ['low', 'medium', 'high'] },
-        mainRisk: { type: 'string' },
-        recurringPatterns: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 4,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              pattern: { type: 'string' },
-              whyItMatters: { type: 'string' },
-              example: { type: 'string' },
-              fix: { type: 'string' },
-            },
-            required: ['pattern', 'whyItMatters', 'example', 'fix'],
-          },
-        },
-        trustworthyEvidence: {
-          type: 'array',
-          maxItems: 6,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              personName: { type: 'string' },
-              quote: { type: 'string' },
-              reason: { type: 'string' },
-            },
-            required: ['personName', 'quote', 'reason'],
-          },
-        },
-        cautionAreas: {
-          type: 'array',
-          maxItems: 6,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              personName: { type: 'string' },
-              quote: { type: 'string' },
-              concern: { type: 'string' },
-              betterProbe: { type: 'string' },
-            },
-            required: ['personName', 'quote', 'concern', 'betterProbe'],
-          },
-        },
-      },
-      required: [
-        'verdict',
-        'reliability',
-        'mainRisk',
-        'recurringPatterns',
-        'trustworthyEvidence',
-        'cautionAreas',
-      ],
-    },
   },
-  required: ['schemaVersion', 'learningSummary', 'recurringThemes', 'assumptionTracker', 'interviewCoach'],
+  required: ['schemaVersion', 'learningSummary', 'recurringThemes', 'assumptionTracker'],
 };
 
 function cleanString(value: unknown) {
@@ -397,7 +336,6 @@ function buildPrompt(data: InsightDataSet) {
       const review = analyzeTranscriptTechnique(record.transcript, record.notes);
       return {
         deterministicCoachingSignals: {
-          reliability: review.reliability,
           questionFlags: review.questionFlags,
           missedProbes: review.missedProbes,
           strongEvidenceMoments: review.strongEvidenceMoments,
@@ -427,8 +365,6 @@ function buildPrompt(data: InsightDataSet) {
     'If evidence is thin, say so plainly. Prefer practical next questions over generic advice.',
     'Be strict about interview quality: call out leading, hypothetical solution-validation questions, especially questions that describe a tool or benefit and ask whether it would help.',
     'When a founder asks a leading product-validation question, recommend a recent-behavior question that does not reveal the proposed solution.',
-    'Separate trustworthy evidence from caution areas. Trustworthy evidence comes from concrete past or current behavior. Caution areas include polite agreement, hypotheticals, vague claims, or answers following leading questions.',
-    'The Interview Coach should name concrete interview-quality risks. Any coaching claim should point to a specific interview record/person and the exact question or exchange when possible.',
     '',
     `Calls/interview records analyzed: ${data.interviewCount}`,
     `Evidence level: ${evidenceLevelForCalls(data.interviewCount)}`,
@@ -617,6 +553,7 @@ export async function getProjectTranscriptInsight(
         outreachProjectType: outreach_projects.type,
         notesRaw: interactions.notes_raw,
         transcriptRaw: interactions.transcript_raw,
+        enhancedReview: interactions.enhanced_review,
         completedAt: interactions.completed_at,
         createdAt: interactions.created_at,
       })
@@ -642,6 +579,17 @@ export async function getProjectTranscriptInsight(
     const transcript = row.transcriptRaw ?? '';
     const notes = row.notesRaw ?? '';
 
+    let review: TranscriptTechniqueReview;
+    if (row.enhancedReview && typeof row.enhancedReview === 'object') {
+      review = row.enhancedReview as unknown as TranscriptTechniqueReview;
+    } else {
+      review = await enhanceTranscriptTechnique(transcript, notes);
+      await db
+        .update(interactions)
+        .set({ enhanced_review: review as unknown as Record<string, unknown> })
+        .where(eq(interactions.id, row.id));
+    }
+
     return {
       id: row.id,
       source: 'interaction',
@@ -656,7 +604,7 @@ export async function getProjectTranscriptInsight(
       checkedLabels: cleanList(metadata.checked_labels),
       checkedCount: metadataNumber(metadata.checked_count),
       topicCount: metadataNumber(metadata.topic_count),
-      review: analyzeTranscriptTechnique(transcript, notes),
+      review,
     };
   }
 
@@ -668,6 +616,7 @@ export async function getProjectTranscriptInsight(
       personaType: people.persona_type,
       outreachProjectType: outreach_projects.type,
       content: transcripts.content,
+      enhancedReview: transcripts.enhanced_review,
       createdAt: transcripts.created_at,
     })
     .from(transcripts)
@@ -682,6 +631,18 @@ export async function getProjectTranscriptInsight(
   if (!row) return null;
 
   const outreachConfig = getOutreachProjectTypeConfig(row.outreachProjectType);
+  const transcript = row.content;
+
+  let review: TranscriptTechniqueReview;
+  if (row.enhancedReview && typeof row.enhancedReview === 'object') {
+    review = row.enhancedReview as unknown as TranscriptTechniqueReview;
+  } else {
+    review = await enhanceTranscriptTechnique(transcript, '');
+    await db
+      .update(transcripts)
+      .set({ enhanced_review: review as unknown as Record<string, unknown> })
+      .where(eq(transcripts.id, row.id));
+  }
 
   return {
     id: row.id,
@@ -692,12 +653,12 @@ export async function getProjectTranscriptInsight(
     outreachProjectType: outreachConfig.type,
     outreachProjectLabel: outreachConfig.label,
     completedAt: row.createdAt,
-    transcript: row.content,
+    transcript,
     notes: '',
     checkedLabels: [],
     checkedCount: null,
     topicCount: null,
-    review: analyzeTranscriptTechnique(row.content),
+    review,
   };
 }
 
