@@ -224,9 +224,9 @@ def _azure_realtime_endpoint() -> str:
     if not host.endswith(".openai.azure.com"):
         raise ValueError(
             "AZURE_OPENAI_REALTIME_ENDPOINT must be an Azure OpenAI endpoint ending in openai.azure.com, "
-            "for example https://user-interview-ai-resource.openai.azure.com/openai/v1."
+            "for example https://user-interview-ai-resource.openai.azure.com."
         )
-    return f"wss://{parsed.netloc}/openai/v1/realtime"
+    return f"wss://{parsed.netloc}/openai/realtime"
 
 
 def _azure_realtime_deployment() -> str:
@@ -366,7 +366,7 @@ class RealtimeBridge:
             endpoint = _azure_realtime_endpoint()
             parsed = urlparse(endpoint)
             return RealtimeConnectionConfig(
-                url=f"{endpoint}?model={quote(deployment, safe='')}",
+                url=f"{endpoint}?api-version=2024-10-01-preview&deployment={quote(deployment, safe='')}",
                 headers={"api-key": api_key},
                 model=deployment,
                 provider="azure",

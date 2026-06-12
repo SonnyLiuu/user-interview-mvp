@@ -24,6 +24,8 @@ TranscriptionStatusHandler = Callable[[str, str | None], None]
 
 _TRANSCRIPTION_SOURCES = ("mic", "loopback")
 _TRANSCRIPTION_MODEL = "gpt-4o-transcribe"
+# Azure deployment name for transcription; falls back to the realtime deployment if unset.
+# This is distinct from the OpenAI model name — Azure uses custom deployment names.
 _AZURE_TRANSCRIPTION_MODEL = "whisper-1"
 _TRANSCRIPTION_MODE_INPUT = "input_transcription"
 _TRANSCRIPTION_MODE_REALTIME_TEXT = "realtime_text"
@@ -76,7 +78,7 @@ def _azure_realtime_endpoint() -> str:
         )
     if not host.endswith(".openai.azure.com"):
         raise ValueError("AZURE_OPENAI_REALTIME_ENDPOINT must end in openai.azure.com")
-    return f"wss://{parsed.netloc}/openai/v1/realtime"
+    return f"wss://{parsed.netloc}/openai/realtime"
 
 
 def _azure_realtime_deployment() -> str:
@@ -121,13 +123,17 @@ def _connection_config(session: LiveSessionState) -> TranscriptionConnectionConf
         transcription_deployment = _azure_transcription_deployment()
         endpoint = _azure_realtime_endpoint()
         parsed = urlparse(endpoint)
+        # Use the realtime deployment for transcription when no separate
+        # transcription deployment is configured (input_transcription mode
+        # runs on the same connection).
+        model = transcription_deployment or deployment
         return TranscriptionConnectionConfig(
-            url=f"{endpoint}?model={quote(deployment, safe='')}",
+            url=f"{endpoint}?api-version=2024-10-01-preview&deployment={quote(deployment, safe='')}",
             headers={"api-key": api_key},
             provider="azure",
             target=parsed.netloc,
             session_type="realtime",
-            model=transcription_deployment or _AZURE_TRANSCRIPTION_MODEL,
+            model=model,
             mode=_TRANSCRIPTION_MODE_INPUT,
         )
 
@@ -280,6 +286,9 @@ class _SourceTranscriber:
             "format": {
                 "type": "audio/pcm",
                 "rate": 24000,
+                "bit_depth": 16,
+                "channels": 1,
+                "byte_order": "little-endian",
             },
             "noise_reduction": {
                 "type": "near_field" if self.source == "mic" else "far_field",

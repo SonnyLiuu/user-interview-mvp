@@ -39,13 +39,32 @@ public final class LiveAudioWebSocket: @unchecked Sendable {
         self.session = session
     }
 
-    /// Opens the WebSocket connection.
-    public func connect() {
+    /// Opens the WebSocket connection and waits for the initial handshake.
+    public func connect() async throws {
         guard !isConnected else { return }
         onStatusChange?(.connecting)
 
-        task = session.webSocketTask(with: url)
-        task?.resume()
+        let nextTask = session.webSocketTask(with: url)
+        task = nextTask
+        nextTask.resume()
+
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                nextTask.sendPing { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+        } catch {
+            task = nil
+            isConnected = false
+            onStatusChange?(.disconnected(error))
+            throw error
+        }
+
         isConnected = true
         onStatusChange?(.connected)
 
@@ -58,7 +77,9 @@ public final class LiveAudioWebSocket: @unchecked Sendable {
     ///   - pcmData: Raw PCM16 mono 24 kHz audio bytes.
     ///   - source: `0x01` for microphone, `0x02` for loopback.
     public func sendAudio(pcmData: Data, source: UInt8) {
-        guard let task, isConnected else { return }
+        // Capture task reference under lock to prevent race with disconnect.
+        let currentTask = task
+        guard let currentTask, isConnected else { return }
 
         var frame = Data(capacity: 5 + pcmData.count)
         // Magic header.
@@ -68,7 +89,7 @@ public final class LiveAudioWebSocket: @unchecked Sendable {
         // PCM16 data.
         frame.append(pcmData)
 
-        task.send(.data(frame)) { [weak self] error in
+        currentTask.send(.data(frame)) { [weak self] error in
             if let error {
                 self?.handleSendError(error)
             }
@@ -118,6 +139,14 @@ public final class LiveAudioWebSocket: @unchecked Sendable {
         let nsError = error as NSError
         // Normal closure is not an error.
         if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+            return
+        }
+        // Server-initiated clean close produces POSIX ENOTCONN (57) or
+        // WebSocket close frames that aren't real errors.
+        if nsError.domain == NSPOSIXErrorDomain && (nsError.code == 57 || nsError.code == 54) {
+            isConnected = false
+            task = nil
+            onStatusChange?(.disconnected(nil))
             return
         }
         isConnected = false

@@ -93,10 +93,10 @@ public final class AudioCaptureManager: @unchecked Sendable {
             return
         }
 
-        // Calculate output capacity.
+        // Calculate output capacity with safety margin for resampling.
         let inputFrames = buffer.frameLength
         let outputFrames = AVAudioFrameCount(
-            Double(inputFrames) * targetFormat.sampleRate / buffer.format.sampleRate + 1
+            (Double(inputFrames) * targetFormat.sampleRate / buffer.format.sampleRate).rounded(.up) + 4
         )
 
         guard let outputBuffer = AVAudioPCMBuffer(
@@ -119,7 +119,11 @@ public final class AudioCaptureManager: @unchecked Sendable {
             return
         }
 
-        guard let channelData = outputBuffer.int16ChannelData else { return }
+        // Validate conversion actually produced output.
+        guard outputBuffer.frameLength > 0,
+              let channelData = outputBuffer.int16ChannelData
+        else { return }
+
         let frameCount = Int(outputBuffer.frameLength)
         let byteCount = frameCount * MemoryLayout<Int16>.size
         let data = Data(bytes: channelData.pointee, count: byteCount)

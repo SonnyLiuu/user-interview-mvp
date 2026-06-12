@@ -637,8 +637,8 @@ async def stream_audio_to_live_session(
         )
         return False
     if _checklist_provider() == "mock":
-        text = f"Mock {source} transcript turn received {len(audio)} bytes of live audio."
-        await _handle_transcript_turn(session, source, text)
+        # Mock: silently acknowledge audio without generating fake transcript text.
+        # The transcript only gets real content via the Paste Transcript feature.
         return True
     transcriber = _transcription_bridges.get(session.session_id)
     if not transcriber:

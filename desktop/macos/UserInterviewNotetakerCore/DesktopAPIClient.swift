@@ -66,8 +66,15 @@ public final class DesktopAPIClient: Sendable {
     private let session: URLSession
     private let decoder = JSONDecoder()
 
-    public init(session: URLSession = .shared) {
-        self.session = session
+    public init(session: URLSession? = nil) {
+        self.session = session ?? DesktopAPIClient.defaultSession()
+    }
+
+    private static func defaultSession() -> URLSession {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 8
+        configuration.timeoutIntervalForResource = 15
+        return URLSession(configuration: configuration)
     }
 
     public func devAuthToken(apiBaseUrl: String, email: String) async throws -> DesktopAuthTokenResponse {
@@ -138,9 +145,12 @@ public final class DesktopAPIClient: Sendable {
         body: EndSessionRequest,
         maxRetries: Int = 3
     ) async throws -> EmptyResponse {
+        // Save goes to Next.js (port 3000), not FastAPI (port 8001).
+        let settings = DesktopSettings(apiBaseUrl: apiBaseUrl)
+        let nextBase = settings.normalizedNextBaseUrl
         let request = try jsonRequest(
-            base: apiBaseUrl,
-            path: "/v1/desktop/sessions/end",
+            base: nextBase,
+            path: "/api/desktop/sessions/end",
             method: "POST",
             bearerToken: authToken,
             body: body

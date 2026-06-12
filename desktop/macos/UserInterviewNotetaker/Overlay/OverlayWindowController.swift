@@ -6,32 +6,20 @@ import UserInterviewNotetakerCore
 final class OverlayWindowController: NSWindowController, NSWindowDelegate {
     private let viewModel: AppViewModel
     private let settingsStore: SettingsStore
+    private weak var actionHandler: OverlayActionHandler?
 
     init(
         viewModel: AppViewModel,
         settingsStore: SettingsStore,
-        onStart: @escaping () -> Void,
-        onEnd: @escaping () -> Void,
-        onSettings: @escaping () -> Void,
-        onSaveSettings: @escaping () -> Void,
-        onSignIn: @escaping () -> Void,
-        onClearAuth: @escaping () -> Void,
-        onBackFromAuxiliary: @escaping () -> Void,
-        onDevSignIn: @escaping (String) -> Void,
-        onAuthToken: @escaping (String) -> Void,
-        onAuthError: @escaping (String) -> Void,
-        onSubmitTranscript: @escaping (String) -> Void,
-        onToggleTopic: @escaping (Topic) -> Void,
-        onSelectPerson: @escaping (DesktopPerson) -> Void,
-        onRefreshPeople: @escaping () -> Void,
-        onBackFromPicker: @escaping () -> Void
+        actionHandler: OverlayActionHandler?
     ) {
         self.viewModel = viewModel
         self.settingsStore = settingsStore
+        self.actionHandler = actionHandler
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 460, height: 620),
-            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -40,25 +28,13 @@ final class OverlayWindowController: NSWindowController, NSWindowDelegate {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isReleasedWhenClosed = false
         window.isMovableByWindowBackground = true
+        window.minSize = NSSize(width: 460, height: 360)
+        window.maxSize = NSSize(width: 460, height: CGFloat.greatestFiniteMagnitude)
         window.standardWindowButton(.zoomButton)?.isHidden = true
 
         let root = OverlayView(
             viewModel: viewModel,
-            onStart: onStart,
-            onEnd: onEnd,
-            onSettings: onSettings,
-            onSaveSettings: onSaveSettings,
-            onSignIn: onSignIn,
-            onClearAuth: onClearAuth,
-            onBackFromAuxiliary: onBackFromAuxiliary,
-            onDevSignIn: onDevSignIn,
-            onAuthToken: onAuthToken,
-            onAuthError: onAuthError,
-            onSubmitTranscript: onSubmitTranscript,
-            onToggleTopic: onToggleTopic,
-            onSelectPerson: onSelectPerson,
-            onRefreshPeople: onRefreshPeople,
-            onBackFromPicker: onBackFromPicker
+            actionHandler: actionHandler
         )
         window.contentViewController = NSHostingController(rootView: root)
 

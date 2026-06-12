@@ -3,10 +3,12 @@ import Combine
 import UserInterviewNotetakerCore
 
 enum OverlayMode {
+    case onboarding
     case main
     case settings
     case signIn
     case transcript
+    case review
 }
 
 @MainActor
@@ -33,9 +35,12 @@ final class AppViewModel: ObservableObject {
 
     // People picker state
     @Published var allPeople: [DesktopPerson] = []
-    @Published var selectedStartup: String?  // company filter ("All Startups" = nil)
-    @Published var selectedProject: String?  // projectName filter ("All Projects" = nil)
+    @Published var selectedStartup: String?  // startup project filter ("All Startups" = nil)
+    @Published var selectedProject: String?  // outreach project filter ("All Projects" = nil)
     @Published var isLoadingPeople = false
+
+    // Session lifecycle
+    @Published var hasStartedSession = false
 
     // Audio capture state
     @Published var isCapturingAudio = false
@@ -45,19 +50,22 @@ final class AppViewModel: ObservableObject {
         status == .active
     }
 
-    /// Unique companies from the loaded people list, sorted alphabetically.
+    /// Unique startup projects from the loaded people list, sorted alphabetically.
     var availableStartups: [String] {
-        let companies = allPeople.compactMap { person -> String? in
-            guard let company = person.company?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !company.isEmpty else { return nil }
-            return company
+        let startups = allPeople.compactMap { person -> String? in
+            guard let startup = person.startupName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !startup.isEmpty else { return nil }
+            return startup
         }
-        return Array(Set(companies)).sorted()
+        return Array(Set(startups)).sorted()
     }
 
-    /// Unique project names from the loaded people list, sorted alphabetically.
+    /// Unique outreach project names from the current startup selection, sorted alphabetically.
     var availableProjects: [String] {
-        let projectNames = allPeople.compactMap { person -> String? in
+        let people = selectedStartup == nil
+            ? allPeople
+            : allPeople.filter { $0.startupName == selectedStartup }
+        let projectNames = people.compactMap { person -> String? in
             guard let name = person.projectName?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !name.isEmpty else { return nil }
             return name
@@ -69,7 +77,7 @@ final class AppViewModel: ObservableObject {
     var filteredPeople: [DesktopPerson] {
         allPeople.filter { person in
             if let startup = selectedStartup {
-                guard person.company == startup else { return false }
+                guard person.startupName == startup else { return false }
             }
             if let project = selectedProject {
                 guard person.projectName == project else { return false }
@@ -150,6 +158,7 @@ final class AppViewModel: ObservableObject {
         topics = []
         isCapturingAudio = false
         audioCaptureError = nil
+        hasStartedSession = false
         message = "Ready."
     }
 

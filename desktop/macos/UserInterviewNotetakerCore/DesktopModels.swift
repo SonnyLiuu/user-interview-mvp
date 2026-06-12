@@ -48,6 +48,9 @@ public struct DesktopPerson: Codable, Identifiable, Equatable, Sendable {
     public var name: String
     public var title: String?
     public var company: String?
+    public var startupName: String?
+    public var startupId: String?
+    public var startupSlug: String?
     public var projectName: String?
     public var projectId: String?
     public var projectSlug: String?
@@ -57,6 +60,9 @@ public struct DesktopPerson: Codable, Identifiable, Equatable, Sendable {
         name: String,
         title: String? = nil,
         company: String? = nil,
+        startupName: String? = nil,
+        startupId: String? = nil,
+        startupSlug: String? = nil,
         projectName: String? = nil,
         projectId: String? = nil,
         projectSlug: String? = nil
@@ -65,13 +71,16 @@ public struct DesktopPerson: Codable, Identifiable, Equatable, Sendable {
         self.name = name
         self.title = title
         self.company = company
+        self.startupName = startupName
+        self.startupId = startupId
+        self.startupSlug = startupSlug
         self.projectName = projectName
         self.projectId = projectId
         self.projectSlug = projectSlug
     }
 
     public var subtitle: String {
-        [title, company, projectName]
+        [title, company, startupName, projectName]
             .compactMap { value in
                 let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed?.isEmpty == false ? trimmed : nil
@@ -85,21 +94,37 @@ public struct DesktopSettings: Codable, Equatable, Sendable {
     public var hasOverlayPosition: Bool
     public var overlayX: Double
     public var overlayY: Double
+    public var hasSeenOnboarding: Bool
 
     public init(
         apiBaseUrl: String = "http://127.0.0.1:8001",
         hasOverlayPosition: Bool = false,
         overlayX: Double = 0,
-        overlayY: Double = 0
+        overlayY: Double = 0,
+        hasSeenOnboarding: Bool = false
     ) {
         self.apiBaseUrl = apiBaseUrl
         self.hasOverlayPosition = hasOverlayPosition
         self.overlayX = overlayX
         self.overlayY = overlayY
+        self.hasSeenOnboarding = hasSeenOnboarding
     }
 
     public var normalizedApiBaseUrl: String {
         normalizeHttpBaseUrl(apiBaseUrl, fallback: "http://127.0.0.1:8001")
+    }
+
+    /// Next.js base URL derived from apiBaseUrl (FastAPI runs on 8001, Next.js on 3000).
+    public var normalizedNextBaseUrl: String {
+        let fastApi = normalizedApiBaseUrl
+        // Replace port 8001 → 3000 for Next.js; also handles portless URLs.
+        if let range = fastApi.range(of: ":8001") {
+            var next = fastApi
+            next.replaceSubrange(range, with: ":3000")
+            return next
+        }
+        // Fallback: try common Next.js default.
+        return "http://127.0.0.1:3000"
     }
 }
 

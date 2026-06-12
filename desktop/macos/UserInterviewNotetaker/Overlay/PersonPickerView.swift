@@ -3,9 +3,12 @@ import UserInterviewNotetakerCore
 
 struct PersonPickerView: View {
     @ObservedObject var viewModel: AppViewModel
-    var onSelectPerson: (DesktopPerson) -> Void
-    var onRefresh: () -> Void
-    var onBack: () -> Void
+    private weak var actionHandler: OverlayActionHandler?
+
+    init(viewModel: AppViewModel, actionHandler: OverlayActionHandler?) {
+        self.viewModel = viewModel
+        self.actionHandler = actionHandler
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,11 +38,14 @@ struct PersonPickerView: View {
                 peopleList
             }
         }
+        .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Button(action: onBack) {
+            Button {
+                actionHandler?.dismissPicker()
+            } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 14, weight: .semibold))
             }
@@ -51,12 +57,23 @@ struct PersonPickerView: View {
 
             Spacer()
 
-            Button(action: onRefresh) {
+            Button {
+                actionHandler?.refreshPeople()
+            } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 13))
             }
             .buttonStyle(.borderless)
             .help("Refresh people list")
+
+            Button {
+                actionHandler?.openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.borderless)
+            .help("Settings")
         }
         .padding(.bottom, 8)
     }
@@ -77,6 +94,9 @@ struct PersonPickerView: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .frame(maxWidth: .infinity)
+                .onChange(of: viewModel.selectedStartup) { _ in
+                    viewModel.selectedProject = nil
+                }
             }
 
             // Project dropdown
@@ -106,12 +126,12 @@ struct PersonPickerView: View {
             }
             .padding(.vertical, 4)
         }
-        .frame(maxHeight: 360)
+        .frame(maxHeight: .infinity)
     }
 
     private func personRow(_ person: DesktopPerson) -> some View {
         Button {
-            onSelectPerson(person)
+            actionHandler?.selectPerson(person)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(person.name)

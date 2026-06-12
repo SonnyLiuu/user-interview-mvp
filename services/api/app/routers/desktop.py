@@ -155,11 +155,11 @@ async def create_dev_desktop_token(
 
 @router.get("/people")
 async def list_desktop_people(
-    startup: str | None = Query(default=None),
+    startup_id: str | None = Query(default=None, alias="startupId"),
     project_id: str | None = Query(default=None, alias="projectId"),
     auth: AuthContext = Depends(get_auth_context),
 ):
-    startup_filter = startup.strip() if startup else None
+    startup_filter = startup_id.strip() if startup_id else None
     project_filter = project_id.strip() if project_id else None
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -174,15 +174,19 @@ async def list_desktop_people(
                 p.analysis_status,
                 p.board_status,
                 p.updated_at,
-                projects.id as project_id,
-                projects.name as project_name,
-                projects.slug as project_slug
+                projects.id as startup_id,
+                projects.name as startup_name,
+                projects.slug as startup_slug,
+                op.id as project_id,
+                op.name as project_name,
+                op.status as project_status
             from people p
             inner join projects on p.project_id = projects.id
+            left join outreach_projects op on p.outreach_project_id = op.id
             where projects.user_id = $1
               and projects.is_archived = false
-              and ($2::text is null or p.company = $2)
-              and ($3::uuid is null or projects.id = $3::uuid)
+              and ($2::uuid is null or projects.id = $2::uuid)
+              and ($3::uuid is null or op.id = $3::uuid)
             order by p.updated_at desc
             limit 100
             """,
@@ -201,9 +205,13 @@ async def list_desktop_people(
             "analysisStatus": row["analysis_status"],
             "boardStatus": row["board_status"],
             "updatedAt": row["updated_at"].isoformat() if row["updated_at"] else None,
+            "startupId": str(row["startup_id"]) if row["startup_id"] else None,
+            "startupName": row["startup_name"],
+            "startupSlug": row["startup_slug"],
             "projectId": str(row["project_id"]) if row["project_id"] else None,
             "projectName": row["project_name"],
-            "projectSlug": row["project_slug"],
+            "projectSlug": None,
+            "projectStatus": row["project_status"],
         }
         for row in rows
     ]

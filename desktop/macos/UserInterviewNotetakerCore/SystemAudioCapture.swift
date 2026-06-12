@@ -21,9 +21,15 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, @unchecked Send
     }
 
     /// Starts capturing system audio from the default display.
+    /// Requires Screen Recording permission (System Settings > Privacy & Security).
     public func start() async throws {
         // Get shareable content (requires screen recording permission).
-        let content = try await SCShareableContent.current
+        let content: SCShareableContent
+        do {
+            content = try await SCShareableContent.current
+        } catch {
+            throw SystemAudioCaptureError.permissionDenied(error.localizedDescription)
+        }
         guard let display = content.displays.first else {
             throw SystemAudioCaptureError.noDisplayAvailable
         }
@@ -211,10 +217,13 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, @unchecked Send
 }
 
 public enum SystemAudioCaptureError: Error, LocalizedError {
+    case permissionDenied(String)
     case noDisplayAvailable
 
     public var errorDescription: String? {
         switch self {
+        case .permissionDenied(let detail):
+            return "Screen Recording permission is required for system audio capture. Enable it in System Settings > Privacy & Security > Screen Recording. (\(detail))"
         case .noDisplayAvailable:
             return "No display available for system audio capture."
         }
