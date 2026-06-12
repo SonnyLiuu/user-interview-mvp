@@ -6,7 +6,7 @@ Generated on 2026-05-05 after Phase 0 migration verification.
 ## Scope Notes
 
 - Primary web app: `src/app`, `src/components`, `src/lib`.
-- Backend service: `services/foundry-api/app`.
+- Backend service: `services/api/app`.
 - Desktop native code is present under `desktop/native/src`; generated CMake output under `desktop/native/build` is not audit source.
 - Drizzle snapshots under `drizzle/meta/*.json` are generated history and are excluded from refactor-candidate file size rankings.
 
@@ -83,7 +83,7 @@ Generated on 2026-05-05 after Phase 0 migration verification.
 | `POST` | `/v1/people/{person_id}/call-brief/refresh` | `regenerate_call_brief` |
 | `POST` | `/v1/people/{person_id}/outreach/refresh` | `regenerate_outreach` |
 
-Router modules included by `services/foundry-api/app/main.py`:
+Router modules included by `services/api/app/main.py`:
 
 - `projects`
 - `onboarding`
@@ -132,7 +132,7 @@ Top non-generated files by line count. Drizzle JSON snapshots and build outputs 
 | 546 | `src/components/app-nav/AppNav.tsx` |
 | 435 | `src/components/app-nav/AppNav.module.css` |
 | 399 | `src/components/landing/LandingPage.module.css` |
-| 386 | `services/foundry-api/app/ai.py` |
+| 386 | `services/api/app/ai.py` |
 | 352 | `src/components/onboarding/OnboardingChat.tsx` |
 | 328 | `src/components/brief/BriefView.module.css` |
 | 301 | `src/lib/db/schema.ts` |
@@ -149,7 +149,7 @@ Early refactor candidates for later phases:
 
 - `PersonDetailClient.tsx`: many local fetches and interaction handlers in one client component.
 - `AppNav.tsx`: project list/edit/delete UI and navigation state in one component.
-- `services/foundry-api/app/ai.py`: multiple provider adapters plus task-specific prompt functions in one module.
+- `services/api/app/ai.py`: multiple provider adapters plus task-specific prompt functions in one module.
 - Desktop C++ files: large, but audit scope should be confirmed before spending cleanup time there.
 
 ## External Services And Network Surfaces
@@ -160,7 +160,7 @@ Early refactor candidates for later phases:
 - App provider and auth UI: `src/app/layout.tsx`, `src/app/(auth)/login/page.tsx`, `src/app/(auth)/signup/page.tsx`, `src/app/desktop-auth/page.tsx`.
 - Server auth helpers: `src/lib/backend-auth.ts`, `src/lib/desktop-auth.ts`.
 - Webhook: `src/app/api/webhooks/clerk/route.ts` with `svix`.
-- Backend auth consumes signed user context in `services/foundry-api/app/auth.py`.
+- Backend auth consumes signed user context in `services/api/app/auth.py`.
 
 ### User Interview FastAPI Backend
 
@@ -173,13 +173,13 @@ Early refactor candidates for later phases:
 ### Databases
 
 - Next/Drizzle/Neon: `src/lib/db/index.ts`, `scripts/migrate.ts`.
-- FastAPI/asyncpg pool: `services/foundry-api/app/db.py`.
+- FastAPI/asyncpg pool: `services/api/app/db.py`.
 - Env keys: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`.
 
 ### AI Providers
 
 - Next AI provider layer: `src/lib/ai/provider.ts`, `src/lib/ai/providers/openai.ts`, `src/lib/ai/providers/anthropic.ts`, `src/lib/ai/providers/gemini.ts`.
-- FastAPI AI provider layer: `services/foundry-api/app/ai.py`.
+- FastAPI AI provider layer: `services/api/app/ai.py`.
 - Providers/dependencies: OpenAI, Anthropic, Google Gemini.
 - Env keys: `AI_PROVIDER`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_MODEL`, `ANTHROPIC_MODEL`, `GEMINI_MODEL`.
 

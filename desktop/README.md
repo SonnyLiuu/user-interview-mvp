@@ -74,12 +74,12 @@ Prereqs:
 2. Run the FastAPI service from repo root:
 
    ```pwsh
-   cd services\foundry-api
+   cd services\api
    .\.venv\Scripts\python.exe app/main.py
    cd ..\..
    ```
 
-   `services/foundry-api/.env.local` must include realtime checklist
+   `services/api/.env.local` must include realtime checklist
    credentials. For Azure, set `CHECKLIST_AI_PROVIDER=azure`,
    `AZURE_OPENAI_REALTIME_ENDPOINT`, `AZURE_OPENAI_REALTIME_API_KEY`, and
    `AZURE_OPENAI_REALTIME_DEPLOYMENT`. For public OpenAI, set

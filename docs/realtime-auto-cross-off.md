@@ -47,7 +47,7 @@ to `/v1/desktop/live-sessions/{sessionId}/transcript-turns`.
 
 ## Required OpenAI Setup
 
-Set these in `services/foundry-api/.env.local`:
+Set these in `services/api/.env.local`:
 
 ```env
 AI_PROVIDER=gemini
@@ -87,7 +87,7 @@ connection.
 
 ## No-Key Smoke Test
 
-Set this in `services/foundry-api/.env.local`:
+Set this in `services/api/.env.local`:
 
 ```env
 CHECKLIST_AI_PROVIDER=mock

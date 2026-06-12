@@ -11,8 +11,8 @@ desktop/installer/dist/
 
 # env
 .env.local
-services/foundry-api/.env
-services/foundry-api/.venv
+services/api/.env
+services/api/.venv
 **/__pycache__/
 *.pyc
 

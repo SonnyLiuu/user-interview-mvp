@@ -8,7 +8,7 @@ Updated on 2026-05-05 after the first AI cost-control pass.
 The codebase has two AI surfaces:
 
 - Next.js research analysis: Firecrawl gathers content, then `analyzePerson` sends it to the configured AI provider.
-- FastAPI generation: onboarding, intake chat, call prep, and outreach run through `services/foundry-api/app/ai.py`.
+- FastAPI generation: onboarding, intake chat, call prep, and outreach run through `services/api/app/ai.py`.
 
 This pass made three low-risk cost and reliability improvements:
 
@@ -39,7 +39,7 @@ Later improvement: chunk or summarize long crawls instead of taking the first 24
 
 ### Structured JSON Retry
 
-`services/foundry-api/app/ai.py` now retries `_generate_json` once when parsing fails because the response is not a JSON object. It does not retry timeouts, missing API keys, provider failures, or other non-format errors.
+`services/api/app/ai.py` now retries `_generate_json` once when parsing fails because the response is not a JSON object. It does not retry timeouts, missing API keys, provider failures, or other non-format errors.
 
 This is a cost tradeoff in the right place: rare malformed provider responses cost one extra call, but the user avoids manual retries and repeated frontend actions.
 

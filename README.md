@@ -75,7 +75,7 @@ src/
     db/                               # Drizzle schema and connection
     backend-*.ts                      # FastAPI auth/proxy helpers
 
-services/foundry-api/
+services/api/
   app/
     routers/
     services/
@@ -100,7 +100,7 @@ npm install
 ### 2. Install Backend Dependencies
 
 ```powershell
-cd services/foundry-api
+cd services/api
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 cd ..\..
@@ -112,7 +112,7 @@ Copy the examples:
 
 ```powershell
 Copy-Item .env.example .env.local
-Copy-Item services\foundry-api\.env.example services\foundry-api\.env.local
+Copy-Item services\api\.env.example services\api\.env.local
 ```
 
 Use the same `DATABASE_URL` and `FOUNDRY_BACKEND_SHARED_SECRET` in both env files.
@@ -136,7 +136,7 @@ npm run dev
 Terminal 2:
 
 ```powershell
-cd services/foundry-api
+cd services/api
 .\.venv\Scripts\python.exe app/main.py
 ```
 
@@ -193,7 +193,7 @@ Default URLs:
 | `OTTER_API_KEY` | Required for Otter.ai | Otter.ai API key for transcript import. |
 | `OTTER_WEBHOOK_SECRET` | No | Otter.ai webhook signing secret. |
 
-### `services/foundry-api/.env.local`
+### `services/api/.env.local`
 
 | Variable | Required | Notes |
 | --- | --- | --- |
@@ -245,7 +245,7 @@ npm run db:push      # Push schema directly; avoid unless intentional
 Backend:
 
 ```powershell
-cd services/foundry-api
+cd services/api
 .\.venv\Scripts\python.exe app/main.py
 .\.venv\Scripts\python.exe -c "import sys; sys.path.insert(0, '.'); from app.main import app; print(len(app.routes))"
 ```
@@ -305,7 +305,7 @@ The highest-value next refactor target is `PersonDetailClient`, followed by `App
 - `FOUNDRY_BACKEND_SHARED_SECRET` matches in both services.
 - `npm run db:migrate` applied.
 - FastAPI deployed and reachable at `FOUNDRY_API_BASE_URL`.
-- FastAPI CORS origins updated for production in `services/foundry-api/app/config.py` or environment/config layer.
+- FastAPI CORS origins updated for production in `services/api/app/config.py` or environment/config layer.
 - Local verification passes:
 
 ```powershell

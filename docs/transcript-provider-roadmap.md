@@ -32,7 +32,7 @@ No provider touches the AI checklist bridge directly. The bridge only sees
 **Change**: Accept additional values through the system without rejecting them.
 
 ```
-services/foundry-api/app/services/live_sessions.py
+services/api/app/services/live_sessions.py
   _capture_provider() — add: "manual_upload", "recall_ai", "fireflies", "otter"
   _speaker_for_source()  — add mappings for new source labels
 ```
@@ -83,7 +83,7 @@ Add parsing for three formats:
 **Library**: `webvtt-py` (pure Python, well-maintained) handles both `.vtt` and `.srt`.
 
 ```
-services/foundry-api/app/services/transcript_parser.py   ← new file
+services/api/app/services/transcript_parser.py   ← new file
 ```
 
 Exports a single function:
@@ -147,7 +147,7 @@ Recall.ai provides:
 - Webhook callbacks for `bot.status_change`, `transcript.data`, etc.
 - Real-time transcript via WebSocket (optional)
 
-**New file**: `services/foundry-api/app/services/recall_provider.py`
+**New file**: `services/api/app/services/recall_provider.py`
 
 ```python
 class RecallProvider:
@@ -177,7 +177,7 @@ Web app → "Start with Recall.ai"
 ### 2.3 Recall.ai config & secrets
 
 ```env
-# services/foundry-api/.env.local
+# services/api/.env.local
 RECALL_API_KEY=rk_...
 RECALL_REGION=us-west-2     # or eu-central-1
 RECALL_WEBHOOK_SECRET=whsec_...   # for verifying webhook signatures
@@ -294,15 +294,15 @@ with provider flexibility in mind.
 ### Phase 0 (Foundation)
 | File | Change |
 |------|--------|
-| `services/foundry-api/app/services/live_sessions.py` | Expand `_capture_provider()` enum, decouple `audio_capture_enabled` |
-| `services/foundry-api/app/services/live_sessions.py` | Add source→speaker mappings in `_speaker_for_source()` |
+| `services/api/app/services/live_sessions.py` | Expand `_capture_provider()` enum, decouple `audio_capture_enabled` |
+| `services/api/app/services/live_sessions.py` | Add source→speaker mappings in `_speaker_for_source()` |
 
 ### Phase 1 (Manual Upload)
 | File | Change |
 |------|--------|
-| `services/foundry-api/app/services/transcript_parser.py` | **New** — parse .txt, .vtt, .srt |
-| `services/foundry-api/app/routers/live_sessions.py` | Add `POST .../transcript-upload` route |
-| `services/foundry-api/app/schemas/live_sessions.py` | Add upload request/response schemas |
+| `services/api/app/services/transcript_parser.py` | **New** — parse .txt, .vtt, .srt |
+| `services/api/app/routers/live_sessions.py` | Add `POST .../transcript-upload` route |
+| `services/api/app/schemas/live_sessions.py` | Add upload request/response schemas |
 | `requirements.txt` | Add `webvtt-py` |
 | `src/app/(app)/...` | Upload UI component |
 | `desktop/native/src/...` | Paste transcript dialog / menu item |
@@ -310,19 +310,19 @@ with provider flexibility in mind.
 ### Phase 2 (Recall.ai)
 | File | Change |
 |------|--------|
-| `services/foundry-api/app/services/recall_provider.py` | **New** — Recall API client |
-| `services/foundry-api/app/routers/recall.py` | **New** — webhook endpoint |
-| `services/foundry-api/app/routers/live_sessions.py` | Add Recall provider to session start |
-| `services/foundry-api/.env.local` | Add `RECALL_API_KEY`, etc. |
+| `services/api/app/services/recall_provider.py` | **New** — Recall API client |
+| `services/api/app/routers/recall.py` | **New** — webhook endpoint |
+| `services/api/app/routers/live_sessions.py` | Add Recall provider to session start |
+| `services/api/.env.local` | Add `RECALL_API_KEY`, etc. |
 | `src/app/(app)/...` | Meeting URL input, bot status UI |
 | `docs/` | Recall setup guide |
 
 ### Phase 3 (Fireflies)
 | File | Change |
 |------|--------|
-| `services/foundry-api/app/services/fireflies_provider.py` | **New** — Fireflies API client |
-| `services/foundry-api/app/routers/fireflies.py` | **New** — import + webhook endpoints |
-| `services/foundry-api/.env.local` | Add `FIREFLIES_API_KEY` |
+| `services/api/app/services/fireflies_provider.py` | **New** — Fireflies API client |
+| `services/api/app/routers/fireflies.py` | **New** — import + webhook endpoints |
+| `services/api/.env.local` | Add `FIREFLIES_API_KEY` |
 | `src/app/(app)/...` | Fireflies import UI |
 | `docs/` | Fireflies setup guide |
 

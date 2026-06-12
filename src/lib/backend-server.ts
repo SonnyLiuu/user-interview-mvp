@@ -41,7 +41,7 @@ async function backendFetchServer<T>(path: string, init?: RequestInit, options?:
     const body = await response.text().catch(() => '');
     throw new ExternalServiceError(
       body || `Backend request failed`,
-      'foundry-api',
+      'api',
       response.status
     );
   }

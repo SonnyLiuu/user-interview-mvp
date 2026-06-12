@@ -593,7 +593,7 @@ Even if only one provider is used in MVP, keep this boundary intact.
 ## Current Backend Structure
 
 ```text
-services/foundry-api/app/
+services/api/app/
   project_modes.py              # mode metadata, slots, availability, fallback turns
   onboarding_engine.py          # deterministic state machine helpers
   onboarding_mode_hints.py      # mode-specific AI hint/normalization hooks
