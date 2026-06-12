@@ -87,7 +87,7 @@ public struct DesktopSettings: Codable, Equatable, Sendable {
     public var overlayY: Double
 
     public init(
-        apiBaseUrl: String = "http://localhost:3000",
+        apiBaseUrl: String = "http://127.0.0.1:8001",
         hasOverlayPosition: Bool = false,
         overlayX: Double = 0,
         overlayY: Double = 0
@@ -99,7 +99,7 @@ public struct DesktopSettings: Codable, Equatable, Sendable {
     }
 
     public var normalizedApiBaseUrl: String {
-        normalizeHttpBaseUrl(apiBaseUrl, fallback: "http://localhost:3000")
+        normalizeHttpBaseUrl(apiBaseUrl, fallback: "http://127.0.0.1:8001")
     }
 }
 

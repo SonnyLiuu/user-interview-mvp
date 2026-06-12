@@ -18,6 +18,7 @@ func mergeTopics(existing: [Topic], incoming: [Topic]) -> [Topic] {
 func expect(_ condition: @autoclosure () -> Bool, _ message: String, file: StaticString = #file, line: UInt = #line) {
     if !condition() {
         fputs("FAIL [\(file):\(line)]: \(message)\n", stderr)
+        Foundation.exit(1)
     }
 }
 

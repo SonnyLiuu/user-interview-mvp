@@ -21,7 +21,7 @@ public enum DesktopAPIError: Error, LocalizedError, Equatable {
 }
 
 public func requestURL(base: String, path: String) throws -> URL {
-    let normalizedBase = normalizeHttpBaseUrl(base, fallback: "http://localhost:3000")
+    let normalizedBase = normalizeHttpBaseUrl(base, fallback: "http://127.0.0.1:8001")
     let joined = normalizedBase + (path.hasPrefix("/") ? path : "/" + path)
     guard let url = URL(string: joined) else {
         throw DesktopAPIError.invalidURL(joined)

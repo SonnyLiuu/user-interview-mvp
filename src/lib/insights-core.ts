@@ -1,5 +1,4 @@
 import type { InsightContent } from '@/lib/db/schema';
-import { generateObject } from '@/lib/ai/provider';
 
 export const CURRENT_INSIGHT_SCHEMA_VERSION = 3;
 
@@ -27,6 +26,7 @@ export type MissedProbe = {
 
 export type TranscriptTechniqueReview = {
   summary: string;
+  reliability: 'low' | 'medium' | 'high';
   evidenceSignals: string[];
   strongEvidenceMoments: TranscriptEvidenceMoment[];
   weakEvidenceMoments: TranscriptEvidenceMoment[];
@@ -320,6 +320,26 @@ function summarizeTranscript(transcript: string, evidenceSignals: string[]) {
   return parts.join(' ');
 }
 
+function transcriptReliability(
+  strongMoments: TranscriptEvidenceMoment[],
+  weakMoments: TranscriptEvidenceMoment[],
+  questionFlags: InterviewQuestionFlag[],
+  probes: MissedProbe[],
+): TranscriptTechniqueReview['reliability'] {
+  const problemFlags = questionFlags.filter((flag) => flag.severity === 'problem').length;
+  const watchFlags = questionFlags.length - problemFlags;
+  const score =
+    strongMoments.length * 2 -
+    weakMoments.length -
+    problemFlags * 2 -
+    watchFlags -
+    probes.length;
+
+  if (problemFlags > 0 || score <= 0) return 'low';
+  if (strongMoments.length >= 3 && score >= 5) return 'high';
+  return 'medium';
+}
+
 export function overarchingAnalysis(review: TranscriptTechniqueReview): string {
   const parts: string[] = [];
 
@@ -389,6 +409,7 @@ export function analyzeTranscriptTechnique(transcript: string, notes = ''): Tran
 
   return {
     summary: summarizeTranscript(combined, evidenceSignals),
+    reliability: transcriptReliability(strongMoments, weakMoments, questionFlags, probes),
     evidenceSignals,
     strongEvidenceMoments: strongMoments,
     weakEvidenceMoments: weakMoments,
@@ -669,6 +690,7 @@ export async function enhanceTranscriptTechnique(
   if (!transcript.trim() && !notes.trim()) return base;
 
   try {
+    const { generateObject } = await import('./ai/provider.ts');
     const enhanced = await generateObject<EnhancedReview>(
       buildEnhancedPrompt(transcript, notes),
       enhancedReviewSchema,
@@ -676,6 +698,7 @@ export async function enhanceTranscriptTechnique(
 
     return {
       summary: enhanced.overarchingAnalysis,
+      reliability: base.reliability,
       evidenceSignals: base.evidenceSignals,
       strongEvidenceMoments: enhanced.strongEvidenceMoments.map((m) => ({
         quote: m.quote,

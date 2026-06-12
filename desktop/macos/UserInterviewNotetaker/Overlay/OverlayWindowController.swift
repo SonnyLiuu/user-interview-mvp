@@ -3,7 +3,7 @@ import SwiftUI
 import UserInterviewNotetakerCore
 
 @MainActor
-final class OverlayWindowController: NSWindowController {
+final class OverlayWindowController: NSWindowController, NSWindowDelegate {
     private let viewModel: AppViewModel
     private let settingsStore: SettingsStore
 
@@ -13,6 +13,14 @@ final class OverlayWindowController: NSWindowController {
         onStart: @escaping () -> Void,
         onEnd: @escaping () -> Void,
         onSettings: @escaping () -> Void,
+        onSaveSettings: @escaping () -> Void,
+        onSignIn: @escaping () -> Void,
+        onClearAuth: @escaping () -> Void,
+        onBackFromAuxiliary: @escaping () -> Void,
+        onDevSignIn: @escaping (String) -> Void,
+        onAuthToken: @escaping (String) -> Void,
+        onAuthError: @escaping (String) -> Void,
+        onSubmitTranscript: @escaping (String) -> Void,
         onToggleTopic: @escaping (Topic) -> Void,
         onSelectPerson: @escaping (DesktopPerson) -> Void,
         onRefreshPeople: @escaping () -> Void,
@@ -21,34 +29,41 @@ final class OverlayWindowController: NSWindowController {
         self.viewModel = viewModel
         self.settingsStore = settingsStore
 
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 540),
-            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 620),
+            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        panel.title = "User Interview Notetaker"
-        panel.isFloatingPanel = true
-        panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.hidesOnDeactivate = false
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
+        window.title = "User Interview Notetaker"
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.isReleasedWhenClosed = false
+        window.isMovableByWindowBackground = true
+        window.standardWindowButton(.zoomButton)?.isHidden = true
 
         let root = OverlayView(
             viewModel: viewModel,
             onStart: onStart,
             onEnd: onEnd,
             onSettings: onSettings,
+            onSaveSettings: onSaveSettings,
+            onSignIn: onSignIn,
+            onClearAuth: onClearAuth,
+            onBackFromAuxiliary: onBackFromAuxiliary,
+            onDevSignIn: onDevSignIn,
+            onAuthToken: onAuthToken,
+            onAuthError: onAuthError,
+            onSubmitTranscript: onSubmitTranscript,
             onToggleTopic: onToggleTopic,
             onSelectPerson: onSelectPerson,
             onRefreshPeople: onRefreshPeople,
             onBackFromPicker: onBackFromPicker
         )
-        panel.contentViewController = NSHostingController(rootView: root)
+        window.contentViewController = NSHostingController(rootView: root)
 
-        super.init(window: panel)
+        super.init(window: window)
+        window.delegate = self
         restorePosition()
     }
 
@@ -57,7 +72,7 @@ final class OverlayWindowController: NSWindowController {
     }
 
     func show() {
-        window?.orderFrontRegardless()
+        window?.makeKeyAndOrderFront(nil)
     }
 
     func persistPosition() {
@@ -92,5 +107,9 @@ final class OverlayWindowController: NSWindowController {
         let x = screenFrame.maxX - window.frame.width - 24
         let y = screenFrame.maxY - window.frame.height - 24
         window.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        persistPosition()
     }
 }

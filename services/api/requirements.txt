@@ -6,5 +6,6 @@ anthropic==0.51.0
 google-generativeai==0.8.5
 httpx==0.28.1
 pydantic-settings==2.9.1
+python-multipart==0.0.20
 webvtt-py==0.5.1
-rtms; platform_system != "Windows"
+# rtms; platform_system != "Windows"  # not available on macOS

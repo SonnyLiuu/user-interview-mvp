@@ -24,6 +24,9 @@ let package = Package(
                 "Packaging",
                 "Resources/Info.plist",
                 "Resources/UserInterviewNotetaker.entitlements"
+            ],
+            resources: [
+                .copy("Resources/AppIcon.icns")
             ]
         ),
         .executableTarget(

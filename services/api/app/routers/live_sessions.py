@@ -4,7 +4,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, Header, Query, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, Header, Query, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import StreamingResponse
 
 from ..auth import AuthContext, get_auth_context
@@ -46,16 +46,23 @@ def _bearer_token(authorization: str | None) -> str:
 
 @router.post("", response_model=LiveSessionResponse, response_model_by_alias=True)
 async def create_live_session(
+    request: Request,
     body: LiveSessionStartRequest,
     auth: AuthContext = Depends(get_auth_context),
 ):
-    return await start_live_session(
+    response = await start_live_session(
         auth.user_id,
         body.person_id,
         capture_provider=body.capture_provider,
         zoom_meeting_identifier=body.zoom_meeting_identifier,
         meeting_url=body.meeting_url,
     )
+    response["foundryBaseUrl"] = (
+        request.app.state.settings.foundry_desktop_api_public_url
+        if hasattr(request.app.state, "settings") and request.app.state.settings.foundry_desktop_api_public_url
+        else str(request.base_url).rstrip("/")
+    )
+    return response
 
 
 @router.get("/{session_id}", response_model=LiveSessionStateResponse, response_model_by_alias=True)

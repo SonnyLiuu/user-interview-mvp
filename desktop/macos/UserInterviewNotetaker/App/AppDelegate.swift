@@ -15,13 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem?
     private var overlayWindow: OverlayWindowController?
-    private var authWindow: AuthWindowController?
-    private var settingsWindow: SettingsWindowController?
-    private var transcriptWindow: TranscriptWindowController?
     private var eventTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var audioTask: Task<Void, Never>?
     private var pendingDeepLink: String?
+    private var authReturnMode: OverlayMode = .main
     private var lastSSEEventTime = Date.distantPast
     private var audioSocket: LiveAudioWebSocket?
 
@@ -79,6 +77,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onStart: { [weak self] in self?.startSessionFromMenu() },
             onEnd: { [weak self] in self?.endSession() },
             onSettings: { [weak self] in self?.openSettings() },
+            onSaveSettings: { [weak self] in self?.saveSettings() },
+            onSignIn: { [weak self] in self?.openAuth() },
+            onClearAuth: { [weak self] in self?.clearAuth() },
+            onBackFromAuxiliary: { [weak self] in self?.closeAuxiliaryView() },
+            onDevSignIn: { [weak self] email in self?.signInWithDevToken(email: email) },
+            onAuthToken: { [weak self] token in self?.finishAuth(token) },
+            onAuthError: { [weak self] message in self?.viewModel.message = message },
+            onSubmitTranscript: { [weak self] text in self?.appendTranscriptText(text) },
             onToggleTopic: { [weak self] topic in self?.toggleTopic(topic) },
             onSelectPerson: { [weak self] person in self?.selectPerson(person) },
             onRefreshPeople: { [weak self] in self?.refreshPeople() },
@@ -100,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func startSessionFromMenu() {
         showOverlay()
+        viewModel.overlayMode = .main
         guard viewModel.authToken != nil else {
             viewModel.message = "Sign in before starting a session."
             openAuth()
@@ -125,28 +132,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let authToken = viewModel.authToken else { return }
         Task {
             do {
-                // Get launch token
-                let launchResponse = try await desktopAPI.launchToken(
-                    apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
-                    authToken: authToken,
-                    personId: person.id,
-                    zoomMeetingIdentifier: nil
-                )
-                guard let launchToken = launchResponse.token else {
-                    viewModel.message = "Could not prepare secure launch token."
-                    return
-                }
-
                 // Start live session with desktop audio capture.
                 let response = try await desktopAPI.startLiveSession(
                     apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
                     authToken: authToken,
                     personId: person.id,
-                    launchToken: launchToken,
                     captureProvider: "desktop_audio",
                     zoomMeetingIdentifier: nil
                 )
                 viewModel.applyLiveSession(response)
+                viewModel.overlayMode = .main
                 startLiveMonitoring()
 
                 // Start audio capture if the backend enabled it.
@@ -184,19 +179,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() {
-        if let settingsWindow {
-            settingsWindow.showWindow(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let controller = SettingsWindowController(
-            viewModel: viewModel,
-            settingsStore: settingsStore,
-            onSignIn: { [weak self] in self?.openAuth() },
-            onClearAuth: { [weak self] in self?.clearAuth() }
-        )
-        settingsWindow = controller
-        controller.showWindow(nil)
+        viewModel.overlayMode = .settings
+        showOverlay()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -206,16 +190,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showOverlay()
             return
         }
-        if let transcriptWindow {
-            transcriptWindow.showWindow(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let controller = TranscriptWindowController { [weak self] text in
-            self?.appendTranscriptText(text)
-        }
-        transcriptWindow = controller
-        controller.showWindow(nil)
+        viewModel.overlayMode = .transcript
+        showOverlay()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -224,25 +200,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openAuth() {
-        if let authWindow {
-            authWindow.showWindow(nil)
-            authWindow.load()
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        let controller = AuthWindowController(
-            apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
-            onToken: { [weak self] token in
-                self?.finishAuth(token)
-            },
-            onError: { [weak self] message in
-                self?.viewModel.message = message
-            }
-        )
-        authWindow = controller
-        controller.showWindow(nil)
-        controller.load()
+        authReturnMode = viewModel.overlayMode == .settings ? .settings : .main
+        viewModel.overlayMode = .signIn
+        showOverlay()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -251,13 +211,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try tokenStore.save(token)
             viewModel.authToken = token
             viewModel.message = "Signed in."
-            settingsWindow?.refreshStatus()
             if let pendingDeepLink {
                 self.pendingDeepLink = nil
+                viewModel.overlayMode = .main
                 handleDeepLink(pendingDeepLink)
+            } else {
+                viewModel.overlayMode = authReturnMode
             }
         } catch {
             viewModel.message = "Could not save auth token."
+        }
+    }
+
+    private func signInWithDevToken(email: String) {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            viewModel.message = "Email is required."
+            return
+        }
+        viewModel.message = "Connecting to local backend..."
+        Task {
+            do {
+                let response = try await desktopAPI.devAuthToken(
+                    apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
+                    email: trimmed
+                )
+                finishAuth(response.token)
+            } catch {
+                viewModel.message = error.localizedDescription
+            }
         }
     }
 
@@ -265,7 +247,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tokenStore.clear()
         viewModel.authToken = nil
         viewModel.message = "Auth cleared."
-        settingsWindow?.refreshStatus()
+    }
+
+    private func saveSettings() {
+        try? settingsStore.save(viewModel.settings)
+        viewModel.message = "Settings saved."
+    }
+
+    private func closeAuxiliaryView() {
+        viewModel.overlayMode = .main
     }
 
     private func handleDeepLink(_ raw: String) {
@@ -273,11 +263,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let link = DeepLinkParser.parse(raw),
               link.action == "call/start",
               let personId = link.personId,
-              let launchToken = link.token
+              link.token != nil
         else {
             viewModel.message = "Ignoring malformed foundry link."
             return
         }
+        viewModel.overlayMode = .main
 
         guard let authToken = viewModel.authToken else {
             pendingDeepLink = raw
@@ -293,11 +284,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
                     authToken: authToken,
                     personId: personId,
-                    launchToken: launchToken,
                     captureProvider: "zoom_rtms",
                     zoomMeetingIdentifier: link.zoomMeetingIdentifier
                 )
                 viewModel.applyLiveSession(response)
+                viewModel.overlayMode = .main
                 startLiveMonitoring()
             } catch {
                 viewModel.message = error.localizedDescription
@@ -602,6 +593,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     body: viewModel.endSessionRequest() ?? initialRequest
                 )
                 viewModel.resetSession()
+                viewModel.overlayMode = .main
                 viewModel.message = "Call saved."
             } catch {
                 viewModel.message = error.localizedDescription

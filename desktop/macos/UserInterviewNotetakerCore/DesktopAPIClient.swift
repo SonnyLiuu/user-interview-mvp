@@ -6,20 +6,27 @@ public struct EmptyResponse: Codable, Equatable, Sendable {
 
 public struct StartLiveSessionRequest: Codable, Equatable, Sendable {
     public var personId: String
-    public var launchToken: String
     public var captureProvider: String
     public var zoomMeetingIdentifier: String?
 
     public init(
         personId: String,
-        launchToken: String,
         captureProvider: String = "zoom_rtms",
         zoomMeetingIdentifier: String? = nil
     ) {
         self.personId = personId
-        self.launchToken = launchToken
         self.captureProvider = captureProvider
         self.zoomMeetingIdentifier = zoomMeetingIdentifier
+    }
+}
+
+public struct DevAuthRequest: Codable, Equatable, Sendable {
+    public var email: String
+    public var name: String?
+
+    public init(email: String, name: String? = nil) {
+        self.email = email
+        self.name = name
     }
 }
 
@@ -63,12 +70,23 @@ public final class DesktopAPIClient: Sendable {
         self.session = session
     }
 
+    public func devAuthToken(apiBaseUrl: String, email: String) async throws -> DesktopAuthTokenResponse {
+        let request = try jsonRequest(
+            base: apiBaseUrl,
+            path: "/v1/desktop/auth/dev-token",
+            method: "POST",
+            bearerToken: nil,
+            body: DevAuthRequest(email: email)
+        )
+        return try await send(request)
+    }
+
     // MARK: People (v2 – not yet wired in the UI)
 
     public func people(apiBaseUrl: String, authToken: String) async throws -> [DesktopPerson] {
         let request = try jsonRequest(
             base: apiBaseUrl,
-            path: "/api/desktop/people",
+            path: "/v1/desktop/people",
             method: "GET",
             bearerToken: authToken
         )
@@ -84,7 +102,7 @@ public final class DesktopAPIClient: Sendable {
         let body = LaunchTokenRequest(personId: personId, zoomMeetingIdentifier: zoomMeetingIdentifier)
         let request = try jsonRequest(
             base: apiBaseUrl,
-            path: "/api/desktop/launch-token",
+            path: "/v1/desktop/launch-token",
             method: "POST",
             bearerToken: authToken,
             body: body
@@ -96,19 +114,17 @@ public final class DesktopAPIClient: Sendable {
         apiBaseUrl: String,
         authToken: String,
         personId: String,
-        launchToken: String,
         captureProvider: String = "desktop_audio",
         zoomMeetingIdentifier: String? = nil
     ) async throws -> LiveSessionResponse {
         let body = StartLiveSessionRequest(
             personId: personId,
-            launchToken: launchToken,
             captureProvider: captureProvider,
             zoomMeetingIdentifier: zoomMeetingIdentifier
         )
         let request = try jsonRequest(
             base: apiBaseUrl,
-            path: "/api/desktop/sessions/live/start",
+            path: "/v1/desktop/live-sessions",
             method: "POST",
             bearerToken: authToken,
             body: body
@@ -124,7 +140,7 @@ public final class DesktopAPIClient: Sendable {
     ) async throws -> EmptyResponse {
         let request = try jsonRequest(
             base: apiBaseUrl,
-            path: "/api/desktop/sessions/end",
+            path: "/v1/desktop/sessions/end",
             method: "POST",
             bearerToken: authToken,
             body: body

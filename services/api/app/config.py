@@ -1,11 +1,19 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+API_DIR = Path(__file__).resolve().parents[1]
+REPO_DIR = Path(__file__).resolve().parents[3]
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env.local", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(REPO_DIR / ".env.local", API_DIR / ".env.local"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     host: str = "0.0.0.0"
     port: int = 8001
@@ -13,6 +21,8 @@ class Settings(BaseSettings):
 
     database_url: str = Field(alias="DATABASE_URL")
     backend_shared_secret: str = Field(alias="FOUNDRY_BACKEND_SHARED_SECRET")
+    desktop_dev_auth_enabled: bool = Field(default=False, alias="DESKTOP_DEV_AUTH_ENABLED")
+    foundry_desktop_api_public_url: str | None = Field(default=None, alias="FOUNDRY_DESKTOP_API_PUBLIC_URL")
 
     ai_provider: str = Field(default="openai", alias="AI_PROVIDER")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")

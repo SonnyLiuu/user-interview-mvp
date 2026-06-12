@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from .config import Settings, get_settings
 from .db import close_pool, init_pool
 from .errors import AIServiceError, BadRequestError, DatabaseUnavailableError, NotFoundError, UnauthorizedError
-from .routers import call_prep, dashboard, fireflies, intake, live_sessions, onboarding, otter, outreach, outreach_projects, projects, recall, workspace, zoom_rtms
+from .routers import call_prep, dashboard, desktop, fireflies, intake, live_sessions, onboarding, otter, outreach, outreach_projects, projects, recall, workspace, zoom_rtms
 
 import logging
 
@@ -27,6 +27,7 @@ async def lifespan(app: FastAPI):
 def create_app(settings: Settings | None = None) -> FastAPI:
     cfg = settings or get_settings()
     app = FastAPI(title="User Interview API", version="0.1.0", lifespan=lifespan)
+    app.state.settings = cfg
 
     app.add_middleware(
         CORSMiddleware,
@@ -40,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(onboarding.router)
     app.include_router(intake.router)
     app.include_router(call_prep.router)
+    app.include_router(desktop.router)
     app.include_router(live_sessions.router)
     app.include_router(outreach.router)
     app.include_router(outreach_projects.router)

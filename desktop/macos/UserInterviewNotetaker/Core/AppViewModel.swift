@@ -2,6 +2,13 @@ import Foundation
 import Combine
 import UserInterviewNotetakerCore
 
+enum OverlayMode {
+    case main
+    case settings
+    case signIn
+    case transcript
+}
+
 @MainActor
 final class AppViewModel: ObservableObject {
     /// Shared formatter so date strings are consistent across the app.
@@ -22,6 +29,7 @@ final class AppViewModel: ObservableObject {
     @Published var liveTranscriptRaw = ""
     @Published var topics: [Topic] = []
     @Published var message = "Ready."
+    @Published var overlayMode: OverlayMode = .main
 
     // People picker state
     @Published var allPeople: [DesktopPerson] = []

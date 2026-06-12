@@ -67,6 +67,7 @@ class LiveSessionResponse(BaseModel):
     capture_provider: str = Field(alias="captureProvider")
     audio_capture_enabled: bool = Field(alias="audioCaptureEnabled")
     zoom_meeting_identifier: str | None = Field(default=None, alias="zoomMeetingIdentifier")
+    foundry_base_url: str | None = Field(default=None, alias="foundryBaseUrl")
     live_token: str = Field(alias="liveToken")
     topics: list[LiveTopic]
     started_at: str = Field(alias="startedAt")
