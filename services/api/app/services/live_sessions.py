@@ -525,7 +525,7 @@ async def start_live_session(
         status="active",
         started_at=_now_iso(),
         capture_provider=provider,
-        audio_capture_enabled=provider == "desktop_audio",
+        audio_capture_enabled=provider == "desktop_audio" and _checklist_provider() != "mock",
         zoom_meeting_identifier=normalized_zoom_meeting_identifier,
         zoom_meeting_id=normalized_zoom_meeting_identifier if normalized_zoom_meeting_identifier and normalized_zoom_meeting_identifier.isdigit() else None,
         topics=_topics_from_call_brief(content),
