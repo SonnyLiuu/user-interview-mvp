@@ -14,10 +14,9 @@ export type OutcomeCounts = {
 };
 
 export type FunnelStage = {
-  bookmarked: number;
   sent: number;
+  responded: number;
   scheduled: number;
-  completed: number;
 };
 
 export type PersonaBreakdown = {
@@ -25,6 +24,10 @@ export type PersonaBreakdown = {
   contacted: number;
   responded: number;
   responseRate: number;
+  noResponse: number;
+  notInterested: number;
+  successfulCall: number;
+  partial: number;
 };
 
 export type StalePerson = {
@@ -104,7 +107,7 @@ function emptyOutcomeCounts(): OutcomeCounts {
 }
 
 function emptyFunnel(): FunnelStage {
-  return { bookmarked: 0, sent: 0, scheduled: 0, completed: 0 };
+  return { sent: 0, responded: 0, scheduled: 0 };
 }
 
 // ── Main query ─────────────────────────────────────────────────────────────────
@@ -152,34 +155,62 @@ export async function getOutreachStats(projectId: string): Promise<OutreachStats
   }
 
   // ── Funnel ────────────────────────────────────────────────────────────────
+  // Cumulative funnel: total contacted → total responded → total completed
+  // Each stage is a subset of the previous one.
 
   const funnel: FunnelStage = emptyFunnel();
   for (const row of rows) {
-    switch (row.boardStatus) {
-      case 'bookmarked':
-        funnel.bookmarked++;
-        break;
-      case 'sent':
-        funnel.sent++;
-        break;
-      case 'scheduled':
-        funnel.scheduled++;
-        break;
-      case 'completed':
-        funnel.completed++;
-        break;
+    if (isContacted(row)) {
+      funnel.sent++; // total ever contacted
+      if (hasResponded(row)) {
+        funnel.responded++;
+        if (row.boardStatus === 'scheduled' || row.boardStatus === 'completed') {
+          funnel.scheduled++;
+        }
+      }
     }
   }
 
   // ── By persona type ───────────────────────────────────────────────────────
 
-  const personaMap = new Map<string, { contacted: number; responded: number }>();
+  const personaMap = new Map<
+    string,
+    {
+      contacted: number;
+      responded: number;
+      noResponse: number;
+      notInterested: number;
+      successfulCall: number;
+      partial: number;
+    }
+  >();
 
   for (const row of contacted) {
     const key = row.personaType?.trim() || 'Unknown';
-    const entry = personaMap.get(key) ?? { contacted: 0, responded: 0 };
+    const entry = personaMap.get(key) ?? {
+      contacted: 0,
+      responded: 0,
+      noResponse: 0,
+      notInterested: 0,
+      successfulCall: 0,
+      partial: 0,
+    };
     entry.contacted++;
     if (hasResponded(row)) entry.responded++;
+    switch (row.outcome) {
+      case 'no_response':
+        entry.noResponse++;
+        break;
+      case 'not_interested':
+        entry.notInterested++;
+        break;
+      case 'successful_call':
+        entry.successfulCall++;
+        break;
+      case 'partial':
+        entry.partial++;
+        break;
+    }
     personaMap.set(key, entry);
   }
 
@@ -189,8 +220,12 @@ export async function getOutreachStats(projectId: string): Promise<OutreachStats
       contacted: entry.contacted,
       responded: entry.responded,
       responseRate: rate(entry.responded, entry.contacted) ?? 0,
+      noResponse: entry.noResponse,
+      notInterested: entry.notInterested,
+      successfulCall: entry.successfulCall,
+      partial: entry.partial,
     }))
-    .sort((a, b) => b.responseRate - a.responseRate);
+    .sort((a, b) => b.responseRate - a.responseRate || b.contacted - a.contacted);
 
   // ── Stale outreach ────────────────────────────────────────────────────────
 

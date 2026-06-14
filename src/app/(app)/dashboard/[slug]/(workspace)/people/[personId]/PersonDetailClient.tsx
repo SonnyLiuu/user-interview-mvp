@@ -192,7 +192,13 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, i
       <button
         type="button"
         className={styles.backBtn}
-        onClick={() => router.push(`/dashboard/${slug}/people`)}
+        onClick={() => {
+          if (window.history.length > 1) {
+            router.back();
+          } else {
+            router.push(`/dashboard/${slug}/people`);
+          }
+        }}
       >
         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className={styles.backIcon}>
           <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

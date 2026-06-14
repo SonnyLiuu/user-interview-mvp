@@ -9,6 +9,7 @@ const OUTCOME_COLORS: Record<string, string> = {
   notInterested: '#d4a08a',
   successfulCall: '#5b9e8a',
   partial: '#8aafb5',
+  awaiting: '#e8d9c4',
 };
 
 const OUTCOME_LABELS: Record<string, string> = {
@@ -16,6 +17,15 @@ const OUTCOME_LABELS: Record<string, string> = {
   notInterested: 'Declined',
   successfulCall: 'Call completed',
   partial: 'Partial',
+  awaiting: 'Awaiting',
+};
+
+const OUTCOME_SLICE_LABELS: Record<string, string> = {
+  noResponse: 'No response',
+  notInterested: 'Declined',
+  successfulCall: 'Call',
+  partial: 'Partial',
+  awaiting: 'Awaiting',
 };
 
 function pct(value: number, total: number): string {
@@ -26,6 +36,30 @@ function pct(value: number, total: number): string {
 function funnelPct(current: number, previous: number): string {
   if (previous === 0) return '—';
   return `${Math.round((current / previous) * 100)}%`;
+}
+
+function personaLabel(type: string): string {
+  const labels: Record<string, string> = {
+    potential_user: 'Target user',
+    buyer: 'Decision maker',
+    operator: 'Experienced builder',
+    domain_expert: 'Industry expert',
+    skeptic: 'Critical voice',
+    connector: 'Introducer',
+    Unknown: 'Unknown persona',
+  };
+
+  return labels[type] ?? type.replace(/_/g, ' ');
+}
+
+function personaSignal(persona: OutreachStats['byPersonaType'][number], averageRate: number | null): string {
+  const positiveResponses = persona.successfulCall + persona.partial;
+
+  if (persona.contacted < 3) return 'Needs more data';
+  if (averageRate !== null && persona.responseRate >= averageRate + 15) return 'Double down';
+  if (positiveResponses === 0 && persona.notInterested > 0) return 'Rework angle';
+  if (averageRate !== null && persona.responseRate <= averageRate - 15) return 'Lower yield';
+  return 'Keep testing';
 }
 
 // ── Empty state ────────────────────────────────────────────────────────────────
@@ -145,33 +179,71 @@ export function OutreachInsightsData({ stats, slug }: { stats: OutreachStats; sl
   );
 }
 
-// ── Outcome bar ────────────────────────────────────────────────────────────────
+// ── Outcome pie ────────────────────────────────────────────────────────────────
 
 function OutcomeBar({ outcomeCounts, totalContacted }: { outcomeCounts: OutreachStats['outcomeCounts']; totalContacted: number }) {
   const entries = Object.entries(outcomeCounts) as Array<[string, number]>;
+  const accounted = entries.reduce((sum, [, count]) => sum + count, 0);
+  const awaiting = Math.max(totalContacted - accounted, 0);
+  const chartEntries = awaiting > 0 ? [...entries, ['awaiting', awaiting] as [string, number]] : entries;
+
+  let start = 0;
+  const pieGradient = chartEntries
+    .filter(([, count]) => count > 0)
+    .map(([key, count]) => {
+      const end = start + (count / totalContacted) * 100;
+      const stop = `${OUTCOME_COLORS[key] ?? '#c4b5a5'} ${start}% ${end}%`;
+      start = end;
+      return stop;
+    })
+    .join(', ');
+  let labelStart = 0;
+  const pieLabels = chartEntries
+    .filter(([, count]) => count > 0)
+    .map(([key, count]) => {
+      const sweep = (count / totalContacted) * 360;
+      const midpoint = labelStart + sweep / 2 - 90;
+      labelStart += sweep;
+      const radians = (midpoint * Math.PI) / 180;
+      const radius = 38;
+      return {
+        key,
+        count,
+        label: OUTCOME_SLICE_LABELS[key] ?? OUTCOME_LABELS[key] ?? key,
+        x: 50 + Math.cos(radians) * radius,
+        y: 50 + Math.sin(radians) * radius,
+      };
+    });
 
   if (totalContacted === 0) {
     return <p className={styles.emptyNote}>No people contacted yet.</p>;
   }
 
   return (
-    <div className={styles.outcomeBarShell}>
-      <div className={styles.outcomeBarTrack}>
-        {entries.map(([key, count]) =>
-          count > 0 ? (
-            <div
-              key={key}
-              className={styles.outcomeBarSegment}
-              style={{
-                width: pct(count, totalContacted),
-                backgroundColor: OUTCOME_COLORS[key] ?? '#c4b5a5',
-              }}
-            />
-          ) : null,
-        )}
+    <div className={styles.outcomePieShell}>
+      <div
+        className={styles.outcomePie}
+        style={{ background: `conic-gradient(${pieGradient})` }}
+        aria-label={`${totalContacted} contacted people by outcome`}
+        role="img"
+      >
+        {pieLabels.map((label) => (
+          <span
+            key={label.key}
+            className={styles.outcomePieTag}
+            style={{ left: `${label.x}%`, top: `${label.y}%` }}
+            aria-hidden="true"
+          >
+            {label.label}
+          </span>
+        ))}
+        <div className={styles.outcomePieCenter}>
+          <span className={styles.outcomePieValue}>{totalContacted}</span>
+          <span className={styles.outcomePieLabel}>contacted</span>
+        </div>
       </div>
       <div className={styles.outcomeLegend}>
-        {entries.map(([key, count]) => (
+        {chartEntries.map(([key, count]) => (
           <div key={key} className={styles.outcomeLegendItem}>
             <span
               className={styles.outcomeLegendDot}
@@ -194,10 +266,9 @@ function OutcomeBar({ outcomeCounts, totalContacted }: { outcomeCounts: Outreach
 
 function FunnelPanel({ funnel }: { funnel: OutreachStats['funnel'] }) {
   const stages = [
-    { key: 'bookmarked', label: 'Found', count: funnel.bookmarked },
     { key: 'sent', label: 'Contacted', count: funnel.sent },
-    { key: 'scheduled', label: 'Scheduled', count: funnel.scheduled },
-    { key: 'completed', label: 'Completed', count: funnel.completed },
+    { key: 'responded', label: 'Responded', count: funnel.responded },
+    { key: 'scheduled', label: 'Completed', count: funnel.scheduled },
   ] as const;
 
   const maxCount = Math.max(...stages.map((s) => s.count), 1);
@@ -251,17 +322,36 @@ function PersonaPanel({
     );
   }
 
+  const bestPersona = byPersonaType[0];
+  const averageRate =
+    totalContacted === 0
+      ? null
+      : Math.round(
+          (byPersonaType.reduce((sum, persona) => sum + persona.responded, 0) / totalContacted) *
+            1000,
+        ) / 10;
+
   return (
     <article className={styles.summaryPanel}>
-      <h2 className={styles.sectionTitle}>Response by persona</h2>
+      <div className={styles.personaPanelHeader}>
+        <h2 className={styles.sectionTitle}>Response by persona</h2>
+        <p className={styles.personaSummary}>
+          {personaLabel(bestPersona.personaType)} is leading at {bestPersona.responseRate}% from{' '}
+          {bestPersona.contacted} contacted.
+        </p>
+      </div>
       <div className={styles.personaTable}>
         {byPersonaType.map((p) => (
           <div key={p.personaType} className={styles.personaRow}>
-            <div className={styles.personaInfo}>
-              <span className={styles.personaName}>{p.personaType}</span>
-              <span className={styles.personaCount}>
-                {p.responded}/{p.contacted}
-              </span>
+            <div className={styles.personaMain}>
+              <div className={styles.personaInfo}>
+                <span className={styles.personaName}>{personaLabel(p.personaType)}</span>
+                <span className={styles.personaSignal}>{personaSignal(p, averageRate)}</span>
+              </div>
+              <div className={styles.personaMeta}>
+                <span>{p.responded}/{p.contacted} responded</span>
+                <span>{pct(p.contacted, totalContacted)} of contacted</span>
+              </div>
             </div>
             <div className={styles.personaBarTrack}>
               <div
@@ -270,6 +360,20 @@ function PersonaPanel({
               />
             </div>
             <span className={styles.personaRate}>{p.responseRate}%</span>
+            <div className={styles.personaOutcomeMix}>
+              {[
+                { key: 'successfulCall', count: p.successfulCall },
+                { key: 'partial', count: p.partial },
+                { key: 'notInterested', count: p.notInterested },
+                { key: 'noResponse', count: p.noResponse },
+              ].map((outcome) =>
+                outcome.count > 0 ? (
+                  <span key={outcome.key} className={styles.personaOutcomePill}>
+                    {OUTCOME_LABELS[outcome.key]} {outcome.count}
+                  </span>
+                ) : null,
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -292,7 +396,7 @@ function StalePanel({
         <div>
           <p className={styles.eyebrow}>Needs follow-up</p>
           <h2 className={styles.sectionHeading}>
-            {stalePeople.length} {stalePeople.length === 1 ? 'person' : 'people'} haven&apos;t responded
+            {`${stalePeople.length} ${stalePeople.length === 1 ? 'person' : 'people'} haven't responded`}
           </h2>
         </div>
       </div>
