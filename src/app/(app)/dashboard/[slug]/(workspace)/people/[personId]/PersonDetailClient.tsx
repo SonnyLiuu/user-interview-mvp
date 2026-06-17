@@ -7,8 +7,7 @@ import type { ProjectType } from '@/lib/backend-types';
 import { getProjectModeConfig } from '@/lib/project-modes';
 import { derivePersonSources, discoveredSourceLabel, normalizeUrlKey } from '@/lib/person-sources';
 import { PersonaBubble } from '@/components/people/PersonaBubble';
-import type { PersonaType } from '@/components/people/PersonaBubble';
-import { RelevanceIndicator } from '@/components/people/RelevanceIndicator';
+import { getPersonaTags, type PersonaTagMode } from '@/components/people/persona-tags';
 import { BookmarkButton } from '@/components/people/BookmarkButton';
 import { UrlInputForm } from '@/components/people/UrlInputForm';
 import { boardStatusToStage } from '@/lib/crm';
@@ -22,6 +21,7 @@ type Props = {
   person: Person;
   slug: string;
   projectType: ProjectType;
+  tagMode: PersonaTagMode;
   initialOutreach: OutreachRow | null;
   initialCallPrep: { id: string; content: CallPrepContent | null } | null;
   initialTranscripts: Transcript[];
@@ -38,7 +38,7 @@ const MATCH_FACTOR_LABELS: Record<string, string> = {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function PersonDetailClient({ person: initialPerson, slug, projectType, initialOutreach, initialCallPrep, initialTranscripts }: Props) {
+export function PersonDetailClient({ person: initialPerson, slug, projectType, tagMode, initialOutreach, initialCallPrep, initialTranscripts }: Props) {
   const router = useRouter();
   const [person, setPerson] = useState<Person>(initialPerson);
   const [savedOutreach, setSavedOutreach] = useState(initialOutreach);
@@ -65,10 +65,10 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, i
     sources.linkedinPastedNoUrl ||
     discoveredSources.length > 0;
   const stage = boardStatusToStage(person.board_status);
-  const matchRank = (person.match_rank ?? person.relevance_rank ?? analysis?.match_rank ?? analysis?.relevance_rank) as 'low' | 'medium' | 'high' | null;
-  const matchScore = typeof person.match_score === 'number' ? person.match_score : analysis?.match_score ?? null;
   const matchFactors = person.match_factors ?? analysis?.match_factors ?? null;
   const matchExplanation = person.match_explanation ?? analysis?.match_explanation ?? null;
+  const hasMatchStatus = person.match_status === 'pending' || person.match_status === 'stale';
+  const personaTags = getPersonaTags(person.persona_type, analysis?.global_tags, tagMode);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -218,12 +218,9 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, i
                 </p>
               )}
               <div className={styles.headerMeta}>
-                {person.persona_type && (
-                  <PersonaBubble type={person.persona_type as PersonaType} />
-                )}
-                {matchRank && (
-                  <RelevanceIndicator rank={matchRank} score={matchScore} stale={person.match_status === 'stale'} />
-                )}
+                {personaTags.map((tag) => (
+                  <PersonaBubble key={tag.key} tag={tag} />
+                ))}
               </div>
             </div>
             <div className={styles.headerActions}>
@@ -234,10 +231,6 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, i
               />
             </div>
           </div>
-
-          {analysis?.why_they_matter && (
-            <p className={styles.whyMatter}>{analysis.why_they_matter}</p>
-          )}
 
           {isAnalyzing && (
             <p className={styles.analyzingNote} role="status">Re-analyzing with updated context…</p>
@@ -257,17 +250,16 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, i
           {/* ── Call Brief ───────────────────────────────────────────────── */}
           <CallBriefSection personId={person.id} slug={slug} stage={stage} initialPrep={initialCallPrep} />
 
-          {(projectType === 'networking' || person.match_profile_version) && (matchRank || matchExplanation || matchFactors) && (
+          {(projectType === 'networking' || person.match_profile_version) && (matchExplanation || matchFactors || hasMatchStatus) && (
             <section className={styles.section}>
               <h2 className={styles.sectionTitle}>{projectType === 'networking' ? 'Match' : 'Idea Validation fit'}</h2>
               <div className={styles.matchPanel}>
-                <div className={styles.matchSummaryRow}>
-                  {matchRank && (
-                    <RelevanceIndicator rank={matchRank} score={matchScore} stale={person.match_status === 'stale'} />
-                  )}
-                  {person.match_status === 'pending' && <span className={styles.matchStatus}>Refreshing score...</span>}
-                  {person.match_status === 'stale' && <span className={styles.matchStatus}>Based on an older rubric</span>}
-                </div>
+                {hasMatchStatus && (
+                  <div className={styles.matchSummaryRow}>
+                    {person.match_status === 'pending' && <span className={styles.matchStatus}>Refreshing score...</span>}
+                    {person.match_status === 'stale' && <span className={styles.matchStatus}>Based on an older rubric</span>}
+                  </div>
+                )}
                 {matchExplanation && <p className={styles.prose}>{matchExplanation}</p>}
                 {matchFactors && (
                   <div className={styles.matchFactors}>
@@ -351,49 +343,6 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, i
             </>
           )}
 
-          {/* ── Sources ─────────────────────────────────────────────────── */}
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Sources</h2>
-            {hasAnySource ? (
-              <dl className={styles.contactGrid}>
-                {sources.email && (
-                  <><dt className={styles.contactKey}>Email</dt><dd className={styles.contactVal}>{sources.email}</dd></>
-                )}
-                {sources.linkedin ? (
-                  <><dt className={styles.contactKey}>LinkedIn</dt><dd className={styles.contactVal}><a href={sources.linkedin} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.linkedin}</a></dd></>
-                ) : sources.linkedinPastedNoUrl ? (
-                  <><dt className={styles.contactKey}>LinkedIn</dt><dd className={styles.contactVal}>URL not provided (pasted profile)</dd></>
-                ) : null}
-                {sources.twitter && (
-                  <><dt className={styles.contactKey}>Twitter</dt><dd className={styles.contactVal}><a href={sources.twitter} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.twitter}</a></dd></>
-                )}
-                {sources.website && (
-                  <><dt className={styles.contactKey}>Website</dt><dd className={styles.contactVal}><a href={sources.website} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.website}</a></dd></>
-                )}
-                {discoveredSources.map((source, i) => {
-                  const included = source.crawl_status === 'included';
-                  return (
-                    <Fragment key={`${source.url}-${i}`}>
-                      <dt className={styles.contactKey}>{discoveredSourceLabel(source)}</dt>
-                      <dd className={styles.contactVal}>
-                        <a href={source.url} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{source.url}</a>
-                        <span className={included ? styles.discoveredIncluded : styles.discoveredFailed}>
-                          {included ? 'Included in analysis' : 'Found, but could not be crawled'}
-                        </span>
-                        {source.evidence ? <span className={styles.discoveredEvidence}>{source.evidence}</span> : null}
-                        {!included && source.crawl_error ? (
-                          <span className={styles.discoveredError}>{source.crawl_error}</span>
-                        ) : null}
-                      </dd>
-                    </Fragment>
-                  );
-                })}
-              </dl>
-            ) : (
-              <p className={styles.notFound}>No sources found.</p>
-            )}
-          </section>
-
           {/* ── Outreach ────────────────────────────────────────────────── */}
           <section id="outreach" className={styles.section}>
             <h2 className={styles.sectionTitle}>Outreach</h2>
@@ -420,6 +369,39 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, i
                   </div>
                 )}
               </div>
+            )}
+          </section>
+
+          {/* ── Sources ─────────────────────────────────────────────────── */}
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Sources</h2>
+            {hasAnySource ? (
+              <dl className={styles.contactGrid}>
+                {sources.email && (
+                  <><dt className={styles.contactKey}>Email</dt><dd className={styles.contactVal}>{sources.email}</dd></>
+                )}
+                {sources.linkedin ? (
+                  <><dt className={styles.contactKey}>LinkedIn</dt><dd className={styles.contactVal}><a href={sources.linkedin} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.linkedin}</a></dd></>
+                ) : sources.linkedinPastedNoUrl ? (
+                  <><dt className={styles.contactKey}>LinkedIn</dt><dd className={styles.contactVal}>URL not provided (pasted profile)</dd></>
+                ) : null}
+                {sources.twitter && (
+                  <><dt className={styles.contactKey}>Twitter</dt><dd className={styles.contactVal}><a href={sources.twitter} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.twitter}</a></dd></>
+                )}
+                {sources.website && (
+                  <><dt className={styles.contactKey}>Website</dt><dd className={styles.contactVal}><a href={sources.website} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{sources.website}</a></dd></>
+                )}
+                {discoveredSources.map((source, i) => (
+                  <Fragment key={`${source.url}-${i}`}>
+                    <dt className={styles.contactKey}>{discoveredSourceLabel(source)}</dt>
+                    <dd className={styles.contactVal}>
+                      <a href={source.url} target="_blank" rel="noopener noreferrer" className={styles.contactLink}>{source.url}</a>
+                    </dd>
+                  </Fragment>
+                ))}
+              </dl>
+            ) : (
+              <p className={styles.notFound}>No sources found.</p>
             )}
           </section>
 

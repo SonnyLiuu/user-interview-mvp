@@ -133,18 +133,17 @@ const insightSchema = {
   additionalProperties: false,
   properties: {
     schemaVersion: { type: 'number' },
+    overviewOpener: { type: 'string' },
     learningSummary: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        headline: { type: 'string' },
-        summary: { type: 'string' },
         callsAnalyzed: { type: 'number' },
         evidenceLevel: { type: 'string', enum: ['thin', 'emerging', 'strong'] },
         topTakeaway: { type: 'string' },
         nextFocus: { type: 'string' },
       },
-      required: ['headline', 'summary', 'callsAnalyzed', 'evidenceLevel', 'topTakeaway', 'nextFocus'],
+      required: ['callsAnalyzed', 'evidenceLevel', 'topTakeaway', 'nextFocus'],
     },
     recurringThemes: {
       type: 'array',
@@ -196,8 +195,32 @@ const insightSchema = {
         required: ['assumption', 'status', 'confidence', 'evidence', 'nextQuestion'],
       },
     },
+    personaBreakdown: {
+      type: 'array',
+      maxItems: 6,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          personaType: { type: 'string' },
+          headline: { type: 'string' },
+          keyFinding: { type: 'string' },
+          peopleCount: { type: 'number' },
+          representativeQuote: {
+            type: ['object', 'null'],
+            additionalProperties: false,
+            properties: {
+              personName: { type: 'string' },
+              quote: { type: 'string' },
+            },
+            required: ['personName', 'quote'],
+          },
+        },
+        required: ['personaType', 'headline', 'keyFinding', 'peopleCount', 'representativeQuote'],
+      },
+    },
   },
-  required: ['schemaVersion', 'learningSummary', 'recurringThemes', 'assumptionTracker'],
+  required: ['schemaVersion', 'overviewOpener', 'learningSummary', 'recurringThemes', 'assumptionTracker', 'personaBreakdown'],
 };
 
 function cleanString(value: unknown) {
@@ -363,6 +386,16 @@ function buildPrompt(data: InsightDataSet) {
     `Return only the structured output with schemaVersion ${CURRENT_INSIGHT_SCHEMA_VERSION}. Be specific, skeptical, and grounded in the interview data.`,
     'Do not invent quotes. Supporting quotes must be short direct excerpts from transcript or notes.',
     'If evidence is thin, say so plainly. Prefer practical next questions over generic advice.',
+    'For overviewOpener, write the best single opening paragraph to show above the interviewee list on the overview page. Make it a cohesive interpretation of the interviews so far, not a generic summary. Choose what matters most: the strongest learning, uncertainty, interview quality, emerging pattern, or next learning angle. Keep it open-ended, direct, and useful for a founder deciding what to do next.',
+    'For recurringThemes, identify the biggest issues found in the interviews. Prioritize repeated patterns across people: recurring pain, repeated workarounds, adoption blockers, trust gaps, weak evidence, or interview-technique problems that distort learning. If a severe issue appears only once, include it only when it materially changes what the founder should investigate next. Write each theme as an issue or pattern the founder can act on, not a broad topic label.',
+    '',
+    'For personaBreakdown, condense the interview findings by persona type. Group interviews by their personaType field and produce one entry per persona type that has at least one interview. For each persona type:',
+    '- Write a headline that captures what this persona group most clearly revealed (one sentence, use personaType as-is from the data).',
+    '- Write a keyFinding paragraph that condenses the most important signal from this group — what they confirmed, contradicted, or left unclear. Be specific and grounded in their actual words.',
+    '- Set peopleCount to the number of people with this persona type.',
+    '- Include a representativeQuote if a compelling direct quote exists for this group; otherwise set representativeQuote to null. Quotes must be short verbatim excerpts.',
+    'Only include persona types that appear in the interview data. Skip persona types with no interviews.',
+    '',
     'Be strict about interview quality: call out leading, hypothetical solution-validation questions, especially questions that describe a tool or benefit and ask whether it would help.',
     'When a founder asks a leading product-validation question, recommend a recent-behavior question that does not reveal the proposed solution.',
     '',
@@ -736,7 +769,7 @@ export async function getProjectInsightsState(projectId: string): Promise<Projec
     .values({
       project_id: projectId,
       content,
-      summary_statement: content.learningSummary.summary,
+      summary_statement: content.overviewOpener,
       recurring_themes: content.recurringThemes.map((theme) => theme.theme),
       hypothesis_evolution: { assumptionTracker: content.assumptionTracker },
       interview_quality_trend: content.learningSummary.evidenceLevel,

@@ -97,15 +97,6 @@
   padding-top: 2px;
 }
 
-.whyMatter {
-  margin: 0;
-  font-size: 15px;
-  color: #5f4a39;
-  line-height: 1.55;
-  font-weight: 430;
-  font-style: italic;
-}
-
 .analyzingNote {
   margin: 0;
   font-size: 13px;
@@ -294,36 +285,6 @@
   margin: 0;
   font-size: 13.5px;
   color: #8a705a;
-}
-
-/* ── Auto-detected source details ────────────────────────────────────────── */
-
-.discoveredEvidence {
-  margin: 0;
-  font-size: 12.5px;
-  color: #8a705a;
-  line-height: 1.5;
-  display: block;
-}
-
-.discoveredIncluded,
-.discoveredFailed {
-  font-size: 11.5px;
-  color: #4f7d52;
-  display: block;
-  margin-top: 2px;
-}
-
-.discoveredFailed {
-  color: #a4532b;
-}
-
-.discoveredError {
-  margin: 0;
-  font-size: 12px;
-  color: #a4532b;
-  line-height: 1.45;
-  display: block;
 }
 
 /* ── Sources ─────────────────────────────────────────────────────────────── */

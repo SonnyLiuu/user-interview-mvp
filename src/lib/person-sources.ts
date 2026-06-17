@@ -85,5 +85,5 @@ const DISCOVERED_KIND_LABEL: Record<DiscoveredUrl['kind'], string> = {
 };
 
 export function discoveredSourceLabel(source: DiscoveredUrl): string {
-  return `Auto-detected ${DISCOVERED_KIND_LABEL[source.kind] ?? source.kind}`;
+  return DISCOVERED_KIND_LABEL[source.kind] ?? source.kind;
 }

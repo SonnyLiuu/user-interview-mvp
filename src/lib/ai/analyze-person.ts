@@ -19,7 +19,7 @@ export async function analyzePerson(
 ): Promise<PersonAnalysis> {
   const analysisContent = limitSourceMaterial(crawledContent);
   const isNetworking = projectContext.project_type === 'networking';
-  const globalTagInstructions = `For global_tags: assign only tags from these allowlists. Omit tags when unsupported by the source material.
+  const globalTagInstructions = `For global_tags: assign all supported tags from these allowlists; people can belong to multiple categories. Omit tags when unsupported by the source material.
 - role_tags: ${GLOBAL_TAG_ALLOWLISTS.role_tags.join(', ')}
 - market_tags: ${GLOBAL_TAG_ALLOWLISTS.market_tags.join(', ')}
 - seniority_tags: ${GLOBAL_TAG_ALLOWLISTS.seniority_tags.join(', ')}
@@ -48,6 +48,7 @@ For summary: write one sentence naming the outreach angle, not a career summary.
 For key_insights: write 1-3 useful personalization hooks. Prefer lightweight hooks over comprehensive background.
 For recommended_questions: write message notes or conversation openers the sender could use with this specific person. Make them brief and grounded in the outreach goal.
 For risk_factors: write details to avoid mentioning or reasons personalization may be weak.
+For why_they_matter: write compact card copy for the people page. Use 8-16 words, one sentence, no name, no company, no caveats. State the concrete outreach/interview value, like "Useful for pressure-testing market assumptions before scaling outreach."
 For sections: produce mode-specific profile sections for the UI:
 - outreach_angle: text, title "Outreach Angle"
 - useful_background: list, title "Useful Background"
@@ -58,6 +59,8 @@ For sections: produce mode-specific profile sections for the UI:
 For contact_info: extract any email, Twitter/X handle, LinkedIn URL, or personal website found in the source material. Only include what is actually present.
 
 The source material may include user-pasted profile text, crawled web sources, or both. Treat user-pasted profile text as valid source material, especially for LinkedIn profiles that cannot be crawled.
+
+For title: return only the person's role/title. Do not include the company, employer, or "at"/"@" company suffix. Put the current employer only in company.
 
 For relevance_rank: score against recipient fit, shared context, and likely usefulness for the outreach goal.
 - high: directly connected to the event, community, topic, organization, or target group; likely worth a personalized note.
@@ -94,10 +97,13 @@ ${analysisContent}
 Analyze this person's relevance to the founder's idea validation goals. Be honest and specific — do not inflate relevance. If this person is genuinely a weak match, say so.
 
 For recommended_questions: write questions the founder could ask this specific person that would validate or invalidate the project's key assumptions. Make them conversational and concrete, not generic.
+For why_they_matter: write compact card copy for the people page. Use 8-16 words, one sentence, no name, no company, no caveats. State the concrete interview value, like "Strong fit for workflow pain and current workaround research."
 
 For contact_info: extract any email, Twitter/X handle, LinkedIn URL, or personal website found in the source material. Only include what is actually present.
 
 The source material may include user-pasted profile text, crawled web sources, or both. Treat user-pasted profile text as valid source material, especially for LinkedIn profiles that cannot be crawled.
+
+For title: return only the person's role/title. Do not include the company, employer, or "at"/"@" company suffix. Put the current employer only in company.
 
 For relevance_rank: score against the founder's specific hypothesis, customer type, and learning value.
 - high: directly matches the target customer or buyer; currently experiences the pain; controls budget for this type of solution; or is actively doing the exact workflow the founder wants to understand.
@@ -135,7 +141,7 @@ Important: Do not assign low relevance solely because the person is not the exac
       },
       title: {
         type: 'string',
-        description: 'Professional title or role (e.g. "Head of Product at Acme").',
+        description: 'Professional title or role only, excluding company/employer text (e.g. "Head of Product", not "Head of Product at Acme").',
       },
       company: {
         type: 'string',
@@ -182,7 +188,9 @@ Important: Do not assign low relevance solely because the person is not the exac
       },
       why_they_matter: {
         type: 'string',
-        description: isNetworking ? 'One sentence explaining why this person is worth contacting, grounded in the outreach project.' : 'One sentence explaining why the founder should talk to this person, grounded in the project hypothesis.',
+        description: isNetworking
+          ? 'Compact people-card synopsis: 8-16 words explaining the concrete outreach or interview value. No name, company, biography, caveat, or long rationale.'
+          : 'Compact people-card synopsis: 8-16 words explaining the concrete interview value. No name, company, biography, caveat, or long rationale.',
       },
       key_insights: {
         type: 'array',

@@ -137,9 +137,8 @@ export type InsightCoachingPattern = {
 
 export type InsightContent = {
   schemaVersion?: number;
+  overviewOpener: string;
   learningSummary: {
-    headline: string;
-    summary: string;
     callsAnalyzed: number;
     evidenceLevel: 'thin' | 'emerging' | 'strong';
     topTakeaway: string;
@@ -170,6 +169,16 @@ export type InsightContent = {
     trustworthyEvidence: InsightEvidenceMoment[];
     cautionAreas: InsightCautionArea[];
   };
+  personaBreakdown: {
+    personaType: string;
+    headline: string;
+    keyFinding: string;
+    peopleCount: number;
+    representativeQuote: {
+      personName: string;
+      quote: string;
+    } | null;
+  }[];
 };
 
 export type OutreachContent = {

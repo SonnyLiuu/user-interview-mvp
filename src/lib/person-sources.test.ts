@@ -55,6 +55,6 @@ test('discoveredSourceLabel formats known source kinds', () => {
       crawl_status: 'included',
       added_at: '2026-06-02T00:00:00.000Z',
     }),
-    'Auto-detected GitHub',
+    'GitHub',
   );
 });

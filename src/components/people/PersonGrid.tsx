@@ -1,46 +1,50 @@
-import type { Person } from '@/lib/db/schema';
+import type { Person, PersonAnalysis } from '@/lib/db/schema';
 import { PersonCard } from './PersonCard';
+import { getPersonaTags, visiblePersonaTagsForMode, type PersonaTagMode } from './persona-tags';
 import styles from './PersonGrid.module.css';
 
 type Props = {
   people: Person[];
   searchActive?: boolean;
   projectId: string;
+  outreachProjectId?: string | null;
+  tagMode: PersonaTagMode;
   slug: string;
   onPersonCreated: (person: Person) => void;
   onPersonUpdated: (person: Person) => void;
   onPersonDeleted: (personId: string) => void;
 };
 
-function coverageGap(people: Person[]): string | null {
+function coverageGap(people: Person[], tagMode: PersonaTagMode): string | null {
   const filled = people.filter((p) => p.analysis_status === 'complete');
   if (filled.length < 3) return null;
 
   const counts: Record<string, number> = {};
   for (const p of filled) {
-    if (p.persona_type) counts[p.persona_type] = (counts[p.persona_type] ?? 0) + 1;
+    const analysis = p.analysis as PersonAnalysis | null;
+    const tags = getPersonaTags(p.persona_type, analysis?.global_tags, tagMode);
+    for (const tag of tags) {
+      counts[tag.key] = (counts[tag.key] ?? 0) + 1;
+    }
   }
 
-  const allTypes = ['potential_user', 'buyer', 'operator', 'domain_expert', 'skeptic', 'connector'];
-  const missing = allTypes.filter((t) => !counts[t]);
+  const tags = visiblePersonaTagsForMode(tagMode);
+  if (tags.length === 0) return null;
+
+  const missing = tags.filter((tag) => !counts[tag.key]);
   if (!missing.length) return null;
 
-  const labels: Record<string, string> = {
-    potential_user: 'target users',
-    buyer: 'decision makers',
-    operator: 'experienced builders',
-    domain_expert: 'industry experts',
-    skeptic: 'critical voices',
-    connector: 'introducers',
-  };
+  const labels = Object.fromEntries(tags.map((tag) => [tag.key, tag.pluralLabel]));
 
   const present = Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 2)
-    .map(([t, n]) => `${n} ${labels[t] ?? t}`)
+    .map(([tagKey, n]) => `${n} ${labels[tagKey] ?? tagKey}`)
     .join(' and ');
 
-  const gap = labels[missing[0]];
+  const gap = missing[0].pluralLabel;
+  if (!present) return `You have 0 ${gap}.`;
+
   return `You have ${present} and 0 ${gap}.`;
 }
 
@@ -48,6 +52,8 @@ export function PersonGrid({
   people,
   searchActive = false,
   projectId,
+  outreachProjectId,
+  tagMode,
   slug,
   onPersonCreated,
   onPersonUpdated,
@@ -62,7 +68,7 @@ export function PersonGrid({
     : Array.from({ length: totalSlots }, (_, i) => people[i] ?? undefined);
   const firstEmptyIdx = slots.findIndex((s) => !s);
 
-  const gap = searchActive ? null : coverageGap(people);
+  const gap = searchActive ? null : coverageGap(people, tagMode);
 
   return (
     <div className={styles.wrap}>
@@ -79,6 +85,8 @@ export function PersonGrid({
               person={person}
               isFirstEmpty={idx === firstEmptyIdx}
               projectId={projectId}
+              outreachProjectId={outreachProjectId}
+              tagMode={tagMode}
               slug={slug}
               onCreated={onPersonCreated}
               onUpdated={onPersonUpdated}

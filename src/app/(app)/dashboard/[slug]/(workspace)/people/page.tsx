@@ -1,27 +1,70 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people } from '@/lib/db/schema';
+import { listOutreachProjects } from '@/lib/backend-server';
+import type { OutreachProjectRecord } from '@/lib/backend-types';
+import { getOutreachProjectTypeConfig } from '@/lib/outreach-projects';
 import { requireOwnedProjectBySlug } from '@/lib/project-access';
+import { tagModeForOutreachProjectType } from '@/components/people/persona-tags';
 import { PeoplePageClient } from './PeoplePageClient';
 import styles from './people-page.module.css';
 
 export const dynamic = 'force-dynamic';
 
+function buildResearchOverview(project: OutreachProjectRecord | null) {
+  if (!project) {
+    return 'Add people you may want to interview, then research their background and fit before moving them into outreach.';
+  }
+
+  const config = getOutreachProjectTypeConfig(project.type);
+  return `Add people for your ${config.label} project, research their background and fit, then choose who belongs in outreach.`;
+}
+
 export default async function PeoplePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ outreachProjectId?: string | string[] }>;
 }) {
   const { slug } = await params;
+  const query = await searchParams;
   const { project } = await requireOwnedProjectBySlug(slug);
+  const requestedOutreachProjectId = Array.isArray(query?.outreachProjectId)
+    ? query?.outreachProjectId[0]
+    : query?.outreachProjectId;
+  const outreachProjects = project.project_type === 'startup'
+    ? await listOutreachProjects(project.id)
+    : [];
+  const selectedOutreachProject =
+    outreachProjects.find((candidate) => candidate.id === requestedOutreachProjectId && candidate.status !== 'archived') ??
+    outreachProjects.find((candidate) => candidate.status !== 'archived') ??
+    null;
+  const defaultOutreachProjectId = outreachProjects.find((candidate) => candidate.status !== 'archived')?.id ?? null;
+  const researchTitle = selectedOutreachProject
+    ? `${getOutreachProjectTypeConfig(selectedOutreachProject.type).label} Research`
+    : 'Research';
+  const researchOverview = buildResearchOverview(selectedOutreachProject);
+  const tagMode = project.project_type === 'startup'
+    ? tagModeForOutreachProjectType(selectedOutreachProject?.type ?? 'idea_validation')
+    : 'none';
 
-  // Load all people for this project. `expires_at` is legacy-only; researched
-  // people are project records and should not disappear from the workspace.
+  // Load people for the selected outreach project. Null outreach ids are legacy
+  // records from before per-project research views, so keep them in the default view.
   const now = new Date();
+  const includeLegacyPeople = selectedOutreachProject?.id === defaultOutreachProjectId;
+  const selectedProjectFilter = selectedOutreachProject
+    ? includeLegacyPeople
+      ? or(eq(people.outreach_project_id, selectedOutreachProject.id), isNull(people.outreach_project_id))
+      : eq(people.outreach_project_id, selectedOutreachProject.id)
+    : undefined;
+  const peopleFilters = selectedProjectFilter
+    ? and(eq(people.project_id, project.id), selectedProjectFilter)
+    : eq(people.project_id, project.id);
   const activePeople = await db
     .select()
     .from(people)
-    .where(eq(people.project_id, project.id))
+    .where(peopleFilters)
     .orderBy(people.created_at);
 
   // Recover stale in-progress records — if after() was orphaned by a page refresh or
@@ -61,6 +104,10 @@ export default async function PeoplePage({
       <PeoplePageClient
         initialPeople={peopleForClient}
         projectId={project.id}
+        outreachProjectId={selectedOutreachProject?.id ?? null}
+        tagMode={tagMode}
+        researchOverview={researchOverview}
+        researchTitle={researchTitle}
         slug={slug}
       />
     </div>

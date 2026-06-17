@@ -45,7 +45,6 @@ test('normalizes generated insight payload with fallback sections', () => {
   const content = normalizeInsightContent(
     {
       learningSummary: {
-        headline: ' Workflow pain is real ',
         callsAnalyzed: 2,
       },
       recurringThemes: [{
@@ -63,7 +62,7 @@ test('normalizes generated insight payload with fallback sections', () => {
     },
   );
 
-  assert.equal(content.learningSummary.headline, 'Workflow pain is real');
+  assert.match(content.overviewOpener, /interviews so far/i);
   assert.equal(content.learningSummary.callsAnalyzed, 2);
   assert.equal(content.learningSummary.evidenceLevel, 'emerging');
   assert.equal(content.recurringThemes[0].supportingQuotes[0].personName, 'Ari');

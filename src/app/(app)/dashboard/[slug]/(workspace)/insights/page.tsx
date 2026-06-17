@@ -6,7 +6,8 @@ import { getOutreachStats } from '@/lib/outreach-insights';
 import { getNotetakerDownloadHref } from '@/lib/notetaker-download';
 import type { InsightContent } from '@/lib/db/schema';
 import type { TranscriptInsightRecord } from '@/lib/ai/synthesize-insights';
-import type { IdeaValidationBrief } from '@/lib/backend-types';
+import type { ProjectType } from '@/lib/backend-types';
+import { getPersonaTag, tagModeForOutreachProjectType, type PersonaTagMode } from '@/components/people/persona-tags';
 import { OutreachInsightsEmpty, OutreachInsightsData } from './OutreachInsights';
 import { InterviewDetailContent } from './InterviewDetailContent';
 import styles from './InsightsPage.module.css';
@@ -26,10 +27,6 @@ const statusLabels: Record<InsightContent['assumptionTracker'][number]['status']
   new: 'New',
 };
 
-function firstItems(items: string[] | null | undefined, limit = 3) {
-  return Array.isArray(items) ? items.filter(Boolean).slice(0, limit) : [];
-}
-
 function formatDate(value: Date | null) {
   if (!value) return 'Not generated yet';
   return new Intl.DateTimeFormat('en', {
@@ -44,66 +41,10 @@ function formatTranscriptDate(value: Date | null) {
   return formatDate(value);
 }
 
-function IdeaValidationContextPanel({
-  brief,
-  startupPath,
-}: {
-  brief: IdeaValidationBrief | null;
-  startupPath: string | null;
-}) {
-  if (!startupPath) return null;
-
-  const assumptions = firstItems(brief?.assumptionsToTest);
-  const targets = firstItems(brief?.targetPeople);
-
-  return (
-    <section className={styles.ideaValidationPanel}>
-      <div className={styles.ideaValidationHeader}>
-        <div>
-          <p className={styles.eyebrow}>Idea Validation</p>
-          <h2 className={styles.ideaValidationTitle}>
-            {brief ? 'Insights will track this learning plan' : 'Set the learning plan before interviews'}
-          </h2>
-        </div>
-      </div>
-      {brief ? (
-        <div className={styles.ideaValidationGrid}>
-          <div>
-            <span className={styles.ideaValidationLabel}>Outcome</span>
-            <p className={styles.ideaValidationText}>
-              {brief.desiredOutcome || 'Clarify the most important market unknown before selling.'}
-            </p>
-          </div>
-          <div>
-            <span className={styles.ideaValidationLabel}>People to learn from</span>
-            <p className={styles.ideaValidationText}>
-              {targets.length ? targets.join(', ') : 'Target users, buyers, or experts who can explain the problem.'}
-            </p>
-          </div>
-          <div className={styles.ideaValidationWide}>
-            <span className={styles.ideaValidationLabel}>Assumptions to watch</span>
-            <p className={styles.ideaValidationText}>
-              {assumptions.length ? assumptions.join('; ') : 'The next interviews should clarify the riskiest startup assumptions.'}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <p className={styles.ideaValidationText}>
-          Insights become sharper when the notetaker knows which assumptions and learning goals the current outreach project is testing.
-        </p>
-      )}
-    </section>
-  );
-}
-
 function EmptyInsights({
   installerHref,
-  activeIdeaValidationBrief,
-  startupPath,
 }: {
   installerHref: string;
-  activeIdeaValidationBrief: IdeaValidationBrief | null;
-  startupPath: string | null;
 }) {
   return (
     <main className={styles.page}>
@@ -119,8 +60,6 @@ function EmptyInsights({
             updates stay tied to the current bottleneck.
           </p>
         </section>
-
-        <IdeaValidationContextPanel brief={activeIdeaValidationBrief} startupPath={startupPath} />
 
         <section className={styles.unlockGrid}>
           <div className={styles.primaryPanel}>
@@ -165,59 +104,81 @@ function EmptyInsights({
   );
 }
 
+function InterviewOverviewOpener({ opener }: { opener: string }) {
+  return (
+    <section className={styles.overviewOpener}>
+      <p className={styles.overviewText}>{opener}</p>
+    </section>
+  );
+}
+
 function DataInsights({
   content,
-  generatedAt,
-  installerHref,
-  activeIdeaValidationBrief,
-  startupPath,
   transcriptInsights,
+  projectType,
   slug,
 }: {
   content: InsightContent;
-  generatedAt: Date | null;
-  installerHref: string;
-  activeIdeaValidationBrief: IdeaValidationBrief | null;
-  startupPath: string | null;
   transcriptInsights: TranscriptInsightRecord[];
+  projectType: ProjectType;
   slug: string;
 }) {
-  const { learningSummary, recurringThemes, assumptionTracker } = content;
+  const { recurringThemes, assumptionTracker } = content;
 
   return (
     <main className={styles.page}>
       <div className={styles.shellWide}>
-        <section className={styles.dataHeader}>
+        <section className={styles.insightsHeader}>
           <div>
             <p className={styles.eyebrow}>Insights</p>
-            <h1 className={styles.dataTitle}>{learningSummary.headline}</h1>
-            <p className={styles.dataDescription}>{learningSummary.summary}</p>
-          </div>
-          <div className={styles.metricStrip}>
-            <div className={styles.metric}>
-              <span className={styles.metricValue}>{learningSummary.callsAnalyzed}</span>
-              <span className={styles.metricLabel}>calls analyzed</span>
-            </div>
-            <div className={styles.metric}>
-              <span className={`${styles.evidencePill} ${styles[learningSummary.evidenceLevel]}`}>
-                {learningSummary.evidenceLevel}
-              </span>
-              <span className={styles.metricLabel}>evidence level</span>
-            </div>
-            <div className={styles.metric}>
-              <span className={styles.metricDate}>{formatDate(generatedAt)}</span>
-              <span className={styles.metricLabel}>last refreshed</span>
-            </div>
           </div>
         </section>
 
-        <IdeaValidationContextPanel brief={activeIdeaValidationBrief} startupPath={startupPath} />
+        <InterviewOverviewOpener opener={content.overviewOpener} />
+
+        <PersonaBreakdownSection
+          breakdown={content.personaBreakdown}
+          tagMode={projectType === 'startup' ? 'idea_validation' : 'none'}
+        />
+
+        <TranscriptInsightsSection transcriptInsights={transcriptInsights} projectType={projectType} slug={slug} />
 
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
             <div>
-              <p className={styles.eyebrow}>Recurring themes</p>
-              <h2 className={styles.sectionHeading}>Patterns across conversations</h2>
+              <p className={styles.eyebrow}>Assumption tracker</p>
+              <h2 className={styles.sectionHeading}>What is getting stronger or weaker</h2>
+            </div>
+          </div>
+          <div className={styles.assumptionList}>
+            {assumptionTracker.map((item) => (
+              <article
+                key={item.assumption}
+                className={styles.assumptionRow}
+              >
+                <div className={styles.assumptionTitleRow}>
+                  <h3 className={styles.assumptionTitle}>{item.assumption}</h3>
+                  <span className={`${styles.statusPill} ${styles[item.status]}`}>
+                    {statusLabels[item.status]}
+                  </span>
+                </div>
+                {item.evidence.length > 0 && (
+                  <ul className={styles.evidenceList}>
+                    {item.evidence.map((evidence) => (
+                      <li key={`${item.assumption}-${evidence}`}>{evidence}</li>
+                    ))}
+                  </ul>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.eyebrow}>Interview issues</p>
+              <h2 className={styles.sectionHeading}>Biggest issues and patterns found</h2>
             </div>
           </div>
           <div className={styles.themeGrid}>
@@ -251,49 +212,79 @@ function DataInsights({
             ))}
           </div>
         </section>
-
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <p className={styles.eyebrow}>Assumption tracker</p>
-              <h2 className={styles.sectionHeading}>What is getting stronger or weaker</h2>
-            </div>
-          </div>
-          <div className={styles.assumptionList}>
-            {assumptionTracker.map((item) => (
-              <article
-                key={item.assumption}
-                className={styles.assumptionRow}
-              >
-                <div className={styles.assumptionTitleRow}>
-                  <h3 className={styles.assumptionTitle}>{item.assumption}</h3>
-                  <span className={`${styles.statusPill} ${styles[item.status]}`}>
-                    {statusLabels[item.status]}
-                  </span>
-                </div>
-                {item.evidence.length > 0 && (
-                  <ul className={styles.evidenceList}>
-                    {item.evidence.map((evidence) => (
-                      <li key={`${item.assumption}-${evidence}`}>{evidence}</li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <TranscriptInsightsSection transcriptInsights={transcriptInsights} slug={slug} />
       </div>
     </main>
   );
 }
 
+function PersonaBreakdownSection({
+  breakdown,
+  tagMode,
+}: {
+  breakdown: InsightContent['personaBreakdown'];
+  tagMode: PersonaTagMode;
+}) {
+  const byTag = new Map<string, InsightContent['personaBreakdown'][number] & { tagLabel: string }>();
+  for (const item of breakdown ?? []) {
+    const tag = getPersonaTag(item.personaType, tagMode);
+    if (!tag) continue;
+
+    const existing = byTag.get(tag.key);
+    if (existing) {
+      byTag.set(tag.key, {
+        ...existing,
+        peopleCount: existing.peopleCount + item.peopleCount,
+      });
+      continue;
+    }
+
+    byTag.set(tag.key, { ...item, tagLabel: tag.label });
+  }
+
+  const visibleBreakdown = Array.from(byTag.values());
+  if (visibleBreakdown.length === 0) return null;
+
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionHeader}>
+        <div>
+          <p className={styles.eyebrow}>Response by persona</p>
+          <h2 className={styles.sectionHeading}>How each group responded</h2>
+        </div>
+      </div>
+      <div className={styles.personaBreakdownGrid}>
+        {visibleBreakdown.map((item) => (
+          <article key={item.personaType} className={styles.personaBreakdownCard}>
+            <div className={styles.personaBreakdownHeader}>
+              <span className={styles.personaBreakdownType}>
+                {item.tagLabel}
+              </span>
+              <span className={styles.personaBreakdownCount}>
+                {item.peopleCount} {item.peopleCount === 1 ? 'person' : 'people'}
+              </span>
+            </div>
+            <h3 className={styles.personaBreakdownHeadline}>{item.headline}</h3>
+            <p className={styles.personaBreakdownBody}>{item.keyFinding}</p>
+            {item.representativeQuote && (
+              <blockquote className={styles.personaBreakdownQuote}>
+                <p>&ldquo;{item.representativeQuote.quote}&rdquo;</p>
+                <cite>&mdash; {item.representativeQuote.personName}</cite>
+              </blockquote>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function TranscriptInsightsSection({
   transcriptInsights,
+  projectType,
   slug,
 }: {
   transcriptInsights: TranscriptInsightRecord[];
+  projectType: ProjectType;
   slug: string;
 }) {
   if (transcriptInsights.length === 0) return null;
@@ -303,24 +294,45 @@ function TranscriptInsightsSection({
   );
 
   return (
-    <section className={styles.section}>
-      <div className={styles.sectionHeader}>
+    <section className={styles.intervieweePanel}>
+      <div className={styles.intervieweeHeader}>
         <div>
           <p className={styles.eyebrow}>Interviewees</p>
-          <h2 className={styles.sectionHeading}>{sorted.length} interview{sorted.length === 1 ? '' : 's'}</h2>
+          <h2 className={styles.intervieweeTitle}>People interviewed</h2>
         </div>
+        <span className={styles.intervieweeCount}>
+          {sorted.length} interview{sorted.length === 1 ? '' : 's'}
+        </span>
       </div>
-      <div className={styles.interviewRowList}>
-        {sorted.map((record) => (
-          <Link
-            key={`${record.source}-${record.id}`}
-            href={`/dashboard/${slug}/insights?tab=insights&interview=${record.source}:${record.id}`}
-            className={styles.interviewRow}
-          >
-            <span className={styles.interviewRowName}>{record.personName}</span>
-            <span className={styles.interviewRowDate}>{formatTranscriptDate(record.completedAt)}</span>
-          </Link>
-        ))}
+      <div className={styles.interviewFileExplorer}>
+        <div className={styles.interviewFileHeader} aria-hidden="true">
+          <span>Name</span>
+          <span>Type</span>
+          <span>Interviewed</span>
+        </div>
+        {sorted.map((record) => {
+          const tagMode = projectType === 'startup'
+            ? tagModeForOutreachProjectType(record.outreachProjectType)
+            : 'none';
+          const tag = getPersonaTag(record.personaType, tagMode);
+          return (
+            <Link
+              key={`${record.source}-${record.id}`}
+              href={`/dashboard/${slug}/insights?tab=insights&interview=${record.source}:${record.id}`}
+              className={styles.intervieweeCard}
+            >
+              <span className={styles.interviewFileName}>
+                <span className={styles.intervieweeName}>{record.personName}</span>
+              </span>
+              <span className={`${styles.intervieweeMeta} ${styles.intervieweeType}`}>
+                {tag?.label || 'Interview'}
+              </span>
+              <span className={`${styles.intervieweeMeta} ${styles.intervieweeDate}`}>
+                {formatTranscriptDate(record.completedAt)}
+              </span>
+            </Link>
+          );
+        })}
       </div>
     </section>
   );
@@ -402,8 +414,6 @@ export default async function InsightsPage({
 
   if (!project) redirect('/dashboard');
 
-  const startupPath = project.project_type === 'startup' ? slug : null;
-
   // Fetch data — include interview record if opening an interview tab
   const [state, outreachStats, interviewRecord] = await Promise.all([
     getProjectInsightsState(project.id),
@@ -458,18 +468,13 @@ export default async function InsightsPage({
       {state.kind === 'empty' ? (
         <EmptyInsights
           installerHref={installerHref}
-          activeIdeaValidationBrief={state.activeIdeaValidationBrief}
-          startupPath={startupPath}
         />
       ) : (
         <>
           <DataInsights
             content={state.content}
-            generatedAt={state.generatedAt}
-            installerHref={installerHref}
-            activeIdeaValidationBrief={state.activeIdeaValidationBrief}
-            startupPath={startupPath}
             transcriptInsights={state.transcriptInsights}
+            projectType={project.project_type}
             slug={slug}
           />
         </>

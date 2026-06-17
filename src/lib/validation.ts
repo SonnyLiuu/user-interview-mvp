@@ -32,6 +32,7 @@ export const createProjectSchema = z.object({
 // Person-related schemas
 export const createPersonSchema = z.object({
   project_id: uuidSchema,
+  outreach_project_id: uuidSchema.optional(),
   name: z.string().optional(),  // populated after crawl when not provided
   title: z.string().optional(),
   company: z.string().optional(),
@@ -39,7 +40,7 @@ export const createPersonSchema = z.object({
   source_urls: z.array(urlSchema).optional().default([]),
   raw_pasted_text: pastedProfileTextSchema,
   additional_context: z.array(z.string()).optional(),
-  research_depth: z.enum(['quick', 'deep']).default('deep'),
+  research_depth: z.enum(['quick', 'deep']).default('quick'),
 }).refine((data) => {
   return data.source_urls.length > 0 || !!data.raw_pasted_text?.trim();
 }, {

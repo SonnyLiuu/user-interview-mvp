@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { people, projects, users } from '@/lib/db/schema';
+import { outreach_projects, people, projects, users } from '@/lib/db/schema';
 import { validateInput, createPersonSchema } from '@/lib/validation';
 
 // Derive a human-readable placeholder name while the research runs.
@@ -73,10 +73,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
+    if (data.outreach_project_id) {
+      const [outreachProject] = await db
+        .select({ id: outreach_projects.id })
+        .from(outreach_projects)
+        .where(and(
+          eq(outreach_projects.id, data.outreach_project_id),
+          eq(outreach_projects.startup_project_id, data.project_id),
+        ))
+        .limit(1);
+
+      if (!outreachProject) {
+        return NextResponse.json({ error: 'Outreach project not found' }, { status: 404 });
+      }
+    }
+
     const [person] = await db
       .insert(people)
       .values({
         project_id: data.project_id,
+        outreach_project_id: data.outreach_project_id,
         name: data.name ?? placeholderName(data.source_urls[0], data.raw_pasted_text),
         title: data.title,
         company: data.company,

@@ -55,6 +55,9 @@ function StartupRecommendationPanel({
   const ideaValidationProject = outreachProjects.find((project) => (
     project.type === 'idea_validation' && project.status !== 'archived'
   ));
+  const readyIdeaValidationProject = isFullyCreatedIdeaValidationProject(ideaValidationProject)
+    ? ideaValidationProject
+    : null;
   const showIdeaValidationRecommendation = !isFullyCreatedIdeaValidationProject(ideaValidationProject);
   const projectActionLabel = outreachProjectActionLabel(ideaValidationProject);
   const alerts: RecommendationBandAlert[] = [
@@ -85,7 +88,18 @@ function StartupRecommendationPanel({
     });
   }
 
-  return <ProjectPageRecommendationBand alerts={alerts} />;
+  if (readyIdeaValidationProject) {
+    alerts.push({
+      id: 'first-outreach-project-ready',
+      eyebrow: 'First outreach project ready',
+      title: 'Your Idea Validation project is ready',
+      body: 'The setup chat created a focused learning project from this foundation. Start by researching the first people you might want to contact.',
+      actionLabel: 'Research people',
+      actionHref: `/dashboard/${startupPath}/people?outreachProjectId=${encodeURIComponent(readyIdeaValidationProject.id)}`,
+    });
+  }
+
+  return <ProjectPageRecommendationBand alerts={alerts} storageScope={startupProjectId} />;
 }
 
 export default async function ProjectPage({

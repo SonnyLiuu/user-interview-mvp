@@ -254,6 +254,8 @@
 /* Persona bubble row */
 .bubbleRow {
   display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 /* Why they matter */
@@ -267,71 +269,6 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.interviewFit {
-  border-top: 1px solid #efe2d1;
-  padding-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.fitHeader {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.fitLabel,
-.askLabel {
-  font-size: 10px;
-  line-height: 1;
-  color: #a4532b;
-  font-weight: 620;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-.fitBest {
-  font-size: 12px;
-  line-height: 1.25;
-  color: #4d3a2c;
-  font-weight: 500;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.askRow {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.askChips {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.askChip {
-  max-width: 100%;
-  min-height: 22px;
-  padding: 4px 7px;
-  border: 1px solid #dfcbb4;
-  border-radius: 6px;
-  background: #fffaf2;
-  color: #5f4a39;
-  font-size: 11px;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Footer: gauge + profile affordance */

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { backendClientFetch } from '@/lib/backend-client';
 import type { OutreachProjectRecord, ProjectType } from '@/lib/backend-types';
 import styles from './WorkspaceTopBar.module.css';
@@ -28,8 +28,8 @@ function PlusIcon() {
   );
 }
 
-function currentOutreachId(pathname: string | null) {
-  return pathname?.match(/\/outreach-projects\/([^/]+)/)?.[1] ?? null;
+function currentOutreachId(pathname: string | null, searchParams: { get(name: string): string | null }) {
+  return pathname?.match(/\/outreach-projects\/([^/]+)/)?.[1] ?? searchParams.get('outreachProjectId');
 }
 
 export function WorkspaceTopBar({
@@ -47,14 +47,17 @@ export function WorkspaceTopBar({
   const [outreachProjects, setOutreachProjects] = useState(initialOutreachProjects);
   const projectRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
 
   const isStartupWorkspace = projectType === 'startup';
+  const selectedOutreachProjectId = currentOutreachId(pathname, searchParams);
   const selectedOutreachProject = useMemo(() => {
-    const id = currentOutreachId(pathname);
-    if (id) return outreachProjects.find((project) => project.id === id) ?? null;
+    if (selectedOutreachProjectId) {
+      return outreachProjects.find((project) => project.id === selectedOutreachProjectId) ?? null;
+    }
     return outreachProjects.find((project) => project.status !== 'archived') ?? null;
-  }, [outreachProjects, pathname]);
+  }, [outreachProjects, selectedOutreachProjectId]);
   const hasOutreachProjects = outreachProjects.length > 0;
 
   useEffect(() => {
@@ -81,6 +84,11 @@ export function WorkspaceTopBar({
 
   function openOutreachProject(project: OutreachProjectRecord) {
     setProjectOpen(false);
+    if (pathname?.startsWith(`/dashboard/${slug}/people`)) {
+      router.push(`/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(project.id)}`);
+      return;
+    }
+
     router.push(`/dashboard/${slug}/outreach-projects/${project.id}/onboarding`);
   }
 

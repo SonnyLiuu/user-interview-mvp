@@ -178,8 +178,10 @@ export default function ProjectChat({
 
     setInput('');
     if (hasBrief && advisorAlertId) {
-      window.localStorage.setItem(`recommendation-alert-dismissed:${advisorAlertId}`, 'true');
-      window.dispatchEvent(new CustomEvent('recommendation-alert:dismiss', { detail: { alertId: advisorAlertId } }));
+      window.localStorage.setItem(`recommendation-alert-dismissed:${projectId}:${advisorAlertId}`, 'true');
+      window.dispatchEvent(new CustomEvent('recommendation-alert:dismiss', {
+        detail: { alertId: advisorAlertId, storageScope: projectId },
+      }));
     }
     const userMsg: Message = { role: 'user', content: text };
     const newMessages = [...messages, userMsg];

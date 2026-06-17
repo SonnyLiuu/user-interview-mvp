@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import type { Person } from '@/lib/db/schema';
+import type { Person, PersonAnalysis } from '@/lib/db/schema';
 import { PersonaBubble } from './PersonaBubble';
-import type { PersonaType } from './PersonaBubble';
 import { RelevanceIndicator } from './RelevanceIndicator';
 import { BookmarkButton } from './BookmarkButton';
 import { UrlInputForm } from './UrlInputForm';
 import styles from './PersonCard.module.css';
+import { getPersonaTags, type PersonaTagMode } from './persona-tags';
 
 // ── Empty ─────────────────────────────────────────────────────────────────────
 
@@ -27,12 +27,14 @@ function CardEmpty({ onActivate }: { onActivate: () => void }) {
 
 function CardActive({
   projectId,
+  outreachProjectId,
   onCreated,
   onCancel,
   initialUrls,
   initialPastedText,
 }: {
   projectId: string;
+  outreachProjectId?: string | null;
   onCreated: (person: Person) => void;
   onCancel?: () => void;
   initialUrls?: string[];
@@ -44,6 +46,7 @@ function CardActive({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         project_id: projectId,
+        outreach_project_id: outreachProjectId ?? undefined,
         source_urls: urls,
         raw_pasted_text: pastedText || undefined,
         research_depth: depth,
@@ -110,6 +113,7 @@ function CardLoading() {
 
 function formatResearchError(message?: string | null) {
   if (!message) return 'Research unsuccessful';
+  if (/not started/i.test(message)) return 'Research was not started. Please retry.';
   if (/foundation/i.test(message)) return 'Complete the foundation first, then retry.';
   if (/timed out/i.test(message)) return 'Research timed out. Please retry.';
   if (/firecrawl|scrape failed|unsupported/i.test(message)) return 'Could not read this URL. Try another source.';
@@ -136,75 +140,25 @@ function CardError({ onRetry, message }: { onRetry: () => void; message?: string
 
 // ── Filled ────────────────────────────────────────────────────────────────────
 
-const FIT_COPY: Record<PersonaType, { bestFor: string; fallbackAsks: string[] }> = {
-  potential_user: {
-    bestFor: 'Validating user pain and current workflow',
-    fallbackAsks: ['Current workaround', 'Research steps', 'Switching trigger'],
-  },
-  buyer: {
-    bestFor: 'Understanding purchase criteria and budget',
-    fallbackAsks: ['Buying process', 'Success criteria', 'Budget owner'],
-  },
-  operator: {
-    bestFor: 'Mapping workflow bottlenecks and handoffs',
-    fallbackAsks: ['Operational gaps', 'Manual steps', 'Decision points'],
-  },
-  domain_expert: {
-    bestFor: 'Stress-testing the market and category',
-    fallbackAsks: ['Market pattern', 'Hidden risks', 'Better targets'],
-  },
-  skeptic: {
-    bestFor: 'Finding objections before they slow outreach',
-    fallbackAsks: ['Deal blockers', 'Weak claims', 'Alternatives'],
-  },
-  connector: {
-    bestFor: 'Finding warmer paths to the right people',
-    fallbackAsks: ['Best intro', 'Relevant circles', 'Credibility signals'],
-  },
-};
-
-function questionToChip(question: string) {
-  return question
-    .replace(/^[\s"']+|[\s"'?.!]+$/g, '')
-    .replace(/^(how|what|where|when|why|who)\s+/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function interviewFitFor(personaType: string | null, recommendedQuestions?: string[]) {
-  const persona = personaType as PersonaType | null;
-  const fallback = persona && FIT_COPY[persona] ? FIT_COPY[persona] : FIT_COPY.potential_user;
-  const questionChips = (recommendedQuestions ?? [])
-    .map(questionToChip)
-    .filter((question) => question.length >= 8)
-    .slice(0, 2);
-
-  return {
-    bestFor: fallback.bestFor,
-    askAbout: questionChips.length ? questionChips : fallback.fallbackAsks,
-  };
-}
-
 function CardFilled({
   person,
   slug,
   onBookmarkToggle,
   onDelete,
   bookmarkLoading,
+  tagMode,
 }: {
   person: Person;
   slug: string;
   onBookmarkToggle: () => void;
   onDelete: () => void;
   bookmarkLoading: boolean;
+  tagMode: PersonaTagMode;
 }) {
-  const analysis = person.analysis as {
-    why_they_matter?: string;
-    recommended_questions?: string[];
-  } | null;
+  const analysis = person.analysis as PersonAnalysis | null;
 
   const matchRank = (person.match_rank ?? person.relevance_rank) as 'low' | 'medium' | 'high' | null;
-  const interviewFit = interviewFitFor(person.persona_type, analysis?.recommended_questions);
+  const personaTags = getPersonaTags(person.persona_type, analysis?.global_tags, tagMode);
 
   return (
     <Link
@@ -245,9 +199,11 @@ function CardFilled({
       </div>
 
       {/* Persona bubble */}
-      {person.persona_type && (
+      {personaTags.length > 0 && (
         <div className={styles.bubbleRow}>
-          <PersonaBubble type={person.persona_type as PersonaType} />
+          {personaTags.map((tag) => (
+            <PersonaBubble key={tag.key} tag={tag} />
+          ))}
         </div>
       )}
 
@@ -255,21 +211,6 @@ function CardFilled({
       {analysis?.why_they_matter && (
         <p className={styles.why}>{analysis.why_they_matter}</p>
       )}
-
-      <div className={styles.interviewFit}>
-        <div className={styles.fitHeader}>
-          <span className={styles.fitLabel}>Interview fit</span>
-          <span className={styles.fitBest}>{interviewFit.bestFor}</span>
-        </div>
-        <div className={styles.askRow}>
-          <span className={styles.askLabel}>Ask about</span>
-          <span className={styles.askChips}>
-            {interviewFit.askAbout.map((item) => (
-              <span key={item} className={styles.askChip}>{item}</span>
-            ))}
-          </span>
-        </div>
-      </div>
 
       {/* Footer: gauge + profile affordance */}
       <div className={styles.footer}>
@@ -288,13 +229,15 @@ type Props = {
   person?: Person;
   isFirstEmpty?: boolean;
   projectId: string;
+  outreachProjectId?: string | null;
+  tagMode: PersonaTagMode;
   slug: string;
   onCreated: (person: Person) => void;
   onUpdated: (person: Person) => void;
   onDeleted: (personId: string) => void;
 };
 
-export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, onUpdated, onDeleted }: Props) {
+export function PersonCard({ person, isFirstEmpty, projectId, outreachProjectId, tagMode, slug, onCreated, onUpdated, onDeleted }: Props) {
   const [active, setActive] = useState(!!isFirstEmpty);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
   const [showRetryForm, setShowRetryForm] = useState(false);
@@ -306,6 +249,7 @@ export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, o
         <div className={styles.card}>
           <CardActive
             projectId={projectId}
+            outreachProjectId={outreachProjectId}
             onCreated={onCreated}
             onCancel={isFirstEmpty ? undefined : () => setActive(false)}
           />
@@ -321,11 +265,12 @@ export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, o
 
   const isLoading =
     person.crawl_status === 'crawling' ||
-    person.analysis_status === 'analyzing' ||
-    (person.crawl_status === 'pending' && person.analysis_status === 'pending');
+    person.analysis_status === 'analyzing';
 
   const isError =
     person.crawl_status === 'error' || person.analysis_status === 'error';
+  const hasCompleteAnalysis = person.analysis_status === 'complete' || !!person.analysis;
+  const isRetryableIncomplete = !isLoading && !isError && !hasCompleteAnalysis;
 
   function handleRetry() {
     setShowRetryForm(true);
@@ -349,11 +294,12 @@ export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, o
     onDeleted(person!.id);
   }
 
-  if (isError && showRetryForm) {
+  if ((isError || isRetryableIncomplete) && showRetryForm) {
     return (
       <div className={styles.card}>
         <CardActive
           projectId={projectId}
+          outreachProjectId={outreachProjectId}
           onCreated={async (newPerson) => {
             await fetch(`/api/people/${person.id}`, { method: 'DELETE' }).catch(() => {});
             onDeleted(person.id);
@@ -370,13 +316,17 @@ export function PersonCard({ person, isFirstEmpty, projectId, slug, onCreated, o
     <div className={styles.card}>
       {isLoading && <CardLoading />}
       {isError && <CardError onRetry={handleRetry} message={person.crawl_error} />}
-      {!isLoading && !isError && (
+      {isRetryableIncomplete && (
+        <CardError onRetry={handleRetry} message={person.crawl_error ?? 'Research was not started'} />
+      )}
+      {!isLoading && !isError && !isRetryableIncomplete && (
         <CardFilled
           person={person}
           slug={slug}
           onBookmarkToggle={handleBookmarkToggle}
           onDelete={handleDelete}
           bookmarkLoading={bookmarkLoading}
+          tagMode={tagMode}
         />
       )}
     </div>

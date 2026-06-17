@@ -12,6 +12,7 @@ export type RecommendationBandAlert = {
   title: string;
   body: string;
   actionLabel?: string;
+  actionHref?: string;
   actionTargetId?: string;
   actionEventName?: string;
   outreachAction?: {
@@ -40,11 +41,14 @@ function ArrowRightIcon() {
 
 export default function ProjectPageRecommendationBand({
   alerts,
+  storageScope,
 }: {
   alerts: RecommendationBandAlert[];
+  storageScope: string;
 }) {
   const router = useRouter();
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<string>>(new Set());
+  const dismissedStorageKey = (alertId: string) => `recommendation-alert-dismissed:${storageScope}:${alertId}`;
   const visibleAlerts = useMemo(
     () => alerts.filter((alert) => alert.title && alert.body && !dismissedAlertIds.has(alert.id)),
     [alerts, dismissedAlertIds],
@@ -56,10 +60,10 @@ export default function ProjectPageRecommendationBand({
   useEffect(() => {
     setDismissedAlertIds(new Set(
       alerts
-        .filter((alert) => window.localStorage.getItem(`recommendation-alert-dismissed:${alert.id}`) === 'true')
+        .filter((alert) => window.localStorage.getItem(dismissedStorageKey(alert.id)) === 'true')
         .map((alert) => alert.id),
     ));
-  }, [alerts]);
+  }, [alerts, storageScope]);
 
   useEffect(() => {
     setActiveIndex((current) => Math.max(0, Math.min(current, alertCount - 1)));
@@ -67,16 +71,18 @@ export default function ProjectPageRecommendationBand({
 
   useEffect(() => {
     function handleDismiss(event: Event) {
-      const alertId = (event as CustomEvent<{ alertId?: string }>).detail?.alertId;
+      const detail = (event as CustomEvent<{ alertId?: string; storageScope?: string }>).detail;
+      const alertId = detail?.alertId;
+      if (detail?.storageScope && detail.storageScope !== storageScope) return;
       if (!alertId) return;
-      window.localStorage.setItem(`recommendation-alert-dismissed:${alertId}`, 'true');
+      window.localStorage.setItem(dismissedStorageKey(alertId), 'true');
       setDismissedAlertIds((current) => new Set(current).add(alertId));
       setActiveIndex((current) => Math.max(0, Math.min(current, alertCount - 2)));
     }
 
     window.addEventListener('recommendation-alert:dismiss', handleDismiss);
     return () => window.removeEventListener('recommendation-alert:dismiss', handleDismiss);
-  }, [alertCount]);
+  }, [alertCount, storageScope]);
 
   if (alertCount === 0) return null;
 
@@ -103,6 +109,11 @@ export default function ProjectPageRecommendationBand({
   }
 
   async function runAlertAction(alert: RecommendationBandAlert) {
+    if (alert.actionHref) {
+      router.push(alert.actionHref);
+      return;
+    }
+
     if (alert.outreachAction) {
       const { startupProjectId, startupPath, type, projectId } = alert.outreachAction;
       if (projectId) {
@@ -180,7 +191,7 @@ export default function ProjectPageRecommendationBand({
               aria-hidden={index !== activeIndex}
             >
               <p className={styles.recommendationReason}>{alert.body}</p>
-              {alert.actionLabel && (alert.actionTargetId || alert.outreachAction) && (
+              {alert.actionLabel && (alert.actionHref || alert.actionTargetId || alert.outreachAction) && (
                 <button
                   type="button"
                   className={styles.recommendationAction}

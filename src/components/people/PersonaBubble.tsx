@@ -1,16 +1,10 @@
 import styles from './PersonaBubble.module.css';
+import { getPersonaTag, type PersonaTag, type PersonaTagMode, type PersonaType } from './persona-tags';
 
-export type PersonaType =
-  | 'potential_user'
-  | 'buyer'
-  | 'operator'
-  | 'domain_expert'
-  | 'skeptic'
-  | 'connector';
+export type { PersonaTagMode, PersonaType } from './persona-tags';
 
-const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: string }> = {
-  potential_user: {
-    label: 'Target user',
+const CONFIG: Record<PersonaTag['key'], { icon: React.ReactNode; mod: string }> = {
+  target_user: {
     mod: styles.user,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -19,18 +13,7 @@ const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: s
       </svg>
     ),
   },
-  buyer: {
-    label: 'Decision maker',
-    mod: styles.buyer,
-    icon: (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <rect x="2" y="5" width="12" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M5 5V4a3 3 0 0 1 6 0v1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  operator: {
-    label: 'Experienced builder',
+  builder: {
     mod: styles.operator,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -40,7 +23,6 @@ const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: s
     ),
   },
   domain_expert: {
-    label: 'Industry expert',
     mod: styles.expert,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -49,38 +31,22 @@ const CONFIG: Record<PersonaType, { label: string; icon: React.ReactNode; mod: s
       </svg>
     ),
   },
-  skeptic: {
-    label: 'Critical voice',
-    mod: styles.skeptic,
-    icon: (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M6.5 6.5c0-1 .5-1.5 1.5-1.5s1.5.5 1.5 1.5c0 .75-.5 1.1-1 1.4C8 8.2 8 8.5 8 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-        <circle cx="8" cy="11" r=".8" fill="currentColor" />
-      </svg>
-    ),
-  },
-  connector: {
-    label: 'Introducer',
-    mod: styles.connector,
-    icon: (
-      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle cx="3" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-        <circle cx="13" cy="4" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-        <circle cx="13" cy="12" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M4.8 8l6.4-3.2M4.8 8l6.4 3.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
-    ),
-  },
 };
 
-export function PersonaBubble({ type }: { type: PersonaType }) {
-  const cfg = CONFIG[type];
+type Props =
+  | { tag: PersonaTag }
+  | { type: PersonaType; mode: PersonaTagMode };
+
+export function PersonaBubble(props: Props) {
+  const tag = 'tag' in props ? props.tag : getPersonaTag(props.type, props.mode);
+  if (!tag) return null;
+
+  const cfg = CONFIG[tag.key];
   if (!cfg) return null;
   return (
     <span className={`${styles.bubble} ${cfg.mod}`}>
       <span className={styles.icon}>{cfg.icon}</span>
-      <span className={styles.label}>{cfg.label}</span>
+      <span className={styles.label}>{tag.label}</span>
     </span>
   );
 }

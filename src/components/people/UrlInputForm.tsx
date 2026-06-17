@@ -22,7 +22,7 @@ export function UrlInputForm({
 }: Props) {
   const [urls, setUrls] = useState<string[]>(initialUrls?.length ? initialUrls : ['']);
   const [pastedText, setPastedText] = useState(initialPastedText ?? '');
-  const [depth, setDepth] = useState<'quick' | 'deep'>('deep');
+  const [depth, setDepth] = useState<'quick' | 'deep'>('quick');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -112,7 +112,7 @@ export function UrlInputForm({
 
       <textarea
         className={styles.textarea}
-        placeholder="Paste copied profile text here..."
+        placeholder="Paste profile data here..."
         value={pastedText}
         onChange={(e) => handlePastedTextChange(e.target.value)}
         disabled={submitting}

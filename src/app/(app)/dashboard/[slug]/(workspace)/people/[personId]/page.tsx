@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { call_prep, outreach, people, transcripts } from '@/lib/db/schema';
+import { call_prep, outreach, outreach_projects, people, transcripts } from '@/lib/db/schema';
+import { tagModeForOutreachProjectType } from '@/components/people/persona-tags';
 import { requireOwnedProjectBySlug } from '@/lib/project-access';
 import { PersonDetailClient } from './PersonDetailClient';
 
@@ -20,6 +21,17 @@ export default async function PersonDetailPage({
     .where(and(eq(people.id, personId), eq(people.project_id, project.id)));
 
   if (!person) notFound();
+
+  const [personOutreachProject] = person.outreach_project_id
+    ? await db
+      .select({ type: outreach_projects.type })
+      .from(outreach_projects)
+      .where(eq(outreach_projects.id, person.outreach_project_id))
+      .limit(1)
+    : [];
+  const tagMode = project.project_type === 'startup'
+    ? tagModeForOutreachProjectType(personOutreachProject?.type ?? 'idea_validation')
+    : 'none';
 
   const [initialOutreach] = await db
     .select({ id: outreach.id, content: outreach.content })
@@ -46,6 +58,7 @@ export default async function PersonDetailPage({
       person={person}
       slug={slug}
       projectType={project.project_type}
+      tagMode={tagMode}
       initialOutreach={initialOutreach ?? null}
       initialCallPrep={initialCallPrep ?? null}
       initialTranscripts={initialTranscripts}

@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useUser, useClerk } from '@clerk/nextjs';
 import styles from './AppNav.module.css';
 import type { ProjectNavItem, ProjectType } from '@/lib/backend-types';
@@ -86,6 +86,7 @@ export function AppNav({ slug, projectId, projectName, projectType, initialProje
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user } = useUser();
   const { signOut } = useClerk();
 
@@ -113,11 +114,17 @@ export function AppNav({ slug, projectId, projectName, projectType, initialProje
   };
 
   const cls = expanded ? styles.expanded : styles.collapsed;
+  const outreachProjectId = pathname?.match(/\/outreach-projects\/([^/]+)/)?.[1] ?? searchParams.get('outreachProjectId');
+  const peopleHref = slug && outreachProjectId
+    ? `/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(outreachProjectId)}`
+    : slug
+      ? `/dashboard/${slug}/people`
+      : '';
 
   const projectNav = slug
     ? [
         { href: `/dashboard/${slug}/foundation`, label: 'Foundation', icon: <IconProject />, match: (p: string) => p.startsWith(`/dashboard/${slug}/foundation`) },
-        { href: `/dashboard/${slug}/people`, label: 'People', icon: <IconPeople />, match: (p: string) => p.startsWith(`/dashboard/${slug}/people`) },
+        { href: peopleHref, label: 'People', icon: <IconPeople />, match: (p: string) => p.startsWith(`/dashboard/${slug}/people`) },
         { href: `/dashboard/${slug}/board`, label: 'Board', icon: <IconBoard />, match: (p: string) => p.startsWith(`/dashboard/${slug}/board`) },
         { href: `/dashboard/${slug}/insights`, label: 'Insights', icon: <IconInsights />, match: (p: string) => p.startsWith(`/dashboard/${slug}/insights`) },
       ]

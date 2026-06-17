@@ -4,11 +4,16 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Person } from '@/lib/db/schema';
 import { PersonGrid } from '@/components/people/PersonGrid';
+import type { PersonaTagMode } from '@/components/people/persona-tags';
 import styles from './PeoplePageClient.module.css';
 
 type Props = {
   initialPeople: Person[];
   projectId: string;
+  outreachProjectId: string | null;
+  tagMode: PersonaTagMode;
+  researchOverview: string;
+  researchTitle: string;
   slug: string;
 };
 
@@ -54,7 +59,11 @@ function matchesSearch(person: Person, query: string): boolean {
   );
 }
 
-export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
+function isResearchActive(person: Person): boolean {
+  return person.crawl_status === 'crawling' || person.analysis_status === 'analyzing';
+}
+
+export function PeoplePageClient({ initialPeople, projectId, outreachProjectId, tagMode, researchOverview, researchTitle, slug }: Props) {
   const router = useRouter();
   const [people, setPeople] = useState<Person[]>(initialPeople);
   const peopleRef = useRef(people);
@@ -62,7 +71,7 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
 
   useEffect(() => {
     setPeople(initialPeople);
-  }, [initialPeople, projectId]);
+  }, [initialPeople, projectId, outreachProjectId]);
 
   const pollStartRef = useRef<Map<string, number>>(new Map());
 
@@ -82,18 +91,14 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [sortOpen]);
 
-  // Poll every 3s while any person is pending, mid-crawl, or mid-analysis
-  const hasInProgress = people.some(
-    (p) => p.crawl_status === 'pending' || p.crawl_status === 'crawling' || p.analysis_status === 'analyzing'
-  );
+  // Poll every 3s while a research job is actively crawling or analyzing.
+  const hasInProgress = people.some(isResearchActive);
 
   useEffect(() => {
     if (!hasInProgress) return;
 
     const id = setInterval(async () => {
-      const toUpdate = peopleRef.current.filter(
-        (p) => p.crawl_status === 'pending' || p.crawl_status === 'crawling' || p.analysis_status === 'analyzing'
-      );
+      const toUpdate = peopleRef.current.filter(isResearchActive);
 
       for (const person of toUpdate) {
         if (!pollStartRef.current.has(person.id)) {
@@ -113,8 +118,8 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
     return () => clearInterval(id);
   }, [hasInProgress]);
 
-  // Client-side safety net: if a person has been in-progress for >10 min with no
-  // resolution (e.g. after() was orphaned and Chunk 1 hasn't run yet), flip locally
+  // Client-side safety net: if a person has been active for >10 min with no
+  // resolution (e.g. after() was orphaned), flip locally
   // to error so the Retry button appears without waiting for a page reload.
   useEffect(() => {
     if (!hasInProgress) return;
@@ -122,8 +127,7 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
     const now = Date.now();
 
     const timedOut = people.filter((p) => {
-      const inProgress = p.crawl_status === 'crawling' || p.crawl_status === 'pending' || p.analysis_status === 'analyzing';
-      if (!inProgress) return false;
+      if (!isResearchActive(p)) return false;
       const start = pollStartRef.current.get(p.id);
       return start !== undefined && now - start >= TIMEOUT_MS;
     });
@@ -175,9 +179,9 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
   return (
     <div className={styles.wrap}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Research</h1>
+        <h1 className={styles.title}>{researchTitle}</h1>
         <p className={styles.subtitle}>
-          Paste a URL to research anyone relevant to your idea.
+          {researchOverview}
         </p>
       </div>
 
@@ -233,6 +237,8 @@ export function PeoplePageClient({ initialPeople, projectId, slug }: Props) {
         people={sortedPeople}
         searchActive={searchActive}
         projectId={projectId}
+        outreachProjectId={outreachProjectId}
+        tagMode={tagMode}
         slug={slug}
         onPersonCreated={handlePersonCreated}
         onPersonUpdated={handlePersonUpdated}

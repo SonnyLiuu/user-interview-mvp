@@ -38,28 +38,29 @@ function funnelPct(current: number, previous: number): string {
   return `${Math.round((current / previous) * 100)}%`;
 }
 
-function personaLabel(type: string): string {
-  const labels: Record<string, string> = {
-    potential_user: 'Target user',
-    buyer: 'Decision maker',
-    operator: 'Experienced builder',
-    domain_expert: 'Industry expert',
-    skeptic: 'Critical voice',
-    connector: 'Introducer',
-    Unknown: 'Unknown persona',
-  };
+function outcomeTakeaway(chartEntries: Array<[string, number]>, totalContacted: number): string {
+  const sorted = [...chartEntries].sort((a, b) => b[1] - a[1]);
+  const [topKey, topCount] = sorted[0] ?? ['awaiting', 0];
+  const completed = chartEntries.find(([key]) => key === 'successfulCall')?.[1] ?? 0;
+  const noResponse = chartEntries.find(([key]) => key === 'noResponse')?.[1] ?? 0;
+  const awaiting = chartEntries.find(([key]) => key === 'awaiting')?.[1] ?? 0;
+  const completedRate = pct(completed, totalContacted);
+  const noResponseRate = pct(noResponse + awaiting, totalContacted);
+  const topLabel = (OUTCOME_LABELS[topKey] ?? topKey).toLowerCase();
 
-  return labels[type] ?? type.replace(/_/g, ' ');
-}
+  if (topKey === 'successfulCall') {
+    return `Completed calls are the strongest outcome so far, making up ${completedRate} of contacted people. Keep the sources and outreach patterns that produced these conversations visible as you scale.`;
+  }
 
-function personaSignal(persona: OutreachStats['byPersonaType'][number], averageRate: number | null): string {
-  const positiveResponses = persona.successfulCall + persona.partial;
+  if (topKey === 'awaiting' || topKey === 'noResponse') {
+    return `${topLabel} is the dominant state right now. ${noResponseRate} of contacted people have not produced a clear reply yet, so follow-up timing and message fit are the biggest levers to inspect.`;
+  }
 
-  if (persona.contacted < 3) return 'Needs more data';
-  if (averageRate !== null && persona.responseRate >= averageRate + 15) return 'Double down';
-  if (positiveResponses === 0 && persona.notInterested > 0) return 'Rework angle';
-  if (averageRate !== null && persona.responseRate <= averageRate - 15) return 'Lower yield';
-  return 'Keep testing';
+  if (topKey === 'notInterested') {
+    return `Declines are the most visible response pattern so far. That usually points to a targeting or opening-angle problem worth tightening before adding more volume.`;
+  }
+
+  return `${OUTCOME_LABELS[topKey] ?? topKey} leads the outcome mix at ${pct(topCount, totalContacted)}. Completed calls are currently ${completedRate}, so the next read should focus on what separates conversations from stalled outreach.`;
 }
 
 // ── Empty state ────────────────────────────────────────────────────────────────
@@ -73,7 +74,7 @@ export function OutreachInsightsEmpty({ slug }: { slug: string }) {
           <h1 className={styles.title}>No outreach sent yet</h1>
           <p className={styles.description}>
             Send outreach messages from the Board to start tracking response
-            rates, conversion funnels, and persona effectiveness here.
+            rates, conversion funnels, and follow-up opportunities here.
           </p>
         </section>
 
@@ -82,8 +83,8 @@ export function OutreachInsightsEmpty({ slug }: { slug: string }) {
             <h2 className={styles.panelTitle}>Track your outreach performance</h2>
             <p className={styles.panelBody}>
               Once you start contacting people, this page will show your
-              response rate, outcome breakdown, conversion funnel, and which
-              persona types respond best — so you can sharpen your targeting.
+              response rate, outcome breakdown, conversion funnel, and stale
+              outreach that may need follow-up.
             </p>
             <Link href={`/dashboard/${slug}/board`} className={styles.downloadButton}>
               Go to Board
@@ -95,7 +96,7 @@ export function OutreachInsightsEmpty({ slug }: { slug: string }) {
             <ul className={styles.valueList}>
               {[
                 'Response rate across all contacts',
-                'Outcome breakdown by persona type',
+                'Outcome breakdown by response type',
                 'Conversion funnel to find bottlenecks',
                 'Stale outreach that needs follow-up',
               ].map((point) => (
@@ -115,7 +116,7 @@ export function OutreachInsightsEmpty({ slug }: { slug: string }) {
 // ── Data state ─────────────────────────────────────────────────────────────────
 
 export function OutreachInsightsData({ stats, slug }: { stats: OutreachStats; slug: string }) {
-  const { totalFound, totalContacted, totalResponded, responseRate, outcomeCounts, funnel, byPersonaType, stalePeople } = stats;
+  const { totalFound, totalContacted, totalResponded, responseRate, outcomeCounts, funnel, stalePeople } = stats;
 
   return (
     <main className={styles.page}>
@@ -164,10 +165,9 @@ export function OutreachInsightsData({ stats, slug }: { stats: OutreachStats; sl
           <OutcomeBar outcomeCounts={outcomeCounts} totalContacted={totalContacted} />
         </section>
 
-        {/* ── Two-column: Funnel + Persona ────────────────────────────── */}
+        {/* ── Conversion funnel ───────────────────────────────────────── */}
         <div className={styles.summaryGrid}>
           <FunnelPanel funnel={funnel} />
-          <PersonaPanel byPersonaType={byPersonaType} totalContacted={totalContacted} />
         </div>
 
         {/* ── Stale outreach ──────────────────────────────────────────── */}
@@ -219,6 +219,8 @@ function OutcomeBar({ outcomeCounts, totalContacted }: { outcomeCounts: Outreach
     return <p className={styles.emptyNote}>No people contacted yet.</p>;
   }
 
+  const takeaway = outcomeTakeaway(chartEntries, totalContacted);
+
   return (
     <div className={styles.outcomePieShell}>
       <div
@@ -242,21 +244,27 @@ function OutcomeBar({ outcomeCounts, totalContacted }: { outcomeCounts: Outreach
           <span className={styles.outcomePieLabel}>contacted</span>
         </div>
       </div>
-      <div className={styles.outcomeLegend}>
-        {chartEntries.map(([key, count]) => (
-          <div key={key} className={styles.outcomeLegendItem}>
-            <span
-              className={styles.outcomeLegendDot}
-              style={{ backgroundColor: OUTCOME_COLORS[key] ?? '#c4b5a5' }}
-            />
-            <span className={styles.outcomeLegendLabel}>
-              {OUTCOME_LABELS[key] ?? key}
-            </span>
-            <span className={styles.outcomeLegendCount}>
-              {count} ({pct(count, totalContacted)})
-            </span>
-          </div>
-        ))}
+      <div className={styles.outcomeReadout}>
+        <div className={styles.outcomeTakeawayPanel}>
+          <h3 className={styles.outcomeTakeawayTitle}>Response takeaway</h3>
+          <p className={styles.outcomeTakeawayText}>{takeaway}</p>
+        </div>
+        <div className={styles.outcomeLegend}>
+          {chartEntries.map(([key, count]) => (
+            <div key={key} className={styles.outcomeLegendItem}>
+              <span
+                className={styles.outcomeLegendDot}
+                style={{ backgroundColor: OUTCOME_COLORS[key] ?? '#c4b5a5' }}
+              />
+              <span className={styles.outcomeLegendLabel}>
+                {OUTCOME_LABELS[key] ?? key}
+              </span>
+              <span className={styles.outcomeLegendCount}>
+                {count} ({pct(count, totalContacted)})
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -299,83 +307,6 @@ function FunnelPanel({ funnel }: { funnel: OutreachStats['funnel'] }) {
             </div>
           );
         })}
-      </div>
-    </article>
-  );
-}
-
-// ── Persona panel ──────────────────────────────────────────────────────────────
-
-function PersonaPanel({
-  byPersonaType,
-  totalContacted,
-}: {
-  byPersonaType: OutreachStats['byPersonaType'];
-  totalContacted: number;
-}) {
-  if (byPersonaType.length === 0) {
-    return (
-      <article className={styles.summaryPanel}>
-        <h2 className={styles.sectionTitle}>Response by persona</h2>
-        <p className={styles.emptyNote}>No contacted people with persona data yet.</p>
-      </article>
-    );
-  }
-
-  const bestPersona = byPersonaType[0];
-  const averageRate =
-    totalContacted === 0
-      ? null
-      : Math.round(
-          (byPersonaType.reduce((sum, persona) => sum + persona.responded, 0) / totalContacted) *
-            1000,
-        ) / 10;
-
-  return (
-    <article className={styles.summaryPanel}>
-      <div className={styles.personaPanelHeader}>
-        <h2 className={styles.sectionTitle}>Response by persona</h2>
-        <p className={styles.personaSummary}>
-          {personaLabel(bestPersona.personaType)} is leading at {bestPersona.responseRate}% from{' '}
-          {bestPersona.contacted} contacted.
-        </p>
-      </div>
-      <div className={styles.personaTable}>
-        {byPersonaType.map((p) => (
-          <div key={p.personaType} className={styles.personaRow}>
-            <div className={styles.personaMain}>
-              <div className={styles.personaInfo}>
-                <span className={styles.personaName}>{personaLabel(p.personaType)}</span>
-                <span className={styles.personaSignal}>{personaSignal(p, averageRate)}</span>
-              </div>
-              <div className={styles.personaMeta}>
-                <span>{p.responded}/{p.contacted} responded</span>
-                <span>{pct(p.contacted, totalContacted)} of contacted</span>
-              </div>
-            </div>
-            <div className={styles.personaBarTrack}>
-              <div
-                className={styles.personaBarFill}
-                style={{ width: `${p.responseRate}%` }}
-              />
-            </div>
-            <span className={styles.personaRate}>{p.responseRate}%</span>
-            <div className={styles.personaOutcomeMix}>
-              {[
-                { key: 'successfulCall', count: p.successfulCall },
-                { key: 'partial', count: p.partial },
-                { key: 'notInterested', count: p.notInterested },
-                { key: 'noResponse', count: p.noResponse },
-              ].map((outcome) =>
-                outcome.count > 0 ? (
-                  <span key={outcome.key} className={styles.personaOutcomePill}>
-                    {OUTCOME_LABELS[outcome.key]} {outcome.count}
-                  </span>
-                ) : null,
-              )}
-            </div>
-          </div>
-        ))}
       </div>
     </article>
   );

@@ -1,6 +1,6 @@
 import type { InsightContent } from '@/lib/db/schema';
 
-export const CURRENT_INSIGHT_SCHEMA_VERSION = 3;
+export const CURRENT_INSIGHT_SCHEMA_VERSION = 7;
 
 export type InsightFreshnessStats = {
   interviewCount: number;
@@ -41,8 +41,7 @@ type CurrentInsightSnapshot = {
   content?: unknown;
 };
 
-const DEFAULT_HEADLINE = 'Early learning is taking shape';
-const DEFAULT_SUMMARY = 'User Interview has interview data to synthesize, but the current evidence is still light.';
+const DEFAULT_OVERVIEW_OPENER = 'The interviews so far are beginning to separate useful signals from open questions. Treat the current learning as directional until more people repeat the same pain, workaround, and urgency patterns.';
 const DEFAULT_TAKEAWAY = 'Look for repeated pain, urgency, and current workaround patterns.';
 const DEFAULT_NEXT_FOCUS = 'Run another focused interview and ask for concrete recent examples.';
 const DEFAULT_COACH_VERDICT = 'The interviews have useful signals, but the founder should keep pressure on concrete past behavior.';
@@ -429,6 +428,7 @@ function hasCurrentInsightSchema(content: unknown) {
   const root = recordValue(content);
   const coach = recordValue(root.interviewCoach);
   return root.schemaVersion === CURRENT_INSIGHT_SCHEMA_VERSION &&
+    typeof root.overviewOpener === 'string' &&
     typeof coach.verdict === 'string' &&
     typeof coach.mainRisk === 'string' &&
     Array.isArray(coach.trustworthyEvidence) &&
@@ -554,19 +554,41 @@ export function normalizeInsightContent(
   const defaultCautionAreas: InsightContent['interviewCoach']['cautionAreas'] = [];
   const recurringPatterns = normalizeCoachingPatterns(coach.recurringPatterns);
 
+  const personaBreakdown = Array.isArray(root.personaBreakdown)
+    ? root.personaBreakdown
+        .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+        .map((item) => {
+          const repQuote = item.representativeQuote && typeof item.representativeQuote === 'object'
+            ? item.representativeQuote as Record<string, unknown>
+            : null;
+          return {
+            personaType: cleanString(item.personaType, 'unknown'),
+            headline: cleanString(item.headline, 'No clear signal yet from this group.'),
+            keyFinding: cleanString(item.keyFinding, 'More interviews with this persona type are needed.'),
+            peopleCount: cleanInteger(item.peopleCount, 0),
+            representativeQuote: repQuote && cleanString(repQuote.quote, '') && cleanString(repQuote.personName, '')
+              ? {
+                  personName: cleanString(repQuote.personName, 'Interviewee'),
+                  quote: cleanString(repQuote.quote, ''),
+                }
+              : null,
+          };
+        })
+        .filter((item) => item.personaType !== 'unknown' && item.peopleCount > 0)
+    : [];
+
   return {
     schemaVersion: CURRENT_INSIGHT_SCHEMA_VERSION,
+    overviewOpener: cleanString(root.overviewOpener, DEFAULT_OVERVIEW_OPENER),
     learningSummary: {
-      headline: cleanString(learning.headline, DEFAULT_HEADLINE),
-      summary: cleanString(learning.summary, DEFAULT_SUMMARY),
       callsAnalyzed,
       evidenceLevel: enumValue(learning.evidenceLevel, ['thin', 'emerging', 'strong'] as const, evidenceLevelForCalls(callsAnalyzed)),
       topTakeaway: cleanString(learning.topTakeaway, DEFAULT_TAKEAWAY),
       nextFocus: cleanString(learning.nextFocus, DEFAULT_NEXT_FOCUS),
     },
     recurringThemes: recurringThemes.length ? recurringThemes : [{
-      theme: 'Evidence is still thin',
-      description: 'More interviews are needed before recurring themes become reliable.',
+      theme: 'No repeated interview issue yet',
+      description: 'More interviews are needed before the biggest issues and repeated patterns become reliable.',
       callCount: Math.max(1, callsAnalyzed),
       evidenceStrength: 'weak',
       supportingQuotes: [],
@@ -580,6 +602,7 @@ export function normalizeInsightContent(
           evidence: ['Needs more interview evidence.'],
           nextQuestion: 'What recent concrete example would make this assumption more or less true?',
         })),
+    personaBreakdown,
     interviewCoach: {
       verdict: cleanString(coach.verdict, DEFAULT_COACH_VERDICT),
       reliability: enumValue(coach.reliability, ['low', 'medium', 'high'] as const, callsAnalyzed >= 3 ? 'medium' : 'low'),
