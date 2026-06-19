@@ -14,6 +14,7 @@ type Props = {
   startupProjectId: string;
   startupPath: string;
   initialOutreachProjects: OutreachProjectRecord[];
+  onboardingChatEnabled: boolean;
 };
 
 function Icon({ iconKey }: { iconKey: string }) {
@@ -74,9 +75,9 @@ function Icon({ iconKey }: { iconKey: string }) {
   );
 }
 
-function statusLabel(project: OutreachProjectRecord | null) {
+function statusLabel(project: OutreachProjectRecord | null, onboardingChatEnabled: boolean) {
   if (!project) return null;
-  if (project.status === 'onboarding') return 'Setup started';
+  if (project.status === 'onboarding') return onboardingChatEnabled ? 'Setup started' : 'In progress';
   return project.status[0].toUpperCase() + project.status.slice(1);
 }
 
@@ -84,10 +85,11 @@ export default function OutreachProjectsClient({
   startupProjectId,
   startupPath,
   initialOutreachProjects,
+  onboardingChatEnabled,
 }: Props) {
   const router = useRouter();
   const [outreachProjects, setOutreachProjects] = useState(initialOutreachProjects);
-  const [creatingType, setCreatingType] = useState<OutreachProjectType | null>(null);
+  const [pendingType, setPendingType] = useState<OutreachProjectType | null>(null);
   const [error, setError] = useState('');
 
   const projectsByType = useMemo(() => {
@@ -100,21 +102,22 @@ export default function OutreachProjectsClient({
 
   async function startProject(type: OutreachProjectType) {
     const config = OUTREACH_PROJECT_TYPE_CONFIGS[type];
-    if (config.availability !== 'active' || creatingType) return;
+    if (config.availability !== 'active' || pendingType) return;
 
-    setCreatingType(type);
+    setPendingType(type);
     setError('');
 
     try {
       const res = await backendClientFetch(`/v1/projects/${startupProjectId}/outreach-projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
+        body: JSON.stringify({ type, skip_onboarding: !onboardingChatEnabled }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => null) as { error?: string } | null;
         setError(body?.error ?? 'Could not start this outreach project.');
+        setPendingType(null);
         return;
       }
 
@@ -125,11 +128,12 @@ export default function OutreachProjectsClient({
           ? current.map((item) => (item.id === project.id ? project : item))
           : [project, ...current];
       });
-      router.push(`/dashboard/${startupPath}/outreach-projects/${project.id}/onboarding`);
+      router.push(onboardingChatEnabled
+        ? `/dashboard/${startupPath}/outreach-projects/${project.id}/onboarding`
+        : `/dashboard/${startupPath}/people?outreachProjectId=${encodeURIComponent(project.id)}`);
     } catch {
       setError('Could not start this outreach project.');
-    } finally {
-      setCreatingType(null);
+      setPendingType(null);
     }
   }
 
@@ -140,7 +144,9 @@ export default function OutreachProjectsClient({
           <p className={styles.eyebrow}>New outreach project</p>
           <h1 className={styles.title}>Choose what kind of outreach to run.</h1>
           <p className={styles.description}>
-            Pick a project type. Once selected, setup opens as a focused chat.
+            {onboardingChatEnabled
+              ? 'Pick a project type. Once selected, setup opens as a focused chat.'
+              : 'Pick a research focus and start finding people to contact.'}
           </p>
         </section>
 
@@ -151,7 +157,7 @@ export default function OutreachProjectsClient({
             const config = OUTREACH_PROJECT_TYPE_CONFIGS[type];
             const existingProject = projectsByType.get(type) ?? null;
             const disabled = config.availability !== 'active';
-            const loading = creatingType === type;
+            const loading = pendingType === type;
 
             return (
               <article
@@ -165,7 +171,7 @@ export default function OutreachProjectsClient({
                   <span className={styles.typeIcon}>
                     <Icon iconKey={config.iconKey} />
                   </span>
-                  {existingProject && <span className={styles.activeBadge}>{statusLabel(existingProject)}</span>}
+                  {existingProject && <span className={styles.activeBadge}>{statusLabel(existingProject, onboardingChatEnabled)}</span>}
                 </div>
                 <h2 className={styles.typeTitle}>{config.label}</h2>
                 <p className={styles.typeDescription}>{config.description}</p>
@@ -173,16 +179,30 @@ export default function OutreachProjectsClient({
                 <button
                   type="button"
                   className={styles.typeAction}
-                  disabled={disabled || loading}
+                  disabled={disabled || pendingType !== null}
                   onClick={() => {
+                    if (!onboardingChatEnabled) {
+                      void startProject(type);
+                      return;
+                    }
                     if (existingProject) {
+                      setPendingType(type);
                       router.push(`/dashboard/${startupPath}/outreach-projects/${existingProject.id}/onboarding`);
                       return;
                     }
                     void startProject(type);
                   }}
                 >
-                  {disabled ? 'Coming soon' : loading ? 'Starting...' : existingProject ? 'Open setup chat' : 'Select project'}
+                  {loading && <span className={styles.actionSpinner} aria-hidden="true" />}
+                  <span>
+                    {disabled
+                      ? 'Coming soon'
+                      : !onboardingChatEnabled
+                        ? existingProject ? 'Open people' : 'Research people'
+                        : loading
+                          ? existingProject ? 'Opening setup...' : 'Creating project...'
+                          : existingProject ? 'Open setup chat' : 'Select project'}
+                  </span>
                 </button>
               </article>
             );

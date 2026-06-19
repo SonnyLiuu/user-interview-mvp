@@ -272,12 +272,20 @@
   line-height: 1.65;
 }
 
+.downloadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .downloadButton,
 .fallbackButton,
-.secondaryDownload {
+.secondaryDownload,
+.macDownloadButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   min-height: 40px;
   padding: 9px 16px;
   font-size: 14px;
@@ -292,8 +300,37 @@
   background: #a4532b;
 }
 
+.downloadButton,
+.macDownloadButton {
+  flex-direction: column;
+  min-height: 64px;
+  padding-block: 10px;
+  gap: 4px;
+}
+
 .downloadButton:hover {
   background: #853f1d;
+}
+
+.macDownloadButton {
+  color: #fff;
+  background: #0071e3;
+}
+
+.macDownloadButton:hover {
+  background: #0068d1;
+}
+
+.platformLogo {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  fill: currentColor;
+}
+
+.appleLogo {
+  width: 54px;
+  height: 54px;
 }
 
 .fallbackButton,
@@ -1466,7 +1503,8 @@
 
   .downloadButton,
   .fallbackButton,
-  .secondaryDownload {
+  .secondaryDownload,
+  .macDownloadButton {
     width: 100%;
   }
 }

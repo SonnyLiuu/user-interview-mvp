@@ -127,10 +127,43 @@
   cursor: pointer;
   transition: background 120ms;
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
 }
 
 .button:hover:not(:disabled) { background: #853f1d; }
-.button:disabled { opacity: 0.5; cursor: not-allowed; }
+.button:disabled { opacity: 0.82; cursor: wait; }
+
+.buttonSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 248, 242, 0.42);
+  border-top-color: #fff8f2;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+.loadingHint {
+  margin: 0;
+  color: #7c6854;
+  font-size: 13px;
+  line-height: 1.4;
+  animation: loadingHintIn 220ms ease-out;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes loadingHintIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .buttonSpinner { animation-duration: 1.4s; }
+  .loadingHint { animation: none; }
+}
 
 @media (max-width: 540px) {
   .page {

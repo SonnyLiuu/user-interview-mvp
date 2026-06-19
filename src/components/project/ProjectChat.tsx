@@ -20,7 +20,22 @@ type Props = {
   inputId?: string;
   advisorIntroEventName?: string;
   advisorAlertId?: string;
+  collapsible?: boolean;
 };
+
+function RailChevron({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d={collapsed ? 'M10 3.5 5.5 8l4.5 4.5' : 'M6 3.5 10.5 8 6 12.5'}
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 // ── Patch helpers ─────────────────────────────────────────────────────────────
 
@@ -99,11 +114,13 @@ export default function ProjectChat({
   inputId,
   advisorIntroEventName,
   advisorAlertId,
+  collapsible = false,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialConversation);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [intakeJustCompleted, setIntakeJustCompleted] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const advisorIntroShown = useRef(false);
@@ -157,6 +174,7 @@ export default function ProjectChat({
     if (!advisorIntroEventName) return;
 
     function handleAdvisorIntro() {
+      setCollapsed(false);
       const intro = "Hi, let's sharpen your foundation further. Describe what you'd like to add or change and I can automatically apply your ideas into the foundation document. What sections need more detail?";
       setMessages((current) => {
         if (advisorIntroShown.current || current.some((message) => message.role === 'assistant' && message.content === intro)) {
@@ -242,20 +260,62 @@ export default function ProjectChat({
     : 'Make edits to your foundation brief, or add more information about your project.');
 
   const isEmpty = fullPage && messages.length === 0 && !streaming;
+  const panelId = inputId ? `${inputId}-panel` : undefined;
+
+  if (collapsible && collapsed) {
+    return (
+      <div className={styles.collapsedBar} data-collapsed="true">
+        <button
+          type="button"
+          className={styles.railNub}
+          onClick={() => setCollapsed(false)}
+          aria-label={`Expand ${title}`}
+          aria-expanded="false"
+        >
+          <RailChevron collapsed />
+          {streaming && <span className={styles.activityDot} aria-label="Advisor is responding" />}
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className={[styles.chat, fullPage && styles.chatFullPage, isEmpty && styles.chatEmpty].filter(Boolean).join(' ')}>
+    <div
+      id={panelId}
+      className={[styles.chat, fullPage && styles.chatFullPage, isEmpty && styles.chatEmpty].filter(Boolean).join(' ')}
+      data-collapsed="false"
+    >
+      {collapsible && (
+        <button
+          type="button"
+          className={styles.railNub}
+          onClick={() => setCollapsed(true)}
+          aria-label={`Collapse ${title}`}
+          aria-expanded="true"
+        >
+          <RailChevron collapsed={false} />
+        </button>
+      )}
+
       {!fullPage && (
         <div className={styles.header}>
-          <span className={styles.title}>{title}</span>
-          <span className={styles.subtitle}>{subtitle}</span>
+          <div className={styles.headerCopy}>
+            <span className={styles.title}>{title}</span>
+            <span className={styles.subtitle}>{subtitle}</span>
+          </div>
         </div>
       )}
 
       <div className={styles.messages}>
         {messages.map((m, i) => (
           <div key={i} className={m.role === 'user' ? styles.userMsg : styles.assistantMsg}>
-            <span className={styles.msgContent}>{displayContent(m.content)}</span>
+            {m.role === 'assistant' && streaming && i === messages.length - 1 && !displayContent(m.content) ? (
+              <span className={styles.typing} aria-label="Advisor is responding" role="status">
+                <span /><span /><span />
+              </span>
+            ) : (
+              <span className={styles.msgContent}>{displayContent(m.content)}</span>
+            )}
           </div>
         ))}
 

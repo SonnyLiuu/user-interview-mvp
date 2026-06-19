@@ -43,6 +43,7 @@ class CreateOutreachProjectRequest(BaseModel):
 
     type: OutreachProjectType = "idea_validation"
     name: str | None = Field(default=None, max_length=120)
+    skip_onboarding: bool = False
 
 
 class UpdateOutreachProjectRequest(BaseModel):

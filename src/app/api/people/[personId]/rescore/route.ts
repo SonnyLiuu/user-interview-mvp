@@ -26,7 +26,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const projectType = (row.project.project_type ?? 'startup') as ProjectType;
   const activeIdeaValidationBrief = projectType === 'startup'
-    ? await getActiveIdeaValidationBrief(row.person.project_id!)
+    ? await getActiveIdeaValidationBrief(row.person.project_id!, row.person.outreach_project_id)
     : null;
   if (projectType !== 'networking' && !activeIdeaValidationBrief) {
     return NextResponse.json({ error: 'Only people with an active outreach match profile can be rescored' }, { status: 400 });

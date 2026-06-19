@@ -111,6 +111,13 @@ For relevance_rank: score against the founder's specific hypothesis, customer ty
 - low: weak fit; minimal overlap with the target customer, startup context, idea validation, founder workflows, or the problem space.
 
 For match_score: when an Idea Validation match rubric is provided, return an integer from 0 to 100 that reflects this person's fit for the current Idea Validation outreach project. Derive match_rank from the score: high >= 75, medium >= 45, low < 45.
+For match_factors: when an Idea Validation match rubric is provided, score each factor from 0 to 100:
+- recipient_fit: how well this person fits the target interviewee types.
+- topic_overlap: overlap with the startup problem, workflow, or market.
+- shared_context: strength of relevant founder, community, industry, or timing context.
+- desired_response_usefulness: likelihood this person can answer the validation questions usefully.
+- personalization_quality: amount and specificity of usable interview or outreach context.
+- evidence_confidence: confidence based on source quality and usable evidence.
 For match_explanation: when an Idea Validation match rubric is provided, write 1-2 concise sentences explaining why this person is or is not a strong learning conversation target.
 
 ${globalTagInstructions}

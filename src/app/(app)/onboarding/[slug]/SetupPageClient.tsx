@@ -43,11 +43,13 @@ export default function SetupPageClient({
   projectSlug,
   projectType,
   initialStage = 'chat',
+  hasFoundation = false,
 }: {
   projectId: string;
   projectSlug: string;
   projectType: ProjectType;
   initialStage?: SetupStage;
+  hasFoundation?: boolean;
 }) {
   const router = useRouter();
   const [stage, setStage] = useState<SetupStage>(initialStage);
@@ -59,7 +61,7 @@ export default function SetupPageClient({
   useEffect(() => {
     if (stage !== 'done') return;
     const timeout = window.setTimeout(() => {
-      router.push(`/dashboard/${resolvedProjectSlug}/foundation`);
+      router.push(`/dashboard/${resolvedProjectSlug}/people`);
     }, 2200);
     return () => window.clearTimeout(timeout);
   }, [resolvedProjectSlug, router, stage]);
@@ -135,7 +137,9 @@ export default function SetupPageClient({
           <span className={styles.eyebrow}>Last step</span>
           <h1 className={styles.statusTitle}>Name this startup.</h1>
           <p className={styles.statusText}>
-            Pick a short name you&apos;ll recognize in the workspace. The foundation is already ready.
+            {hasFoundation
+              ? 'Pick a short name you\'ll recognize in the workspace. The foundation is already ready.'
+              : 'Pick a short name you\'ll recognize in the workspace, then start researching people.'}
           </p>
           <form className={styles.nameForm} onSubmit={saveProjectName}>
             <input
@@ -166,10 +170,14 @@ export default function SetupPageClient({
           <Confetti />
           <span className={styles.eyebrow}>Setup Complete</span>
           <h1 className={styles.statusTitle}>
-            {projectType === 'networking' ? 'Your outreach foundation is ready.' : 'Your startup foundation is ready.'}
+            {hasFoundation
+              ? projectType === 'networking'
+                ? 'Your outreach foundation is ready.'
+                : 'Your startup foundation is ready.'
+              : 'Your startup workspace is ready.'}
           </h1>
           <p className={styles.statusText}>
-            Opening the startup workspace now so you can review the foundation and keep refining it.
+            Opening People now so you can start researching who to contact.
           </p>
         </div>
       </div>

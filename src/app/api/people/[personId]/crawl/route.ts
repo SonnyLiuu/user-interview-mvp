@@ -44,7 +44,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
   }
 
   const activeIdeaValidationBrief = projectType === 'startup'
-    ? await getActiveIdeaValidationBrief(person.project_id!)
+    ? await getActiveIdeaValidationBrief(person.project_id!, person.outreach_project_id)
     : null;
   const contextualFoundation = activeIdeaValidationBrief
     ? applyIdeaValidationBrief(foundation, activeIdeaValidationBrief)

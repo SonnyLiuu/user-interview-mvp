@@ -320,6 +320,15 @@ export default function OnboardingChat({
     >
       {/* Transcript */}
       <div ref={messagesRef} className={styles.messages} onScroll={syncScrollIntent}>
+        {loading && messages.length === 0 && !error && (
+          <div className={[styles.assistantMsg, styles.loadingMsg].join(' ')} role="status" aria-live="polite">
+            <span className={styles.loadingLabel}>Getting your first question ready</span>
+            <div className={styles.typing} aria-hidden="true">
+              <span /><span /><span />
+            </div>
+          </div>
+        )}
+
         {messages.map((msg, i) => (
           <div
             key={i}

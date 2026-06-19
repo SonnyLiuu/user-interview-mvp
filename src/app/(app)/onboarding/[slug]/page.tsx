@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getProjectBySlugOrId } from '@/lib/backend-server';
+import { newProjectOnboardingChatEnabled } from '@/lib/feature-flags';
 import { getProjectPathSegment } from '@/lib/projects';
 import SetupPageClient from './SetupPageClient';
 
@@ -23,12 +24,17 @@ export default async function ProjectOnboardingPage({
     redirect(`/dashboard/${pathSegment}/foundation`);
   }
 
+  if (!newProjectOnboardingChatEnabled && !lookup.foundationExists && project.slug !== null) {
+    redirect(`/dashboard/${pathSegment}/people`);
+  }
+
   return (
     <SetupPageClient
       projectId={project.id}
       projectSlug={pathSegment}
       projectType={project.project_type}
-      initialStage={lookup.foundationExists ? 'name' : 'chat'}
+      initialStage={lookup.foundationExists || !newProjectOnboardingChatEnabled ? 'name' : 'chat'}
+      hasFoundation={lookup.foundationExists}
     />
   );
 }

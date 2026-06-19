@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { AppNav } from '@/components/app-nav/AppNav';
 import { WorkspaceTopBar } from '@/components/workspace-top-bar/WorkspaceTopBar';
 import { getProjectBySlugOrId, getWorkspaceSummary, listOutreachProjects } from '@/lib/backend-server';
+import { outreachProjectOnboardingChatEnabled } from '@/lib/feature-flags';
 
 export default async function ProjectWorkspaceLayout({
   children,
@@ -40,6 +41,7 @@ export default async function ProjectWorkspaceLayout({
           projectId={project.id}
           projectType={project.project_type}
           initialOutreachProjects={initialOutreachProjects}
+          outreachOnboardingChatEnabled={outreachProjectOnboardingChatEnabled}
         />
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>{children}</div>
       </main>

@@ -17,7 +17,7 @@ function buildResearchOverview(project: OutreachProjectRecord | null) {
   }
 
   const config = getOutreachProjectTypeConfig(project.type);
-  return `Add people for your ${config.label} project, research their background and fit, then choose who belongs in outreach.`;
+  return `Deep research automatically finds personal websites, Github profiles, and more to generate an informed brief on their interview fit.`;
 }
 
 export default async function PeoplePage({

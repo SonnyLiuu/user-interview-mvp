@@ -1,20 +1,88 @@
 .chat {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   background: #fffdf8;
   border: 1px solid #e8d9c4;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .header {
   padding: 16px 20px 14px;
   border-bottom: 1px solid #e8d9c4;
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.headerCopy {
+  display: flex;
   flex-direction: column;
   gap: 2px;
-  flex-shrink: 0;
+  min-width: 0;
+}
+
+.collapsedBar {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: visible;
+}
+
+.railNub {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: -33px;
+  width: 34px;
+  height: 56px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 1px solid #e1cdb5;
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  background: #fffdf8;
+  color: #715b49;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: -2px 0 5px rgb(46 33 21 / 5%);
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.railNub svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.railNub:hover {
+  color: #2e2115;
+  background: #f5eddf;
+  border-color: #c8ad91;
+}
+
+.railNub:focus-visible {
+  outline: 2px solid #a4532b;
+  outline-offset: 2px;
+}
+
+.activityDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a4532b;
+  animation: activityPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes activityPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 .title {
@@ -67,6 +135,19 @@
   word-break: break-word;
 }
 
+.loadingMsg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: messageArrive 240ms ease-out;
+}
+
+.loadingLabel {
+  color: #715b49;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 /* Typing indicator */
 .typing {
   display: flex;
@@ -89,6 +170,31 @@
 @keyframes bounce {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
   40% { transform: translateY(-4px); opacity: 1; }
+}
+
+@keyframes messageArrive {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingMsg { animation: none; }
+  .typing span { animation-duration: 2.4s; }
+  .activityDot { animation: none; }
+}
+
+@media (max-width: 900px) {
+  .railNub {
+    top: -33px;
+    left: 50%;
+    width: 56px;
+    height: 34px;
+    transform: translateX(-50%);
+    border-right: 1px solid #e1cdb5;
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
+  }
+
 }
 
 .systemMsg {

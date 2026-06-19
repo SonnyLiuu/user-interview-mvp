@@ -158,6 +158,15 @@ function CardFilled({
   const analysis = person.analysis as PersonAnalysis | null;
 
   const matchRank = (person.match_rank ?? person.relevance_rank) as 'low' | 'medium' | 'high' | null;
+  const displayedMatchScore = typeof person.match_score === 'number'
+    ? person.match_score
+    : matchRank === 'high'
+      ? 85
+      : matchRank === 'medium'
+        ? 60
+        : matchRank === 'low'
+          ? 30
+          : null;
   const personaTags = getPersonaTags(person.persona_type, analysis?.global_tags, tagMode);
 
   return (
@@ -215,7 +224,7 @@ function CardFilled({
       {/* Footer: gauge + profile affordance */}
       <div className={styles.footer}>
         {matchRank && (
-          <RelevanceIndicator rank={matchRank} score={person.match_score} stale={person.match_status === 'stale'} />
+          <RelevanceIndicator rank={matchRank} score={displayedMatchScore} stale={person.match_status === 'stale'} />
         )}
         <span className={styles.openProfile}>Open profile</span>
       </div>

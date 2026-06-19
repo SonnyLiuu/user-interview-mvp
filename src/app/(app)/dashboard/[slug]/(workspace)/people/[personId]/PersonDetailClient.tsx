@@ -80,8 +80,12 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
   }, []);
 
   useEffect(() => {
-    if (projectType !== 'networking') return;
-    if (person.match_status !== 'stale') return;
+    const needsNetworkingRefresh = projectType === 'networking' && person.match_status === 'stale';
+    const needsIdeaValidationFit = projectType === 'startup'
+      && person.analysis_status === 'complete'
+      && person.match_status !== 'pending'
+      && (typeof person.match_score !== 'number' || !person.match_profile_version);
+    if (!needsNetworkingRefresh && !needsIdeaValidationFit) return;
     if (rescoreTriggered.current) return;
     rescoreTriggered.current = true;
 
@@ -108,7 +112,7 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
       cancelled = true;
       if (interval) clearInterval(interval);
     };
-  }, [person.id, projectType]);
+  }, [person.analysis_status, person.id, person.match_profile_version, person.match_score, person.match_status, projectType]);
 
   async function handleBookmarkToggle() {
     setBookmarkLoading(true);
@@ -250,7 +254,7 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
           {/* ── Call Brief ───────────────────────────────────────────────── */}
           <CallBriefSection personId={person.id} slug={slug} stage={stage} initialPrep={initialCallPrep} />
 
-          {(projectType === 'networking' || person.match_profile_version) && (matchExplanation || matchFactors || hasMatchStatus) && (
+          {(projectType === 'networking' || person.match_profile_version || person.match_status === 'pending') && (matchExplanation || matchFactors || hasMatchStatus) && (
             <section className={styles.section}>
               <h2 className={styles.sectionTitle}>{projectType === 'networking' ? 'Match' : 'Idea Validation fit'}</h2>
               <div className={styles.matchPanel}>

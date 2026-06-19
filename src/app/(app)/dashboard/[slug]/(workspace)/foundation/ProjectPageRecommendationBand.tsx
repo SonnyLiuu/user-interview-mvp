@@ -20,6 +20,7 @@ export type RecommendationBandAlert = {
     startupPath: string;
     type: OutreachProjectType;
     projectId?: string;
+    skipOnboarding?: boolean;
   };
 };
 
@@ -115,8 +116,8 @@ export default function ProjectPageRecommendationBand({
     }
 
     if (alert.outreachAction) {
-      const { startupProjectId, startupPath, type, projectId } = alert.outreachAction;
-      if (projectId) {
+      const { startupProjectId, startupPath, type, projectId, skipOnboarding } = alert.outreachAction;
+      if (projectId && !skipOnboarding) {
         router.push(`/dashboard/${startupPath}/outreach-projects/${projectId}/onboarding`);
         return;
       }
@@ -126,11 +127,13 @@ export default function ProjectPageRecommendationBand({
         const res = await backendClientFetch(`/v1/projects/${startupProjectId}/outreach-projects`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type }),
+          body: JSON.stringify({ type, skip_onboarding: skipOnboarding }),
         });
         if (!res.ok) return;
         const project = await res.json() as OutreachProjectRecord;
-        router.push(`/dashboard/${startupPath}/outreach-projects/${project.id}/onboarding`);
+        router.push(skipOnboarding
+          ? `/dashboard/${startupPath}/people?outreachProjectId=${encodeURIComponent(project.id)}`
+          : `/dashboard/${startupPath}/outreach-projects/${project.id}/onboarding`);
       } finally {
         setLoadingActionId(null);
       }

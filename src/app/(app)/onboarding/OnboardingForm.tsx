@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { backendClientFetch } from '@/lib/backend-client';
 import styles from './onboarding.module.css';
 
-export default function OnboardingForm() {
+export default function OnboardingForm({ onboardingChatEnabled }: { onboardingChatEnabled: boolean }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
@@ -39,8 +39,16 @@ export default function OnboardingForm() {
         className={styles.button}
         disabled={loading}
       >
-        {loading ? 'Starting...' : 'Start onboarding'}
+        {loading && <span className={styles.buttonSpinner} aria-hidden="true" />}
+        <span>{loading ? 'Creating your project...' : onboardingChatEnabled ? 'Start onboarding' : 'Create project'}</span>
       </button>
+      {loading && (
+        <p className={styles.loadingHint} role="status" aria-live="polite">
+          {onboardingChatEnabled
+            ? 'Setting up your workspace and opening the first conversation.'
+            : 'Setting up your workspace.'}
+        </p>
+      )}
     </form>
   );
 }

@@ -83,6 +83,52 @@ class OutreachProjectsServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["id"], "outreach-1")
             outreach_project_service.outreach_project_repo.create_outreach_project.assert_not_awaited()
 
+    async def test_create_generic_project_skips_onboarding(self):
+        active_row = {**self.row, "status": "active"}
+        with (
+            self._patch_pool(),
+            patch.object(outreach_project_service.project_repo, "find_owned_project", new=AsyncMock(return_value=self.startup)),
+            patch.object(outreach_project_service.outreach_project_repo, "find_non_archived_by_type", new=AsyncMock(return_value=None)),
+            patch.object(outreach_project_service.outreach_project_repo, "create_outreach_project", new=AsyncMock(return_value=active_row)),
+        ):
+            result = await outreach_project_service.create_or_open_outreach_project(
+                "user-1",
+                "startup-1",
+                {"type": "idea_validation", "skip_onboarding": True},
+            )
+
+            self.assertEqual(result["status"], "active")
+            outreach_project_service.outreach_project_repo.create_outreach_project.assert_awaited_with(
+                self.conn,
+                "startup-1",
+                "idea_validation",
+                "Idea Validation",
+                "active",
+            )
+
+    async def test_skip_onboarding_activates_existing_generic_project(self):
+        active_row = {**self.row, "status": "active"}
+        with (
+            self._patch_pool(),
+            patch.object(outreach_project_service.project_repo, "find_owned_project", new=AsyncMock(return_value=self.startup)),
+            patch.object(outreach_project_service.outreach_project_repo, "find_non_archived_by_type", new=AsyncMock(return_value=self.row)),
+            patch.object(outreach_project_service.outreach_project_repo, "update_outreach_project", new=AsyncMock(return_value=active_row)),
+            patch.object(outreach_project_service.outreach_project_repo, "create_outreach_project", new=AsyncMock()),
+        ):
+            result = await outreach_project_service.create_or_open_outreach_project(
+                "user-1",
+                "startup-1",
+                {"type": "idea_validation", "skip_onboarding": True},
+            )
+
+            self.assertEqual(result["status"], "active")
+            outreach_project_service.outreach_project_repo.update_outreach_project.assert_awaited_with(
+                self.conn,
+                "outreach-1",
+                status="active",
+            )
+            outreach_project_service.outreach_project_repo.create_outreach_project.assert_not_awaited()
+
     async def test_existing_legacy_idea_validation_project_encodes_as_current_type(self):
         legacy_row = {
             **self.row,

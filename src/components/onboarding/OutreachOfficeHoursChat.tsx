@@ -163,9 +163,24 @@ export default function OutreachOfficeHoursChat({
   return (
     <div className={[styles.chat, styles.chatFullPage].join(' ')}>
       <div className={styles.messages}>
+        {loading && messages.length === 0 && !streaming && !error && (
+          <div className={[styles.assistantMsg, styles.loadingMsg].join(' ')} role="status" aria-live="polite">
+            <span className={styles.loadingLabel}>Preparing your setup conversation</span>
+            <span className={styles.typing} aria-hidden="true">
+              <span /><span /><span />
+            </span>
+          </div>
+        )}
+
         {messages.map((message, index) => (
           <div key={index} className={message.role === 'user' ? styles.userMsg : styles.assistantMsg}>
-            <span className={styles.msgContent}>{displayContent(message.content)}</span>
+            {message.role === 'assistant' && streaming && index === messages.length - 1 && !displayContent(message.content) ? (
+              <span className={styles.typing} aria-label="Advisor is responding" role="status">
+                <span /><span /><span />
+              </span>
+            ) : (
+              <span className={styles.msgContent}>{displayContent(message.content)}</span>
+            )}
           </div>
         ))}
 

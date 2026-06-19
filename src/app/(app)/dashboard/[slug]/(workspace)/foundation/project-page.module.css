@@ -4,6 +4,11 @@
   height: 100%;
   overflow: hidden;
   gap: 0;
+  transition: grid-template-columns 180ms ease;
+}
+
+.layout:has(.chatPane [data-collapsed="true"]) {
+  grid-template-columns: minmax(0, 1fr) 0;
 }
 
 .briefPane {
@@ -16,11 +21,18 @@
 
 .chatPane {
   height: 100%;
+  min-width: 0;
   padding: 16px;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   background: #faf4ec;
+  transition: padding 160ms ease;
+}
+
+.chatPane:has([data-collapsed="true"]) {
+  padding: 0;
+  background: transparent;
 }
 
 .recommendationBand {
@@ -169,6 +181,11 @@
     border-right: none;
     border-bottom: 1px solid #e8d9c4;
   }
+
+  .layout:has(.chatPane [data-collapsed="true"]) {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) 0;
+  }
 }
 
 @media (max-width: 640px) {
@@ -182,5 +199,12 @@
 
   .recommendationAction {
     align-self: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout,
+  .chatPane {
+    transition: none;
   }
 }

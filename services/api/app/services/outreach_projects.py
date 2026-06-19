@@ -452,6 +452,7 @@ async def list_outreach_projects_for_startup(user_id: str, startup_project_id: s
 
 async def create_or_open_outreach_project(user_id: str, startup_project_id: str, body):
     data = _request_data(body)
+    skip_onboarding = bool(data.get("skip_onboarding"))
     raw_type = data.get("type")
     if not is_valid_outreach_project_type(raw_type):
         raise BadRequestError("Invalid outreach project type")
@@ -465,6 +466,12 @@ async def create_or_open_outreach_project(user_id: str, startup_project_id: str,
         await _get_owned_startup(conn, user_id, startup_project_id)
         existing = await outreach_project_repo.find_non_archived_by_type(conn, startup_project_id, outreach_type)
         if existing:
+            if skip_onboarding and dict(existing).get("status") in {"draft", "onboarding"}:
+                existing = await outreach_project_repo.update_outreach_project(
+                    conn,
+                    existing["id"],
+                    status="active",
+                )
             return _encode_row(existing)
 
         config = get_outreach_project_type_config(outreach_type)
@@ -476,7 +483,9 @@ async def create_or_open_outreach_project(user_id: str, startup_project_id: str,
             startup_project_id,
             outreach_type,
             name,
-            "onboarding" if outreach_type == OUTREACH_TYPE_IDEA_VALIDATION else "draft",
+            "active" if skip_onboarding else (
+                "onboarding" if outreach_type == OUTREACH_TYPE_IDEA_VALIDATION else "draft"
+            ),
         )
     return _encode_row(row)
 

@@ -15,9 +15,10 @@ export default function IdeaValidationOnboardingClient({
   initialStatus: OutreachProjectStatus;
 }) {
   const router = useRouter();
+  const peopleHref = `/dashboard/${startupPath}/people?outreachProjectId=${encodeURIComponent(outreachProjectId)}`;
 
   function completeOnboarding() {
-    router.push(`/dashboard/${startupPath}/foundation`);
+    router.push(peopleHref);
     router.refresh();
   }
 
@@ -44,8 +45,8 @@ export default function IdeaValidationOnboardingClient({
             <p className={styles.doneText}>
               The learning plan is ready for this startup.
             </p>
-            <button className={styles.primaryLink} type="button" onClick={() => router.push(`/dashboard/${startupPath}/foundation`)}>
-              Open foundation
+            <button className={styles.primaryLink} type="button" onClick={() => router.push(peopleHref)}>
+              Open people
             </button>
           </div>
         ) : (

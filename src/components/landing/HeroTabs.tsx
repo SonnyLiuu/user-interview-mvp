@@ -1,167 +1,155 @@
 import styles from './LandingPage.module.css';
 
-const workspaceSteps = [
-  { label: 'Foundation', meta: 'Advisor sharpened scope' },
-  { label: 'People', meta: '14 researched matches' },
-  { label: 'Board', meta: '9 active conversations' },
-  { label: 'Insights', meta: '31% response rate' },
-];
+function FoundationIcon() {
+  return <svg viewBox="0 0 22 22" fill="none" aria-hidden="true"><rect x="3" y="2" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M7 7h8M7 11h8M7 15h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
+}
+function PeopleIcon() {
+  return <svg viewBox="0 0 22 22" fill="none" aria-hidden="true"><circle cx="11" cy="7.4" r="3.2" stroke="currentColor" strokeWidth="1.5"/><path d="M5.2 18c.5-3.6 2.65-5.4 5.8-5.4s5.3 1.8 5.8 5.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>;
+}
+function BoardIcon() {
+  return <svg viewBox="0 0 22 22" fill="none" aria-hidden="true"><rect x="2" y="4" width="5" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="4" width="5" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><rect x="16" y="4" width="5" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/></svg>;
+}
+function InsightsIcon() {
+  return <svg viewBox="0 0 22 22" fill="none" aria-hidden="true"><path d="M4 15.5l4.4-5 3.4 3.2L17.5 7M14.1 7h3.4v3.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
 
-const people = [
-  {
-    name: 'Sarah Chen',
-    role: 'Head of Product',
-    company: 'Stripe',
-    score: 92,
-    persona: 'Target user',
-    note: 'Strong fit for workflow pain and current workaround research.',
-  },
-  {
-    name: 'Priya Raman',
-    role: 'Founder',
-    company: 'OpsPilot',
-    score: 86,
-    persona: 'Builder',
-    note: 'Can explain workflow constraints, switching triggers, and founder priorities.',
-  },
-  {
-    name: 'Marco Lee',
-    role: 'Product advisor',
-    company: 'Independent',
-    score: 74,
-    persona: 'Domain expert',
-    note: 'Useful for pressure-testing market assumptions before scaling outreach.',
-  },
-];
-
-const boardColumns = [
-  { label: 'To contact', count: 8 },
-  { label: 'Sent', count: 4 },
-  { label: 'Scheduled', count: 2 },
-  { label: 'Completed', count: 3 },
+const navItems = [
+  { label: 'Foundation', icon: <FoundationIcon /> },
+  { label: 'People', icon: <PeopleIcon /> },
+  { label: 'Board', icon: <BoardIcon /> },
+  { label: 'Insights', icon: <InsightsIcon /> },
 ];
 
 export function HeroTabs() {
   return (
-    <div className={styles.workspacePreview} aria-label="Product workspace preview">
-      <div className={styles.previewSidebar}>
-        <div className={styles.previewProjectMark}>UI</div>
-        <div className={styles.previewProjectCopy}>
-          <span className={styles.previewProjectLabel}>Startup</span>
-          <strong>Idea validation</strong>
-        </div>
+    <div className={styles.workspacePreview} aria-label="Preview of the User Interview people workspace">
+      <aside className={styles.previewSidebar}>
+        <div className={styles.previewLogo} title="Startup Foundry">SF</div>
         <nav className={styles.previewNav} aria-label="Preview navigation">
-          {workspaceSteps.map((step, index) => (
-            <div
-              key={step.label}
-              className={`${styles.previewNavItem} ${index === 1 ? styles.previewNavItemActive : ''}`}
-            >
-              <span className={styles.previewNavDot} aria-hidden="true" />
-              <span>
-                <strong>{step.label}</strong>
-                <small>{step.meta}</small>
-              </span>
+          {navItems.map((item) => (
+            <div key={item.label} className={`${styles.previewNavItem} ${item.label === 'People' ? styles.previewNavItemActive : ''}`} title={item.label}>
+              {item.icon}
             </div>
           ))}
         </nav>
-      </div>
+        <div className={styles.previewAccount} aria-hidden="true"><PeopleIcon /></div>
+        <span className={styles.previewHandle} aria-hidden="true">›</span>
+      </aside>
 
-      <div className={styles.previewMain}>
-        <div className={styles.previewTopbar}>
-          <div>
-            <p className={styles.previewEyebrow}>AI-assisted outreach workspace</p>
-            <h2 className={styles.previewTitle}>Find the right people, then keep the pipeline moving.</h2>
+      <div className={styles.previewApp}>
+        <header className={styles.previewTopbar}>
+          <div className={styles.previewProjectSelector}>
+            <span>Project</span>
+            <strong>Idea Validation</strong>
+            <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M2 4.5l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </div>
-          <span className={styles.previewStatus}>Live research</span>
-        </div>
+        </header>
 
-        <div className={styles.previewGrid}>
-          <section className={styles.previewPanel}>
-            <div className={styles.previewPanelHeader}>
-              <span className={styles.previewPanelKicker}>Foundation advisor</span>
-              <span className={styles.previewPill}>Ready</span>
-            </div>
-            <h3 className={styles.previewPanelTitle}>Recommended first outreach project</h3>
-            <p className={styles.previewPanelText}>
-              Validate whether early-stage founders feel enough pain around fragmented customer discovery to change tools.
-            </p>
-            <div className={styles.previewChipRow}>
-              <span>Target users</span>
-              <span>Builders</span>
-              <span>Domain experts</span>
-            </div>
-          </section>
+        <main className={styles.previewDetailMain}>
+          <div className={styles.previewBack}>← <span>People research</span></div>
 
-          <section className={`${styles.previewPanel} ${styles.previewPeoplePanel}`}>
-            <div className={styles.previewPanelHeader}>
-              <span className={styles.previewPanelKicker}>People research</span>
-              <span className={styles.previewPill}>Quick + deep</span>
-            </div>
-            <div className={styles.previewInputBar}>
-              <span>Paste URLs or profile text</span>
-              <strong>Research</strong>
-            </div>
-            <div className={styles.previewPeopleList}>
-              {people.map((person) => (
-                <article key={person.name} className={styles.previewPersonCard}>
-                  <div className={styles.previewPersonTop}>
-                    <div>
-                      <h3>{person.name}</h3>
-                      <p>{person.role} at {person.company}</p>
-                    </div>
-                    <span>{person.score}</span>
-                  </div>
-                  <div className={styles.previewPersonMeta}>
-                    <span>{person.persona}</span>
-                    <span>Interview fit</span>
-                  </div>
-                  <p>{person.note}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className={styles.previewPanel}>
-            <div className={styles.previewPanelHeader}>
-              <span className={styles.previewPanelKicker}>Board</span>
-              <span className={styles.previewPill}>Drag to update</span>
-            </div>
-            <div className={styles.previewBoard}>
-              {boardColumns.map((column) => (
-                <div key={column.label} className={styles.previewBoardColumn}>
-                  <span>{column.label}</span>
-                  <strong>{column.count}</strong>
+          <section className={styles.previewProfileHeader}>
+            <div className={styles.previewAvatar}>SC</div>
+            <div className={styles.previewProfileIdentity}>
+              <div className={styles.previewNameRow}>
+                <div>
+                  <h2>Sarah Chen</h2>
+                  <p>Head of Product · Stripe</p>
                 </div>
-              ))}
+                <span className={styles.previewSaved}>Saved</span>
+              </div>
+              <div className={styles.previewProfileTags}>
+                <span>Target user</span>
+                <span>Product leader</span>
+                <span>Domain expert</span>
+              </div>
+              <p className={styles.previewProfileSummary}>
+                Strong fit for testing how product teams collect, synthesize, and act on customer interview evidence.
+              </p>
+              <div className={styles.previewSources}>
+                <span>in LinkedIn</span>
+                <span>↗ Personal site</span>
+                <span>3 sources researched</span>
+              </div>
+            </div>
+            <div className={styles.previewMatchScore}>
+              <svg viewBox="0 0 86 50" fill="none" aria-hidden="true">
+                <path d="M8 43a35 35 0 0 1 70 0" stroke="#eadcca" strokeWidth="7" strokeLinecap="round" />
+                <path d="M8 43A35 35 0 0 1 72 18" stroke="#4a8c5c" strokeWidth="7" strokeLinecap="round" />
+                <circle cx="72" cy="18" r="5" fill="#4a8c5c" />
+              </svg>
+              <strong>92</strong>
+              <span>High match</span>
             </div>
           </section>
 
-          <section className={styles.previewPanel}>
-            <div className={styles.previewPanelHeader}>
-              <span className={styles.previewPanelKicker}>Outreach insights</span>
-              <span className={styles.previewPill}>Updating</span>
+          <div className={styles.previewDetailColumns}>
+            <div className={styles.previewDetailPrimary}>
+              <section className={styles.previewDetailCard}>
+                <div className={styles.previewDetailHeading}>
+                  <div>
+                    <span>Idea validation fit</span>
+                    <h3>A high-leverage learning conversation</h3>
+                  </div>
+                  <span className={styles.previewFitBadge}>Strong fit</span>
+                </div>
+                <p className={styles.previewFitSummary}>
+                  Sarah directly owns the workflow you are validating and can explain where research evidence gets lost between interviews and product decisions.
+                </p>
+                <div className={styles.previewFactors}>
+                  {[
+                    ['Recipient fit', 95],
+                    ['Topic overlap', 91],
+                    ['Evidence confidence', 88],
+                    ['Response usefulness', 90],
+                  ].map(([label, score]) => (
+                    <div key={label} className={styles.previewFactor}>
+                      <div><span>{label}</span><strong>{score}</strong></div>
+                      <i><b style={{ width: `${score}%` }} /></i>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className={styles.previewDetailCard}>
+                <span className={styles.previewSectionKicker}>What to learn</span>
+                <h3>Best questions for this conversation</h3>
+                <ul className={styles.previewQuestionList}>
+                  <li>Walk me through the last customer interview that changed a product decision.</li>
+                  <li>Where does evidence become hardest to organize or trust?</li>
+                </ul>
+              </section>
             </div>
-            <div className={styles.previewMetricRow}>
-              <div>
-                <strong>31%</strong>
-                <span>response rate</span>
-              </div>
-              <div>
-                <strong>3</strong>
-                <span>follow-ups due</span>
-              </div>
-            </div>
-            <div className={styles.previewInsightBar}>
-              <span style={{ width: '46%' }} />
-              <span style={{ width: '26%' }} />
-              <span style={{ width: '18%' }} />
-              <span style={{ width: '10%' }} />
-            </div>
-            <p className={styles.previewPanelText}>
-              Target users are responding best. Rework the opening angle for budget holders before adding more volume.
-            </p>
-          </section>
-        </div>
+
+            <aside className={styles.previewDetailAside}>
+              <section className={styles.previewDetailCard}>
+                <span className={styles.previewSectionKicker}>Outreach stage</span>
+                <div className={styles.previewStageTrack}>
+                  <span className={styles.previewStageDone}>Researched</span>
+                  <i />
+                  <span>Contacted</span>
+                  <i />
+                  <span>Interviewed</span>
+                </div>
+                <button type="button" className={styles.previewPrimaryAction}>Prepare outreach</button>
+              </section>
+
+              <section className={styles.previewDetailCard}>
+                <span className={styles.previewSectionKicker}>Useful evidence</span>
+                <div className={styles.previewEvidenceItem}>
+                  <strong>Owns customer discovery systems</strong>
+                  <p>Led research operations across product and design teams.</p>
+                </div>
+                <div className={styles.previewEvidenceItem}>
+                  <strong>Recently discussed synthesis gaps</strong>
+                  <p>Public writing points to the exact workflow under validation.</p>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </main>
       </div>
     </div>
   );

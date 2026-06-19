@@ -143,6 +143,10 @@
   font-size: 13px;
   font-weight: 560;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .typeAction:hover:not(:disabled) {
@@ -150,8 +154,28 @@
 }
 
 .typeAction:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.typeCardDisabled .typeAction:disabled {
   cursor: default;
   opacity: 0.58;
+}
+
+.actionSpinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 250, 242, 0.4);
+  border-top-color: #fffaf2;
+  border-radius: 50%;
+  animation: actionSpin 700ms linear infinite;
+}
+
+@keyframes actionSpin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .actionSpinner { animation-duration: 1.4s; }
 }
 
 @media (max-width: 1169px) {

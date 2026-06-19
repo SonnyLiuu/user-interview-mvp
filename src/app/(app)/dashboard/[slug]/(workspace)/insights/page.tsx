@@ -27,6 +27,26 @@ const statusLabels: Record<InsightContent['assumptionTracker'][number]['status']
   new: 'New',
 };
 
+function WindowsLogo() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className={styles.platformLogo}>
+      <path d="M2.75 4.65 10.5 3.6v7.48H2.75V4.65Zm8.75-1.18 9.75-1.32v8.93H11.5V3.47ZM2.75 12.08h7.75v7.48l-7.75-1.05v-6.43Zm8.75 0h9.75V21l-9.75-1.32v-7.6Z" />
+    </svg>
+  );
+}
+
+function AppleLogo() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={`${styles.platformLogo} ${styles.appleLogo}`}
+    >
+      <path d="M17.05 12.54c.02-2.02 1.66-2.99 1.74-3.04a3.72 3.72 0 0 0-2.93-1.59c-1.23-.13-2.43.74-3.06.74-.64 0-1.6-.72-2.65-.7a3.9 3.9 0 0 0-3.29 2.01c-1.42 2.46-.36 6.08 1 8.07.68.97 1.47 2.06 2.52 2.02 1.03-.04 1.42-.65 2.67-.65 1.24 0 1.61.65 2.68.62 1.11-.02 1.8-.98 2.45-1.96a8.07 8.07 0 0 0 1.12-2.29 3.49 3.49 0 0 1-2.25-3.23ZM15.06 6.61a3.56 3.56 0 0 0 .81-2.56 3.64 3.64 0 0 0-2.35 1.22 3.4 3.4 0 0 0-.84 2.46 3 3 0 0 0 2.38-1.12Z" />
+    </svg>
+  );
+}
+
 function formatDate(value: Date | null) {
   if (!value) return 'Not generated yet';
   return new Intl.DateTimeFormat('en', {
@@ -42,9 +62,11 @@ function formatTranscriptDate(value: Date | null) {
 }
 
 function EmptyInsights({
-  installerHref,
+  windowsInstallerHref,
+  macInstallerHref,
 }: {
-  installerHref: string;
+  windowsInstallerHref: string;
+  macInstallerHref: string;
 }) {
   return (
     <main className={styles.page}>
@@ -73,12 +95,22 @@ function EmptyInsights({
               what happened during your calls as well as track vital assumptions
               for your startup.
             </p>
-            <a
-              href={installerHref}
-              className={styles.downloadButton}
-            >
-              Download for Windows
-            </a>
+            <div className={styles.downloadActions}>
+              <a
+                href={windowsInstallerHref}
+                className={styles.downloadButton}
+              >
+                <WindowsLogo />
+                Download for Windows
+              </a>
+              <a
+                href={macInstallerHref}
+                className={styles.macDownloadButton}
+              >
+                <AppleLogo />
+                Download for Mac
+              </a>
+            </div>
           </div>
 
           <div className={styles.sidePanel}>
@@ -408,7 +440,8 @@ export default async function InsightsPage({
     }
   }
 
-  const installerHref = getNotetakerDownloadHref();
+  const windowsInstallerHref = getNotetakerDownloadHref('windows');
+  const macInstallerHref = getNotetakerDownloadHref('macos');
   const lookup = await getProjectBySlugOrId(slug);
   const project = lookup?.project;
 
@@ -467,7 +500,8 @@ export default async function InsightsPage({
       <TabBar active="insights" slug={slug} />
       {state.kind === 'empty' ? (
         <EmptyInsights
-          installerHref={installerHref}
+          windowsInstallerHref={windowsInstallerHref}
+          macInstallerHref={macInstallerHref}
         />
       ) : (
         <>

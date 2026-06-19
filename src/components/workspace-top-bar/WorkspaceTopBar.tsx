@@ -37,11 +37,13 @@ export function WorkspaceTopBar({
   projectId,
   projectType,
   initialOutreachProjects,
+  outreachOnboardingChatEnabled,
 }: {
   slug: string;
   projectId: string;
   projectType: ProjectType;
   initialOutreachProjects: OutreachProjectRecord[];
+  outreachOnboardingChatEnabled: boolean;
 }) {
   const [projectOpen, setProjectOpen] = useState(false);
   const [outreachProjects, setOutreachProjects] = useState(initialOutreachProjects);
@@ -82,8 +84,27 @@ export function WorkspaceTopBar({
     setOutreachProjects(await res.json() as OutreachProjectRecord[]);
   }
 
-  function openOutreachProject(project: OutreachProjectRecord) {
+  async function openOutreachProject(project: OutreachProjectRecord) {
     setProjectOpen(false);
+    if (!outreachOnboardingChatEnabled) {
+      let selectedProject = project;
+      if (project.status === 'draft' || project.status === 'onboarding') {
+        const res = await backendClientFetch(`/v1/projects/${projectId}/outreach-projects`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: project.type, skip_onboarding: true }),
+        });
+        if (res.ok) {
+          selectedProject = await res.json() as OutreachProjectRecord;
+          setOutreachProjects((current) => current.map((item) => (
+            item.id === selectedProject.id ? selectedProject : item
+          )));
+        }
+      }
+      router.push(`/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(selectedProject.id)}`);
+      return;
+    }
+
     if (pathname?.startsWith(`/dashboard/${slug}/people`)) {
       router.push(`/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(project.id)}`);
       return;
@@ -130,7 +151,7 @@ export function WorkspaceTopBar({
                   key={project.id}
                   type="button"
                   className={`${styles.menuItem} ${project.id === selectedOutreachProject?.id ? styles.menuItemActive : ''}`}
-                  onClick={() => openOutreachProject(project)}
+                  onClick={() => void openOutreachProject(project)}
                   role="menuitem"
                 >
                   <span className={styles.outreachName}>{project.name}</span>

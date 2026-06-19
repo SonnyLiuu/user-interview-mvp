@@ -57,6 +57,7 @@ export type OutreachProjectRecord = {
 export type CreateOutreachProjectPayload = {
   type?: OutreachProjectType;
   name?: string | null;
+  skip_onboarding?: boolean;
 };
 
 export type UpdateOutreachProjectPayload = {

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
-import { getOutreachProject, getProjectBySlugOrId } from '@/lib/backend-server';
+import { activateOutreachProject, getOutreachProject, getProjectBySlugOrId } from '@/lib/backend-server';
+import { outreachProjectOnboardingChatEnabled } from '@/lib/feature-flags';
 import { getProjectPathSegment } from '@/lib/projects';
 import IdeaValidationOnboardingClient from './IdeaValidationOnboardingClient';
 
@@ -27,6 +28,12 @@ export default async function IdeaValidationOnboardingPage({
   }
   if (outreachProject.type !== 'idea_validation') {
     redirect(`/dashboard/${startupPath}/foundation`);
+  }
+  if (!outreachProjectOnboardingChatEnabled) {
+    if (outreachProject.status === 'draft' || outreachProject.status === 'onboarding') {
+      await activateOutreachProject(outreachProject.id);
+    }
+    redirect(`/dashboard/${startupPath}/people?outreachProjectId=${encodeURIComponent(outreachProject.id)}`);
   }
 
   return (

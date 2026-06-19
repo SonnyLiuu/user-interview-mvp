@@ -94,3 +94,14 @@ export async function getOutreachProject(outreachProjectId: string) {
     { allowNotFound: true },
   );
 }
+
+export async function activateOutreachProject(outreachProjectId: string) {
+  return backendFetchServer<OutreachProjectRecord>(
+    `/v1/outreach-projects/${outreachProjectId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'active' }),
+    },
+  );
+}

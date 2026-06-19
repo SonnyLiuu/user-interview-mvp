@@ -6,6 +6,7 @@ import type { Foundation, OutreachProjectRecord } from '@/lib/backend-types';
 import styles from './project-page.module.css';
 import ProjectPageRecommendationBand, { type RecommendationBandAlert } from './ProjectPageRecommendationBand';
 import { getFoundationView, getProjectBySlugOrId, listOutreachProjects } from '@/lib/backend-server';
+import { outreachProjectOnboardingChatEnabled } from '@/lib/feature-flags';
 import { getProjectPathSegment } from '@/lib/projects';
 import { adaptFoundationForMode } from '@/lib/project-modes';
 
@@ -59,7 +60,9 @@ function StartupRecommendationPanel({
     ? ideaValidationProject
     : null;
   const showIdeaValidationRecommendation = !isFullyCreatedIdeaValidationProject(ideaValidationProject);
-  const projectActionLabel = outreachProjectActionLabel(ideaValidationProject);
+  const projectActionLabel = outreachProjectOnboardingChatEnabled
+    ? outreachProjectActionLabel(ideaValidationProject)
+    : 'Research people';
   const alerts: RecommendationBandAlert[] = [
     {
       id: 'ongoing-advisor-first-run',
@@ -75,7 +78,7 @@ function StartupRecommendationPanel({
   if (showIdeaValidationRecommendation) {
     alerts.push({
       id: 'recommended-outreach-project',
-      eyebrow: 'Recommended first outreach project',
+      eyebrow: 'Research your first people',
       title: recommendation.label,
       body: recommendation.reason,
       actionLabel: projectActionLabel,
@@ -84,6 +87,7 @@ function StartupRecommendationPanel({
         startupPath,
         type: 'idea_validation',
         projectId: ideaValidationProject?.id,
+        skipOnboarding: !outreachProjectOnboardingChatEnabled,
       },
     });
   }
@@ -93,7 +97,9 @@ function StartupRecommendationPanel({
       id: 'first-outreach-project-ready',
       eyebrow: 'First outreach project ready',
       title: 'Your Idea Validation project is ready',
-      body: 'The setup chat created a focused learning project from this foundation. Start by researching the first people you might want to contact.',
+      body: outreachProjectOnboardingChatEnabled
+        ? 'The setup chat created a focused learning project from this foundation. Start by researching the first people you might want to contact.'
+        : 'Start by researching the first people you might want to contact.',
       actionLabel: 'Research people',
       actionHref: `/dashboard/${startupPath}/people?outreachProjectId=${encodeURIComponent(readyIdeaValidationProject.id)}`,
     });
@@ -159,6 +165,7 @@ export default async function ProjectPage({
             inputId="ongoing-advisor-input"
             advisorIntroEventName="foundation-advisor:try"
             advisorAlertId="ongoing-advisor-first-run"
+            collapsible
           />
         </div>
       </div>
