@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useLayoutEffect } from 'react';
 import { useFoundation } from './FoundationContext';
 import type { Foundation, ProjectType } from '@/lib/backend-types';
 import { getProjectModeConfig } from '@/lib/project-modes';
@@ -43,12 +43,31 @@ function AutoTextarea({
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    if (ref.current) {
-      ref.current.style.height = 'auto';
-      ref.current.style.height = ref.current.scrollHeight + 'px';
-    }
+  useLayoutEffect(() => {
+    const textarea = ref.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
   }, [value]);
+
+  useEffect(() => {
+    const textarea = ref.current;
+    if (!textarea) return;
+
+    let previousWidth = textarea.getBoundingClientRect().width;
+    const observer = new ResizeObserver(([entry]) => {
+      const nextWidth = entry.contentRect.width;
+      if (nextWidth === previousWidth) return;
+
+      previousWidth = nextWidth;
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    });
+
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <textarea
@@ -56,6 +75,7 @@ function AutoTextarea({
       className={className}
       value={value}
       rows={1}
+      wrap="soft"
       onChange={(e) => onChange(e.target.value)}
       onBlur={onBlur}
       placeholder={placeholder}

@@ -39,6 +39,14 @@ function RailChevron({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M13 5.5V2.75l-1.2 1.2A5.25 5.25 0 1 0 13.2 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // ── Patch helpers ─────────────────────────────────────────────────────────────
 
 // Strips {"foundation_patch": ...} (possibly wrapped in ```json fences) from the
@@ -128,6 +136,7 @@ export default function ProjectChat({
   });
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [intakeJustCompleted, setIntakeJustCompleted] = useState(false);
   const [collapsed, setCollapsed] = useState(collapsible);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -212,7 +221,7 @@ export default function ProjectChat({
     const res = await backendClientFetch(`/v1/projects/${projectId}/intake/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, recentMessages }),
+      body: JSON.stringify({ message: text, recentMessages, conversation: messages }),
     });
 
     if (!res.ok || !res.body) {
@@ -279,29 +288,63 @@ export default function ProjectChat({
     );
   }
 
+  async function resetChat() {
+    if (streaming || resetting) return;
+
+    setResetting(true);
+    try {
+      const res = await backendClientFetch(`/v1/projects/${projectId}/intake/chat`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        setMessages(advisorIntroEventName ? [{ role: 'assistant', content: ADVISOR_INTRO }] : []);
+        setInput('');
+        setIntakeJustCompleted(false);
+        requestAnimationFrame(() => textareaRef.current?.focus());
+      }
+    } finally {
+      setResetting(false);
+    }
+  }
+
   return (
     <div
       id={panelId}
       className={[styles.chat, fullPage && styles.chatFullPage, isEmpty && styles.chatEmpty].filter(Boolean).join(' ')}
       data-collapsed="false"
     >
-      {collapsible && (
-        <button
-          type="button"
-          className={styles.railNub}
-          onClick={() => setCollapsed(true)}
-          aria-label={`Collapse ${title}`}
-          aria-expanded="true"
-        >
-          <RailChevron collapsed={false} />
-        </button>
-      )}
-
       {!fullPage && (
         <div className={styles.header}>
           <div className={styles.headerCopy}>
             <span className={styles.title}>{title}</span>
             <span className={styles.subtitle}>{subtitle}</span>
+          </div>
+          <div className={styles.headerActions}>
+            {hasBrief && (
+              <button
+                type="button"
+                className={[styles.headerCollapse, resetting && styles.refreshing].filter(Boolean).join(' ')}
+                onClick={resetChat}
+                aria-label={`Start a new ${title} chat`}
+                title="Start a new chat"
+                disabled={streaming || resetting}
+              >
+                <RefreshIcon />
+              </button>
+            )}
+            {collapsible && (
+              <button
+                type="button"
+                className={styles.headerCollapse}
+                onClick={() => setCollapsed(true)}
+                aria-label={`Collapse ${title}`}
+                aria-expanded="true"
+                aria-controls={panelId}
+              >
+                <RailChevron collapsed={false} />
+              </button>
+            )}
           </div>
         </div>
       )}

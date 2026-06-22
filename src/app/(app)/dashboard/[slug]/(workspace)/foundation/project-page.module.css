@@ -170,6 +170,7 @@
 .foundationArea {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 900px) {

@@ -27,6 +27,58 @@
   min-width: 0;
 }
 
+.headerActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.headerCollapse {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e1cdb5;
+  border-radius: 6px;
+  background: #fffdf8;
+  color: #715b49;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.headerCollapse svg {
+  width: 16px;
+  height: 16px;
+}
+
+.headerCollapse:hover {
+  color: #2e2115;
+  background: #f5eddf;
+  border-color: #c8ad91;
+}
+
+.headerCollapse:focus-visible {
+  outline: 2px solid #a4532b;
+  outline-offset: 2px;
+}
+
+.headerCollapse:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.refreshing svg {
+  animation: refreshSpin 700ms linear infinite;
+}
+
+@keyframes refreshSpin {
+  to { transform: rotate(360deg); }
+}
+
 .collapsedBar {
   position: relative;
   height: 100%;
@@ -183,6 +235,7 @@
   .loadingMsg { animation: none; }
   .typing span { animation-duration: 2.4s; }
   .activityDot { animation: none; }
+  .refreshing svg { animation: none; }
 }
 
 @media (max-width: 900px) {

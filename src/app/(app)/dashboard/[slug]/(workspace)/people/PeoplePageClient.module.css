@@ -28,6 +28,14 @@
   font-weight: 420;
 }
 
+.sourceWarning {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #9a5b2e;
+  font-weight: 440;
+}
+
 .progressBanner {
   margin: 0;
   font-size: 13px;

@@ -173,7 +173,22 @@ async def get_intake_payload(user_id: str, project_id: str):
     return jsonable_encoder(dict(intake))
 
 
-async def stream_chat(user_id: str, project_id: str, message: str, recent_messages: list[dict] | None = None) -> AsyncIterator[str]:
+async def reset_conversation(user_id: str, project_id: str):
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        project = await project_repo.find_owned_project(conn, user_id, project_id)
+        if not project:
+            raise NotFoundError("Not found")
+        await intake_repo.save_conversation(conn, project_id, [])
+
+
+async def stream_chat(
+    user_id: str,
+    project_id: str,
+    message: str,
+    recent_messages: list[dict] | None = None,
+    conversation_messages: list[dict] | None = None,
+) -> AsyncIterator[str]:
     pool = get_pool()
     async with pool.acquire() as conn:
         project = await project_repo.find_owned_project(conn, user_id, project_id)
@@ -216,7 +231,15 @@ async def stream_chat(user_id: str, project_id: str, message: str, recent_messag
         full_response += chunk
         yield chunk
 
-    if not has_foundation:
+    if has_foundation:
+        saved_history = conversation_messages or []
+        final_conversation = [
+            *saved_history,
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": full_response},
+        ]
+    else:
         final_conversation = [*updated_conversation, {"role": "assistant", "content": full_response}]
-        async with pool.acquire() as conn:
-            await intake_repo.save_conversation(conn, project_id, final_conversation)
+
+    async with pool.acquire() as conn:
+        await intake_repo.save_conversation(conn, project_id, final_conversation)

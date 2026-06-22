@@ -73,7 +73,7 @@ export function UrlInputForm({
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
-      <p className={styles.hint}>Paste URLs, profile text, or both. For LinkedIn, paste copied profile text.</p>
+      <p className={styles.hint}>Paste URLs, profile text, or both. If a profile requires a login, copy and paste its content below.</p>
 
       <div className={styles.urlList}>
         {urls.map((url, idx) => (

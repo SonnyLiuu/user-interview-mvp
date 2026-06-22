@@ -183,6 +183,9 @@ export function PeoplePageClient({ initialPeople, projectId, outreachProjectId, 
         <p className={styles.subtitle}>
           {researchOverview}
         </p>
+        <p className={styles.sourceWarning}>
+          LinkedIn and other profiles that require a login can’t be read from a URL. Copy and paste the profile content instead.
+        </p>
       </div>
 
       {hasInProgress && (
