@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { getProjectBySlugOrId, listOutreachProjects } from '@/lib/backend-server';
-import { outreachProjectOnboardingChatEnabled } from '@/lib/feature-flags';
 import { getProjectPathSegment } from '@/lib/projects';
 import OutreachProjectsClient from './OutreachProjectsClient';
 
@@ -28,7 +27,6 @@ export default async function OutreachProjectsPage({
       startupProjectId={project.id}
       startupPath={pathSegment}
       initialOutreachProjects={outreachProjects}
-      onboardingChatEnabled={outreachProjectOnboardingChatEnabled}
     />
   );
 }

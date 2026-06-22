@@ -8,6 +8,8 @@ import styles from './ProjectChat.module.css';
 
 type Message = { role: 'assistant' | 'user'; content: string };
 
+const ADVISOR_INTRO = "Hi, let's sharpen your foundation further. Describe what you'd like to add or change and I can automatically apply your ideas into the foundation document. What sections need more detail?";
+
 type Props = {
   projectId: string;
   initialConversation: Message[];
@@ -116,14 +118,20 @@ export default function ProjectChat({
   advisorAlertId,
   collapsible = false,
 }: Props) {
-  const [messages, setMessages] = useState<Message[]>(initialConversation);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (!advisorIntroEventName || initialConversation.some((message) => (
+      message.role === 'assistant' && message.content === ADVISOR_INTRO
+    ))) {
+      return initialConversation;
+    }
+    return [...initialConversation, { role: 'assistant', content: ADVISOR_INTRO }];
+  });
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [intakeJustCompleted, setIntakeJustCompleted] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(collapsible);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const advisorIntroShown = useRef(false);
 
   // Foundation context — null when ProjectChat is used outside a FoundationProvider
   const foundationCtx = useFoundation();
@@ -175,14 +183,6 @@ export default function ProjectChat({
 
     function handleAdvisorIntro() {
       setCollapsed(false);
-      const intro = "Hi, let's sharpen your foundation further. Describe what you'd like to add or change and I can automatically apply your ideas into the foundation document. What sections need more detail?";
-      setMessages((current) => {
-        if (advisorIntroShown.current || current.some((message) => message.role === 'assistant' && message.content === intro)) {
-          return current;
-        }
-        advisorIntroShown.current = true;
-        return [...current, { role: 'assistant', content: intro }];
-      });
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
 

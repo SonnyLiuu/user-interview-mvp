@@ -264,7 +264,7 @@ export function LandingPage() {
       </section>
 
       {/* ── Feature Cards ────────────────────────────────────────────────── */}
-      <section className={styles.featureSection}>
+      <section id="outreach-projects" className={styles.featureSection}>
         <div className={styles.container}>
           <div className={styles.featureHeader}>
             <p className={styles.eyebrow}>What it does</p>
@@ -298,6 +298,15 @@ export function LandingPage() {
                   <h3 className={styles.featureTitle}>{config.label}</h3>
                   <p className={styles.featureBody}>{config.description}</p>
                   <p className={styles.featurePurpose}>{config.purpose}</p>
+                  {isActive && (
+                    <Link
+                      href={`/projects/${config.type.replaceAll('_', '-')}`}
+                      className={styles.featureLink}
+                      aria-label={`Learn more about ${config.label}`}
+                    >
+                      See how it works <span aria-hidden="true">→</span>
+                    </Link>
+                  )}
                 </div>
               );
             })}

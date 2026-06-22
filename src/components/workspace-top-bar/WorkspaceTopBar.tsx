@@ -37,13 +37,11 @@ export function WorkspaceTopBar({
   projectId,
   projectType,
   initialOutreachProjects,
-  outreachOnboardingChatEnabled,
 }: {
   slug: string;
   projectId: string;
   projectType: ProjectType;
   initialOutreachProjects: OutreachProjectRecord[];
-  outreachOnboardingChatEnabled: boolean;
 }) {
   const [projectOpen, setProjectOpen] = useState(false);
   const [outreachProjects, setOutreachProjects] = useState(initialOutreachProjects);
@@ -55,12 +53,13 @@ export function WorkspaceTopBar({
   const isStartupWorkspace = projectType === 'startup';
   const selectedOutreachProjectId = currentOutreachId(pathname, searchParams);
   const selectedOutreachProject = useMemo(() => {
-    if (selectedOutreachProjectId) {
-      return outreachProjects.find((project) => project.id === selectedOutreachProjectId) ?? null;
-    }
-    return outreachProjects.find((project) => project.status !== 'archived') ?? null;
+    if (!selectedOutreachProjectId) return null;
+    return outreachProjects.find((project) => (
+      project.id === selectedOutreachProjectId && project.status !== 'archived'
+    )) ?? null;
   }, [outreachProjects, selectedOutreachProjectId]);
-  const hasOutreachProjects = outreachProjects.length > 0;
+  const activeOutreachProjects = outreachProjects.filter((project) => project.status !== 'archived');
+  const hasOutreachProjects = activeOutreachProjects.length > 0;
 
   useEffect(() => {
     setOutreachProjects(initialOutreachProjects);
@@ -86,31 +85,7 @@ export function WorkspaceTopBar({
 
   async function openOutreachProject(project: OutreachProjectRecord) {
     setProjectOpen(false);
-    if (!outreachOnboardingChatEnabled) {
-      let selectedProject = project;
-      if (project.status === 'draft' || project.status === 'onboarding') {
-        const res = await backendClientFetch(`/v1/projects/${projectId}/outreach-projects`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: project.type, skip_onboarding: true }),
-        });
-        if (res.ok) {
-          selectedProject = await res.json() as OutreachProjectRecord;
-          setOutreachProjects((current) => current.map((item) => (
-            item.id === selectedProject.id ? selectedProject : item
-          )));
-        }
-      }
-      router.push(`/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(selectedProject.id)}`);
-      return;
-    }
-
-    if (pathname?.startsWith(`/dashboard/${slug}/people`)) {
-      router.push(`/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(project.id)}`);
-      return;
-    }
-
-    router.push(`/dashboard/${slug}/outreach-projects/${project.id}/onboarding`);
+    router.push(`/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(project.id)}`);
   }
 
   function openNewOutreachProjectPage() {
@@ -139,14 +114,26 @@ export function WorkspaceTopBar({
           >
             <span className={styles.selectorKicker}>Project</span>
             <span className={styles.selectorName}>
-              {!hasOutreachProjects ? 'New outreach project' : selectedOutreachProject?.name ?? 'Outreach projects'}
+              {!hasOutreachProjects ? 'New outreach project' : selectedOutreachProject?.name ?? 'General research'}
             </span>
             {hasOutreachProjects ? <ChevronIcon open={projectOpen} /> : <PlusIcon />}
           </button>
 
           {hasOutreachProjects && projectOpen && (
             <div className={`${styles.menu} ${styles.projectMenu}`} role="menu">
-              {outreachProjects.map((project) => (
+              <button
+                type="button"
+                className={`${styles.menuItem} ${!selectedOutreachProject ? styles.menuItemActive : ''}`}
+                onClick={() => {
+                  setProjectOpen(false);
+                  router.push(`/dashboard/${slug}/people`);
+                }}
+                role="menuitem"
+              >
+                <span className={styles.outreachName}>General research</span>
+              </button>
+              <div className={styles.menuDivider} />
+              {activeOutreachProjects.map((project) => (
                 <button
                   key={project.id}
                   type="button"

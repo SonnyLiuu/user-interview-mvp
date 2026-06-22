@@ -61,7 +61,7 @@ export default function SetupPageClient({
   useEffect(() => {
     if (stage !== 'done') return;
     const timeout = window.setTimeout(() => {
-      router.push(`/dashboard/${resolvedProjectSlug}/people`);
+      router.push(`/dashboard/${resolvedProjectSlug}/foundation`);
     }, 2200);
     return () => window.clearTimeout(timeout);
   }, [resolvedProjectSlug, router, stage]);
@@ -177,7 +177,7 @@ export default function SetupPageClient({
               : 'Your startup workspace is ready.'}
           </h1>
           <p className={styles.statusText}>
-            Opening People now so you can start researching who to contact.
+            Opening your Foundation now.
           </p>
         </div>
       </div>

@@ -1207,6 +1207,36 @@
   padding-top: 10px;
 }
 
+.featureLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-top: 14px;
+  color: #2e2115;
+  font-size: 14px;
+  font-weight: 520;
+  text-decoration: none;
+}
+
+.featureLink span {
+  transition: transform 150ms ease;
+}
+
+.featureLink:hover {
+  color: #a4532b;
+}
+
+.featureLink:hover span {
+  transform: translateX(3px);
+}
+
+.featureLink:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid #a4532b;
+  outline-offset: 4px;
+}
+
 
 /* ── Closing CTA ─────────────────────────────────────────────────────────── */
 .closingCta {

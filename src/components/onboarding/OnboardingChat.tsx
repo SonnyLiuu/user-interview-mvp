@@ -71,6 +71,21 @@ type Phase = 'kickoff' | 'choices' | 'finishing' | 'done';
 
 const BOTTOM_THRESHOLD_PX = 32;
 
+function formatAnswerMessage(
+  currentTurn: CurrentTurn,
+  selectedChoiceIds: string[],
+  customText: string,
+): string {
+  const selectedIds = new Set(selectedChoiceIds);
+  const selectedLabels = currentTurn.choices
+    .map((choice, index) => selectedIds.has(choice.id) ? `${index + 1}. ${choice.label}` : null)
+    .filter((label): label is string => label !== null);
+
+  if (selectedLabels.length === 0) return customText;
+  const selectedSummary = `Selected suggestions: ${selectedLabels.join('; ')}`;
+  return customText ? `${customText}\n${selectedSummary}` : selectedSummary;
+}
+
 const STARTUP_FINISHING_STATUSES = [
   'Re-reading your answers',
   'Identifying the current bottleneck',
@@ -208,8 +223,12 @@ export default function OnboardingChat({
     const text = kickoffText.trim();
     if (!text || submitting) return;
 
+    const previousMessages = messages;
     setSubmitting(true);
     setError('');
+    setKickoffText('');
+    setMessages([...previousMessages, { role: 'user', content: text, messageType: 'custom_answer' }]);
+    shouldStickToBottomRef.current = true;
 
     try {
       const res = await backendClientFetch(chatEndpoint, {
@@ -223,9 +242,10 @@ export default function OnboardingChat({
       }
 
       const data = await res.json() as ChatResponse;
-      setKickoffText('');
       applyResponse(data);
     } catch {
+      setMessages(previousMessages);
+      setKickoffText(text);
       setError('Your answer did not go through. Please try again.');
     } finally {
       setSubmitting(false);
@@ -246,8 +266,19 @@ export default function OnboardingChat({
     const text = customText.trim();
     if ((!text && selectedChoiceIds.length === 0) || submitting || !currentTurn) return;
 
+    const previousMessages = messages;
+    const optimisticContent = formatAnswerMessage(currentTurn, selectedChoiceIds, text);
     setSubmitting(true);
     setError('');
+    setMessages([
+      ...previousMessages,
+      {
+        role: 'user',
+        content: optimisticContent,
+        messageType: text ? 'custom_answer' : 'choice_answer',
+      },
+    ]);
+    shouldStickToBottomRef.current = true;
 
     try {
       const res = await backendClientFetch(chatEndpoint, {
@@ -267,6 +298,7 @@ export default function OnboardingChat({
       const data = await res.json() as ChatResponse;
       applyResponse(data);
     } catch {
+      setMessages(previousMessages);
       setError('Your answer did not go through. Please try again.');
     } finally {
       setSubmitting(false);

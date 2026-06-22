@@ -14,7 +14,6 @@ type Props = {
   startupProjectId: string;
   startupPath: string;
   initialOutreachProjects: OutreachProjectRecord[];
-  onboardingChatEnabled: boolean;
 };
 
 function Icon({ iconKey }: { iconKey: string }) {
@@ -75,9 +74,9 @@ function Icon({ iconKey }: { iconKey: string }) {
   );
 }
 
-function statusLabel(project: OutreachProjectRecord | null, onboardingChatEnabled: boolean) {
+function statusLabel(project: OutreachProjectRecord | null) {
   if (!project) return null;
-  if (project.status === 'onboarding') return onboardingChatEnabled ? 'Setup started' : 'In progress';
+  if (project.status === 'onboarding') return 'In progress';
   return project.status[0].toUpperCase() + project.status.slice(1);
 }
 
@@ -85,7 +84,6 @@ export default function OutreachProjectsClient({
   startupProjectId,
   startupPath,
   initialOutreachProjects,
-  onboardingChatEnabled,
 }: Props) {
   const router = useRouter();
   const [outreachProjects, setOutreachProjects] = useState(initialOutreachProjects);
@@ -111,7 +109,7 @@ export default function OutreachProjectsClient({
       const res = await backendClientFetch(`/v1/projects/${startupProjectId}/outreach-projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, skip_onboarding: !onboardingChatEnabled }),
+        body: JSON.stringify({ type, skip_onboarding: true }),
       });
 
       if (!res.ok) {
@@ -128,9 +126,7 @@ export default function OutreachProjectsClient({
           ? current.map((item) => (item.id === project.id ? project : item))
           : [project, ...current];
       });
-      router.push(onboardingChatEnabled
-        ? `/dashboard/${startupPath}/outreach-projects/${project.id}/onboarding`
-        : `/dashboard/${startupPath}/people?outreachProjectId=${encodeURIComponent(project.id)}`);
+      router.push(`/dashboard/${startupPath}/people?outreachProjectId=${encodeURIComponent(project.id)}`);
     } catch {
       setError('Could not start this outreach project.');
       setPendingType(null);
@@ -144,9 +140,7 @@ export default function OutreachProjectsClient({
           <p className={styles.eyebrow}>New outreach project</p>
           <h1 className={styles.title}>Choose what kind of outreach to run.</h1>
           <p className={styles.description}>
-            {onboardingChatEnabled
-              ? 'Pick a project type. Once selected, setup opens as a focused chat.'
-              : 'Pick a research focus and start finding people to contact.'}
+            Pick a research focus and start finding people to contact.
           </p>
         </section>
 
@@ -171,7 +165,7 @@ export default function OutreachProjectsClient({
                   <span className={styles.typeIcon}>
                     <Icon iconKey={config.iconKey} />
                   </span>
-                  {existingProject && <span className={styles.activeBadge}>{statusLabel(existingProject, onboardingChatEnabled)}</span>}
+                  {existingProject && <span className={styles.activeBadge}>{statusLabel(existingProject)}</span>}
                 </div>
                 <h2 className={styles.typeTitle}>{config.label}</h2>
                 <p className={styles.typeDescription}>{config.description}</p>
@@ -180,28 +174,15 @@ export default function OutreachProjectsClient({
                   type="button"
                   className={styles.typeAction}
                   disabled={disabled || pendingType !== null}
-                  onClick={() => {
-                    if (!onboardingChatEnabled) {
-                      void startProject(type);
-                      return;
-                    }
-                    if (existingProject) {
-                      setPendingType(type);
-                      router.push(`/dashboard/${startupPath}/outreach-projects/${existingProject.id}/onboarding`);
-                      return;
-                    }
-                    void startProject(type);
-                  }}
+                  onClick={() => void startProject(type)}
                 >
                   {loading && <span className={styles.actionSpinner} aria-hidden="true" />}
                   <span>
                     {disabled
                       ? 'Coming soon'
-                      : !onboardingChatEnabled
-                        ? existingProject ? 'Open people' : 'Research people'
-                        : loading
-                          ? existingProject ? 'Opening setup...' : 'Creating project...'
-                          : existingProject ? 'Open setup chat' : 'Select project'}
+                      : loading
+                        ? existingProject ? 'Opening research...' : 'Creating project...'
+                        : existingProject ? 'Open research' : 'Create project'}
                   </span>
                 </button>
               </article>

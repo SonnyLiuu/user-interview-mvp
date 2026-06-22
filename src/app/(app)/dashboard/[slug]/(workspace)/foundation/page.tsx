@@ -6,7 +6,6 @@ import type { Foundation, OutreachProjectRecord } from '@/lib/backend-types';
 import styles from './project-page.module.css';
 import ProjectPageRecommendationBand, { type RecommendationBandAlert } from './ProjectPageRecommendationBand';
 import { getFoundationView, getProjectBySlugOrId, listOutreachProjects } from '@/lib/backend-server';
-import { outreachProjectOnboardingChatEnabled } from '@/lib/feature-flags';
 import { getProjectPathSegment } from '@/lib/projects';
 import { adaptFoundationForMode } from '@/lib/project-modes';
 
@@ -23,13 +22,6 @@ function ideaValidationRecommendation(foundation: Foundation) {
   const reason = cleanText(recommendation?.reason)
     || 'This is a good first outreach project because it helps turn the startup context into focused learning conversations.';
   return { label, reason };
-}
-
-function outreachProjectActionLabel(project?: OutreachProjectRecord) {
-  if (!project) return 'Start project';
-  if (project.status === 'onboarding' || project.status === 'draft') return 'Continue Setup';
-  if (project.status === 'paused') return 'Resume project';
-  return 'Open project';
 }
 
 function isFullyCreatedIdeaValidationProject(project?: OutreachProjectRecord) {
@@ -60,9 +52,6 @@ function StartupRecommendationPanel({
     ? ideaValidationProject
     : null;
   const showIdeaValidationRecommendation = !isFullyCreatedIdeaValidationProject(ideaValidationProject);
-  const projectActionLabel = outreachProjectOnboardingChatEnabled
-    ? outreachProjectActionLabel(ideaValidationProject)
-    : 'Research people';
   const alerts: RecommendationBandAlert[] = [
     {
       id: 'ongoing-advisor-first-run',
@@ -81,14 +70,8 @@ function StartupRecommendationPanel({
       eyebrow: 'Research your first people',
       title: recommendation.label,
       body: recommendation.reason,
-      actionLabel: projectActionLabel,
-      outreachAction: {
-        startupProjectId,
-        startupPath,
-        type: 'idea_validation',
-        projectId: ideaValidationProject?.id,
-        skipOnboarding: !outreachProjectOnboardingChatEnabled,
-      },
+      actionLabel: 'Create an Idea Validation project',
+      actionHref: `/dashboard/${startupPath}/outreach-projects`,
     });
   }
 
@@ -97,9 +80,7 @@ function StartupRecommendationPanel({
       id: 'first-outreach-project-ready',
       eyebrow: 'First outreach project ready',
       title: 'Your Idea Validation project is ready',
-      body: outreachProjectOnboardingChatEnabled
-        ? 'The setup chat created a focused learning project from this foundation. Start by researching the first people you might want to contact.'
-        : 'Start by researching the first people you might want to contact.',
+      body: 'Start by researching the first people you might want to contact.',
       actionLabel: 'Research people',
       actionHref: `/dashboard/${startupPath}/people?outreachProjectId=${encodeURIComponent(readyIdeaValidationProject.id)}`,
     });

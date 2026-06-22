@@ -21,6 +21,7 @@
 
 .chatPane {
   height: 100%;
+  min-height: 0;
   min-width: 0;
   padding: 16px;
   overflow: visible;

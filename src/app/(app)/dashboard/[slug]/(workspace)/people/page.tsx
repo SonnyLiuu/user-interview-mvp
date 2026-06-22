@@ -37,16 +37,18 @@ export default async function PeoplePage({
     ? await listOutreachProjects(project.id)
     : [];
   const selectedOutreachProject =
-    outreachProjects.find((candidate) => candidate.id === requestedOutreachProjectId && candidate.status !== 'archived') ??
-    outreachProjects.find((candidate) => candidate.status !== 'archived') ??
-    null;
+    outreachProjects.find((candidate) => (
+      candidate.id === requestedOutreachProjectId && candidate.status !== 'archived'
+    )) ?? null;
   const defaultOutreachProjectId = outreachProjects.find((candidate) => candidate.status !== 'archived')?.id ?? null;
   const researchTitle = selectedOutreachProject
     ? `${getOutreachProjectTypeConfig(selectedOutreachProject.type).label} Research`
     : 'Research';
   const researchOverview = buildResearchOverview(selectedOutreachProject);
   const tagMode = project.project_type === 'startup'
-    ? tagModeForOutreachProjectType(selectedOutreachProject?.type ?? 'idea_validation')
+    ? selectedOutreachProject
+      ? tagModeForOutreachProjectType(selectedOutreachProject.type)
+      : 'none'
     : 'none';
 
   // Load people for the selected outreach project. Null outreach ids are legacy
