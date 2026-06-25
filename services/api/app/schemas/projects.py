@@ -8,6 +8,7 @@ class ProjectNavItem(BaseModel):
     name: str
     slug: str | None = None
     project_type: str = "startup"
+    entry_goal: str | None = None
 
 
 class ProjectRecord(ProjectNavItem):

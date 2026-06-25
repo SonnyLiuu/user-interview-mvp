@@ -24,8 +24,15 @@ class AuthContext:
     avatar_url: str
 
 
+@dataclass
+class GuestAuthContext:
+    token: str
+    ip_address: str
+
+
 DESKTOP_AUTH_TOKEN_TYPE = "desktop_app_auth"
 DESKTOP_LAUNCH_TOKEN_TYPE = "desktop_call_launch"
+GUEST_ONBOARDING_TOKEN_TYPE = "guest_onboarding"
 DESKTOP_AUTH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30
 DESKTOP_LAUNCH_TOKEN_TTL_SECONDS = 60 * 2
 
@@ -200,3 +207,18 @@ async def get_auth_context(
     if payload.get("typ") == DESKTOP_AUTH_TOKEN_TYPE:
         return await resolve_desktop_user(payload.get("sub") or "")
     return await resolve_user(payload)
+
+
+async def get_guest_auth_context(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    settings: Settings = Depends(get_settings),
+) -> GuestAuthContext:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise UnauthorizedError("Missing bearer token")
+    payload = verify_internal_token(authorization.removeprefix("Bearer ").strip(), settings.backend_shared_secret)
+    if payload.get("typ") != GUEST_ONBOARDING_TOKEN_TYPE:
+        raise UnauthorizedError("Invalid guest token")
+    token = payload.get("guest_token") or ""
+    if not token:
+        raise UnauthorizedError("Missing guest token")
+    return GuestAuthContext(token=token, ip_address=payload.get("ip_address") or "")

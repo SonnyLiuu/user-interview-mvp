@@ -14,6 +14,21 @@
   flex-shrink: 0;
 }
 
+.withLabel {
+  width: auto;
+  height: 32px;
+  gap: 6px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.withLabel .icon {
+  width: 12px;
+  height: 16px;
+}
+
 .btn:hover:not(:disabled) {
   background: #fef3e2;
   color: #a45f18;

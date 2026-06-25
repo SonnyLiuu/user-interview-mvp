@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { AppNav } from '@/components/app-nav/AppNav';
 import { WorkspaceTopBar } from '@/components/workspace-top-bar/WorkspaceTopBar';
-import { getProjectBySlugOrId, getWorkspaceSummary, listOutreachProjects } from '@/lib/backend-server';
+import { getWorkspaceSummary, listOutreachProjects } from '@/lib/backend-server';
+import { requireOwnedProjectBySlug } from '@/lib/project-access';
 
 export default async function ProjectWorkspaceLayout({
   children,
@@ -11,11 +12,7 @@ export default async function ProjectWorkspaceLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const lookup = await getProjectBySlugOrId(slug);
-  if (!lookup?.project) {
-    return redirect('/dashboard');
-  }
-  const { project } = lookup;
+  const { project } = await requireOwnedProjectBySlug(slug);
   const summary = await getWorkspaceSummary(project.id);
   if (!summary) {
     return redirect('/dashboard');
@@ -41,7 +38,7 @@ export default async function ProjectWorkspaceLayout({
           projectType={project.project_type}
           initialOutreachProjects={initialOutreachProjects}
         />
-        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>{children}</div>
+        <div key={project.id} style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>{children}</div>
       </main>
     </div>
   );

@@ -35,13 +35,277 @@
 /* ── Content ─────────────────────────────────────────────────────────────── */
 
 .content {
-  max-width: 760px;
+  max-width: 1040px;
   width: 100%;
   margin: 0 auto;
   padding: 16px 32px 60px;
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+/* ── Profile dashboard ──────────────────────────────────────────────────── */
+
+.profileDashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 4px 0 18px;
+}
+
+.dashboardCard {
+  min-width: 0;
+  background: #fffdf9;
+  border: 1px solid #e5cfb1;
+  border-radius: 15px;
+  box-shadow: 0 1px 0 rgba(98, 62, 30, 0.02);
+}
+
+.identityCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 116px;
+  align-items: start;
+  gap: 16px;
+  padding: 20px 22px;
+}
+
+.identityAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #f5e3cf;
+  color: #9c4826;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.identityContent {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.identityTitleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.identitySummary {
+  margin: 12px 0 0;
+  color: #4c3829;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.sourceSummary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+  color: #876f5d;
+  font-size: 11px;
+}
+
+.sourceSummary > * + *::before {
+  content: "/";
+  margin-right: 5px;
+  color: #bea78d;
+}
+
+.sourceSummary a {
+  color: #9d502e;
+  text-decoration: none;
+}
+
+.sourceSummary a:hover {
+  text-decoration: underline;
+}
+
+.matchGauge {
+  position: relative;
+  width: 104px;
+  height: 74px;
+  align-self: center;
+  color: #397a4b;
+}
+
+.matchGauge svg {
+  display: block;
+  width: 104px;
+  height: 62px;
+  overflow: visible;
+}
+
+.gaugeTrack,
+.gaugeFill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.gaugeTrack {
+  stroke: #eadfce;
+}
+
+.gaugeFill {
+  stroke: #4b9162;
+}
+
+.gaugeValue {
+  position: absolute;
+  inset: 25px 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.gaugeValue strong {
+  font-size: 20px;
+  font-weight: 570;
+}
+
+.gaugeValue span {
+  margin-top: 7px;
+  font-size: 10px;
+  color: #397a4b;
+}
+
+.dashboardGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(280px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.dashboardMainColumn,
+.dashboardSideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fitCard,
+.previewCard,
+.stageCard {
+  padding: 18px 20px;
+}
+
+.cardEyebrowRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
+.cardEyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 560;
+  color: #a55632;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.cardHeadline {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 580;
+  line-height: 1.35;
+  color: #2e2115;
+}
+
+.cardProse {
+  margin: 8px 0 0;
+  color: #5a4030;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.fitBadge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 560;
+}
+
+.fitBadge_high {
+  color: #25703d;
+  background: #eaf5ed;
+}
+
+.fitBadge_medium {
+  color: #8a5a19;
+  background: #fbf0d9;
+}
+
+.fitBadge_low {
+  color: #944733;
+  background: #f8e8e3;
+}
+
+.fitCard .matchFactors {
+  margin-top: 13px;
+}
+
+.previewCard .cardEyebrow {
+  margin-bottom: 8px;
+}
+
+.previewList {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.previewList li {
+  position: relative;
+  padding-left: 15px;
+  color: #5a4030;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.previewList li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: #b2542e;
+}
+
+.evidenceList {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+
+.evidenceList p {
+  margin: 0;
+  padding: 9px 0;
+  color: #4d3829;
+  font-size: 12.5px;
+  line-height: 1.5;
+  border-bottom: 1px solid #eadbc7;
+}
+
+.evidenceList p:first-child {
+  padding-top: 0;
+}
+
+.evidenceList p:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
@@ -72,23 +336,23 @@
 
 .name {
   margin: 0;
-  font-size: 26px;
-  font-weight: 520;
+  font-size: 20px;
+  font-weight: 600;
   color: #2e2115;
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .role {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: #7c6854;
 }
 
 .headerMeta {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 6px;
+  gap: 7px;
+  margin-top: 8px;
   flex-wrap: wrap;
 }
 
@@ -98,8 +362,8 @@
 }
 
 .analyzingNote {
-  margin: 0;
-  font-size: 13px;
+  margin: 8px 0 0;
+  font-size: 12px;
   color: #7c6854;
 }
 
@@ -156,6 +420,9 @@
 }
 
 .matchStatus {
+  display: inline-flex;
+  align-self: flex-start;
+  margin: 10px 0 0;
   font-size: 12px;
   color: #8a705a;
   border: 1px solid #ead9c3;
@@ -336,6 +603,39 @@
   row-gap: 6px;
 }
 
+.stageCard .stageBreadcrumb {
+  margin: 16px 0 14px;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.stageCard .stageStep {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.stageCard .stepDivider {
+  flex: 1 1 12px;
+  min-width: 8px;
+  margin: 0 5px;
+}
+
+.stageCard .stepLabel {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #ae9580;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.stageCard .stepPast,
+.stageCard .stepCurrent {
+  color: #9a4d2b;
+  background: transparent;
+  font-weight: 560;
+}
+
 .stageStep {
   display: flex;
   align-items: center;
@@ -374,6 +674,10 @@
 
 .stageActionsWrap {
   margin-top: 4px;
+}
+
+.stageCard .stageActionsWrap {
+  margin-top: 0;
 }
 
 /* ── Stage Actions ───────────────────────────────────────────────────────── */
@@ -730,7 +1034,72 @@
   word-break: break-word;
 }
 
+.compactActions {
+  width: 100%;
+}
+
+.compactActions > .actionBtn:first-child,
+.compactPrimaryAction {
+  flex: 1 1 auto;
+  width: 100%;
+  text-align: center;
+}
+
+.compactActions .actionNote {
+  font-size: 12px;
+}
+
+@media (max-width: 820px) {
+  .dashboardGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
+  .backBtn {
+    padding: 14px 18px 0;
+  }
+
+  .content {
+    padding: 12px 14px 48px;
+  }
+
+  .identityCard {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .identityAvatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .identityTitleRow {
+    gap: 10px;
+  }
+
+  .matchGauge {
+    grid-column: 1 / -1;
+    justify-self: center;
+    margin-top: -2px;
+  }
+
+  .fitCard,
+  .previewCard,
+  .stageCard {
+    padding: 16px;
+  }
+
+  .stageCard .stageBreadcrumb {
+    overflow-x: auto;
+    padding-bottom: 3px;
+  }
+
+  .stageCard .stageStep {
+    min-width: max-content;
+  }
+
   .matchFactors {
     grid-template-columns: 1fr;
   }

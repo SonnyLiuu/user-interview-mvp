@@ -6,6 +6,14 @@ export type ProjectNavItem = {
 };
 
 export type ProjectType = 'startup' | 'networking';
+export type EntryGoal =
+  | 'pressure_test_idea'
+  | 'find_interviewees'
+  | 'write_outreach'
+  | 'prepare_conversation'
+  | 'analyze_notes'
+  | 'find_early_users'
+  | 'exploring';
 
 export type OutreachProjectType =
   | 'idea_validation'
@@ -72,6 +80,7 @@ type ProjectRecord = {
   name: string;
   slug: string | null;
   project_type: ProjectType;
+  entry_goal?: EntryGoal | null;
   intake_status: string | null;
   is_archived?: boolean | null;
 };

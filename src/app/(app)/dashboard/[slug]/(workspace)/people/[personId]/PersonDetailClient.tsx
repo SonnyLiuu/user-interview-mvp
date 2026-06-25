@@ -36,6 +36,77 @@ const MATCH_FACTOR_LABELS: Record<string, string> = {
   evidence_confidence: 'Evidence confidence',
 };
 
+function initialsForName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
+}
+
+function normalizedScore(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function rankForScore(score: number | null) {
+  if (score === null) return null;
+  if (score >= 75) return 'high';
+  if (score >= 45) return 'medium';
+  return 'low';
+}
+
+function fitPresentation(rank: string | null | undefined, projectType: ProjectType) {
+  if (rank === 'high') {
+    return {
+      badge: 'Strong fit',
+      headline: projectType === 'networking'
+        ? 'A high-priority outreach opportunity'
+        : 'A high-leverage learning conversation',
+    };
+  }
+  if (rank === 'medium') {
+    return {
+      badge: 'Moderate fit',
+      headline: projectType === 'networking'
+        ? 'A promising outreach opportunity'
+        : 'A promising conversation with some gaps',
+    };
+  }
+  return {
+    badge: 'Low fit',
+    headline: projectType === 'networking'
+      ? 'A lower-priority outreach opportunity'
+      : 'A lower-priority learning conversation',
+  };
+}
+
+function MatchGauge({ score, pending }: { score: number | null; pending: boolean }) {
+  const label = pending
+    ? 'Match score is refreshing'
+    : score === null
+      ? 'Match score unavailable'
+      : `${score} out of 100 match score`;
+
+  return (
+    <div className={styles.matchGauge} role="img" aria-label={label}>
+      <svg viewBox="0 0 104 62" aria-hidden="true">
+        <path className={styles.gaugeTrack} d="M8 54a44 44 0 0 1 88 0" pathLength="100" />
+        {score !== null && (
+          <path
+            className={styles.gaugeFill}
+            d="M8 54a44 44 0 0 1 88 0"
+            pathLength="100"
+            strokeDasharray={`${score} 100`}
+          />
+        )}
+      </svg>
+      <div className={styles.gaugeValue}>
+        <strong>{pending ? '…' : score ?? '—'}</strong>
+        <span>{pending ? 'Refreshing' : score === null ? 'Not scored' : 'Match'}</span>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function PersonDetailClient({ person: initialPerson, slug, projectType, tagMode, initialOutreach, initialCallPrep, initialTranscripts }: Props) {
@@ -69,6 +140,24 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
   const matchExplanation = person.match_explanation ?? analysis?.match_explanation ?? null;
   const hasMatchStatus = person.match_status === 'pending' || person.match_status === 'stale';
   const personaTags = getPersonaTags(person.persona_type, analysis?.global_tags, tagMode);
+  const matchScore = normalizedScore(person.match_score ?? analysis?.match_score);
+  const storedMatchRank = person.match_rank ?? analysis?.match_rank ?? person.relevance_rank ?? analysis?.relevance_rank;
+  const matchRank = storedMatchRank === 'high' || storedMatchRank === 'medium' || storedMatchRank === 'low'
+    ? storedMatchRank
+    : rankForScore(matchScore);
+  const fit = fitPresentation(matchRank, projectType);
+  const evidencePreview = analysis?.key_insights?.slice(0, 2) ?? [];
+  const questionsPreview = analysis?.recommended_questions?.slice(0, 2) ?? [];
+  const sourceLinks = [
+    sources.linkedin ? { label: 'LinkedIn', url: sources.linkedin } : null,
+    sources.twitter ? { label: 'Twitter / X', url: sources.twitter } : null,
+    sources.website ? { label: 'Personal site', url: sources.website } : null,
+    ...discoveredSources.map((source) => ({ label: discoveredSourceLabel(source), url: source.url })),
+  ].filter((source): source is { label: string; url: string } => source !== null);
+  const sourceCount = sourceLinks.length + (sources.email ? 1 : 0) + (sources.linkedinPastedNoUrl ? 1 : 0);
+  const showFitCard =
+    (projectType === 'networking' || !!person.match_profile_version || person.match_status === 'pending')
+    && (!!matchExplanation || !!matchFactors || hasMatchStatus || matchScore !== null);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -211,82 +300,134 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
       </button>
 
       <div className={styles.content}>
-        {/* ── Identity header ─────────────────────────────────────────────── */}
-        <div className={styles.header}>
-          <div className={styles.headerMain}>
-            <div className={styles.headerIdentity}>
-              <h1 className={styles.name}>{person.name}</h1>
-              {(person.title || person.company) && (
-                <p className={styles.role}>
-                  {[person.title, person.company].filter(Boolean).join(' · ')}
-                </p>
-              )}
-              <div className={styles.headerMeta}>
-                {personaTags.map((tag) => (
-                  <PersonaBubble key={tag.key} tag={tag} />
-                ))}
+        <div className={styles.profileDashboard}>
+          <section className={`${styles.dashboardCard} ${styles.identityCard}`}>
+            <div className={styles.identityAvatar} aria-hidden="true">{initialsForName(person.name)}</div>
+            <div className={styles.identityContent}>
+              <div className={styles.identityTitleRow}>
+                <div className={styles.headerIdentity}>
+                  <h1 className={styles.name}>{person.name}</h1>
+                  {(person.title || person.company) && (
+                    <p className={styles.role}>
+                      {[person.title, person.company].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </div>
+                <BookmarkButton
+                  bookmarked={person.board_status !== null}
+                  onToggle={handleBookmarkToggle}
+                  loading={bookmarkLoading}
+                  showLabel
+                />
               </div>
+
+              {personaTags.length > 0 && (
+                <div className={styles.headerMeta}>
+                  {personaTags.map((tag) => (
+                    <PersonaBubble key={tag.key} tag={tag} />
+                  ))}
+                </div>
+              )}
+
+              {analysis?.why_they_matter && (
+                <p className={styles.identitySummary}>{analysis.why_they_matter}</p>
+              )}
+
+              {sourceCount > 0 && (
+                <div className={styles.sourceSummary}>
+                  {sourceLinks.slice(0, 3).map((source) => (
+                    <a key={`${source.label}-${source.url}`} href={source.url} target="_blank" rel="noopener noreferrer">
+                      {source.label}
+                    </a>
+                  ))}
+                  {sources.linkedinPastedNoUrl && <span>LinkedIn profile</span>}
+                  <span>{sourceCount} {sourceCount === 1 ? 'source' : 'sources'} researched</span>
+                </div>
+              )}
+
+              {isAnalyzing && (
+                <p className={styles.analyzingNote} role="status">Re-analyzing with updated context…</p>
+              )}
             </div>
-            <div className={styles.headerActions}>
-              <BookmarkButton
-                bookmarked={person.board_status !== null}
-                onToggle={handleBookmarkToggle}
-                loading={bookmarkLoading}
-              />
+            <MatchGauge score={matchScore} pending={person.match_status === 'pending'} />
+          </section>
+
+          <div className={styles.dashboardGrid}>
+            <div className={styles.dashboardMainColumn}>
+              {showFitCard && (
+                <section className={`${styles.dashboardCard} ${styles.fitCard}`}>
+                  <div className={styles.cardEyebrowRow}>
+                    <h2 className={styles.cardEyebrow}>{projectType === 'networking' ? 'Match' : 'Idea validation fit'}</h2>
+                    <span className={`${styles.fitBadge} ${styles[`fitBadge_${matchRank ?? 'low'}`] ?? ''}`}>{fit.badge}</span>
+                  </div>
+                  <h3 className={styles.cardHeadline}>{fit.headline}</h3>
+                  {matchExplanation && <p className={styles.cardProse}>{matchExplanation}</p>}
+                  {hasMatchStatus && (
+                    <p className={styles.matchStatus} role="status">
+                      {person.match_status === 'pending' ? 'Refreshing score…' : 'Based on an older rubric'}
+                    </p>
+                  )}
+                  {matchFactors && (
+                    <div className={styles.matchFactors}>
+                      {Object.entries(matchFactors).map(([key, raw]) => {
+                        if (typeof raw !== 'number') return null;
+                        const value = Math.max(0, Math.min(100, Math.round(raw)));
+                        return (
+                          <div key={key} className={styles.matchFactor}>
+                            <div className={styles.matchFactorHeader}>
+                              <span>{MATCH_FACTOR_LABELS[key] ?? key}</span>
+                              <span>{value}</span>
+                            </div>
+                            <div className={styles.matchFactorTrack} aria-hidden="true">
+                              <span className={styles.matchFactorFill} style={{ width: `${value}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {questionsPreview.length > 0 && (
+                <section className={`${styles.dashboardCard} ${styles.previewCard}`}>
+                  <h2 className={styles.cardEyebrow}>What to learn</h2>
+                  <h3 className={styles.cardHeadline}>Best questions for this conversation</h3>
+                  <ul className={styles.previewList}>
+                    {questionsPreview.map((question, index) => (
+                      <li key={index}>{question}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
+
+            <div className={styles.dashboardSideColumn}>
+              <section className={`${styles.dashboardCard} ${styles.stageCard}`}>
+                <h2 className={styles.cardEyebrow}>Outreach stage</h2>
+                <StageBreadcrumb stage={stage} />
+                <div className={styles.stageActionsWrap}>
+                  <StageActions person={person} stage={stage} onUpdate={setPerson} compact />
+                </div>
+              </section>
+
+              {evidencePreview.length > 0 && (
+                <section className={`${styles.dashboardCard} ${styles.previewCard}`}>
+                  <h2 className={styles.cardEyebrow}>Useful evidence</h2>
+                  <div className={styles.evidenceList}>
+                    {evidencePreview.map((evidence, index) => (
+                      <p key={index}>{evidence}</p>
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
           </div>
-
-          {isAnalyzing && (
-            <p className={styles.analyzingNote} role="status">Re-analyzing with updated context…</p>
-          )}
         </div>
-
-        {/* ── CRM Stage ───────────────────────────────────────────────────── */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Outreach stage</h2>
-          <StageBreadcrumb stage={stage} />
-          <div className={styles.stageActionsWrap}>
-            <StageActions person={person} stage={stage} onUpdate={setPerson} />
-          </div>
-        </section>
 
         <div className={styles.body}>
           {/* ── Call Brief ───────────────────────────────────────────────── */}
           <CallBriefSection personId={person.id} slug={slug} stage={stage} initialPrep={initialCallPrep} />
-
-          {(projectType === 'networking' || person.match_profile_version || person.match_status === 'pending') && (matchExplanation || matchFactors || hasMatchStatus) && (
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>{projectType === 'networking' ? 'Match' : 'Idea Validation fit'}</h2>
-              <div className={styles.matchPanel}>
-                {hasMatchStatus && (
-                  <div className={styles.matchSummaryRow}>
-                    {person.match_status === 'pending' && <span className={styles.matchStatus}>Refreshing score...</span>}
-                    {person.match_status === 'stale' && <span className={styles.matchStatus}>Based on an older rubric</span>}
-                  </div>
-                )}
-                {matchExplanation && <p className={styles.prose}>{matchExplanation}</p>}
-                {matchFactors && (
-                  <div className={styles.matchFactors}>
-                    {Object.entries(matchFactors).map(([key, raw]) => {
-                      if (typeof raw !== 'number') return null;
-                      const value = Math.max(0, Math.min(100, Math.round(raw)));
-                      return (
-                        <div key={key} className={styles.matchFactor}>
-                          <div className={styles.matchFactorHeader}>
-                            <span>{MATCH_FACTOR_LABELS[key] ?? key}</span>
-                            <span>{value}</span>
-                          </div>
-                          <div className={styles.matchFactorTrack} aria-hidden="true">
-                            <span className={styles.matchFactorFill} style={{ width: `${value}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
 
           {analysis?.sections?.length ? (
             analysis.sections.map((section) => (
@@ -353,7 +494,7 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
             {stage === 'to_contact' ? (
               <div className={styles.outreachBox}>
                 <p className={styles.outreachHint}>
-                  Write your outreach message below, then click <strong>Copy &amp; mark sent</strong> to move this person to the Sent stage.
+                  Write your outreach message below, then click <strong>Copy &amp; mark sent</strong> to move this person to the Messaged stage.
                 </p>
                 <OutreachComposer personId={person.id} slug={slug} initialOutreach={savedOutreach} onCopy={handleCopyOutreach} copying={copyingOutreach} />
               </div>

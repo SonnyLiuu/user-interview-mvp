@@ -38,6 +38,21 @@ export function signBackendAccessToken(user: BackendTokenUser) {
   return `${encodedPayload}.${base64Url(signature)}`;
 }
 
+export function signGuestOnboardingToken(guestToken: string, ipAddress = '') {
+  const payload = {
+    typ: 'guest_onboarding',
+    guest_token: guestToken,
+    ip_address: ipAddress,
+    exp: Math.floor(Date.now() / 1000) + 60 * 5,
+  };
+  const encodedPayload = base64Url(JSON.stringify(payload));
+  const signature = crypto
+    .createHmac('sha256', env.FOUNDRY_BACKEND_SHARED_SECRET)
+    .update(encodedPayload)
+    .digest();
+  return `${encodedPayload}.${base64Url(signature)}`;
+}
+
 export async function getBackendAccessToken() {
   const { userId } = await auth();
   if (!userId) {

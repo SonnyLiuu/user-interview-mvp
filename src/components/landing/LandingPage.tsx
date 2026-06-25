@@ -193,7 +193,7 @@ export function LandingPage() {
           <Link href="/" className={styles.wordmark}>User Interview</Link>
           <div className={styles.navLinks}>
             <Link href="/login" className={styles.navLogin}>Log in</Link>
-            <Link href="/signup" className={styles.navCta}>Get started</Link>
+            <Link href="/get-started" className={styles.navCta}>Get started</Link>
           </div>
         </div>
       </nav>
@@ -207,10 +207,10 @@ export function LandingPage() {
           <p className={styles.heroSub}>
             Automate the research, keep your human touch. Pressure-test ideas, find the right people to talk to, and get help preparing and debriefing every conversation. All in one place. 
           </p>
-          <Link href="/signup" className={styles.ctaButton}>
+          <Link href="/get-started" className={styles.ctaButton}>
             Get started for free
           </Link>
-          <span className={styles.ctaNote}>No waitlist. No credit card required.</span>
+          <span className={styles.ctaNote}>Save time on better outreach.</span>
           <HeroTabs />
         </div>
       </section>
@@ -323,7 +323,7 @@ export function LandingPage() {
           <p className={styles.closingSub}>
             Sign up and start your first project in a few minutes. Free to use.
           </p>
-          <Link href="/signup" className={styles.ctaButton}>
+          <Link href="/get-started" className={styles.ctaButton}>
             Get started
           </Link>
         </div>

@@ -270,13 +270,14 @@ async def generate_foundation(messages: list[dict], state: dict, project_type: s
             "- Use the collected state's biggestBottleneck only to write recommendedOutreachProject.reason.\n"
             "- Do not include biggestBottleneck as a Foundation field; it is only recommendation context.\n"
             "- recommendedOutreachProject.reason must explain why learning-oriented outreach is valuable now.\n"
+            "- keyAssumptions should list 2-4 concise beliefs about the user, problem, workaround, or value that outreach should test.\n"
             "- Do not recommend sales, investor, recruiting, partnership, advisor, or press outreach in V1."
         )
         schema_hint = (
             '{"foundation":{"startupName":"string","summary":"string","targetUser":"string",'
             '"painPoint":"string","valueProp":"string","idealPeopleTypes":["string"],'
             '"startupStage":"string|null","traction":["string"],'
-            '"differentiation":"string|null","recommendedOutreachProject":'
+            '"differentiation":"string|null","keyAssumptions":["string"],"recommendedOutreachProject":'
             '{"type":"idea_validation","label":"Idea Validation","reason":"string"}}}'
         )
     prompt = (
@@ -350,7 +351,16 @@ async def generate_call_brief(person: dict, project_context: dict) -> dict:
         "Avoid vague sales tasks like 'ask about budget'.\n"
         f"- questions: 5-7 conversational questions the {'sender' if is_networking else 'founder'} could actually ask. "
         f"Make them specific to this person's background and the {'outreach context' if is_networking else 'founder assumptions'}. Keep them brief and direct.\n"
-        "- signals: 3-5 fit or weak-fit signals to use later during transcript/notes analysis. "
+        + (
+            ""
+            if is_networking
+            else
+            "- Ask neutral questions about recent, specific behavior, existing workflows, past decisions, and current workarounds.\n"
+            "- Do not ask leading solution-validation questions that embed the assumed pain or invite agreement with the proposed value.\n"
+            '- Avoid questions like "Have you ever abandoned reaching out to a promising contact because finding enough relevant context took too long?" '
+            "Instead ask for the last time they considered reaching out to someone and what they did to prepare.\n"
+        )
+        + "- signals: 3-5 fit or weak-fit signals to use later during transcript/notes analysis. "
         "These are not checklist questions.\n"
         "- closing: one concise referral or follow-up ask.\n"
         "- Do not include numbering, markdown, labels, or filler."

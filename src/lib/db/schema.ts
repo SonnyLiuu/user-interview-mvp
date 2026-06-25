@@ -199,6 +199,14 @@ export type OutreachProjectStatus = 'draft' | 'onboarding' | 'active' | 'paused'
 export type OutreachProjectBrief = Record<string, unknown>;
 
 export type OutreachProjectOnboardingState = Record<string, unknown>;
+export type EntryGoal =
+  | 'pressure_test_idea'
+  | 'find_interviewees'
+  | 'write_outreach'
+  | 'prepare_conversation'
+  | 'analyze_notes'
+  | 'find_early_users'
+  | 'exploring';
 
 // ── users ────────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
@@ -218,6 +226,7 @@ export const projects = pgTable('projects', {
   name: text('name').notNull(),
   slug: text('slug'),
   project_type: text('project_type').notNull().default('startup'),
+  entry_goal: text('entry_goal').$type<EntryGoal>(),
   intake_status: text('intake_status').default('not_started'),
   is_archived: boolean('is_archived').default(false),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -229,6 +238,28 @@ export const projects = pgTable('projects', {
   uniqueIndex('projects_active_user_slug_idx')
     .on(table.user_id, table.slug)
     .where(sql`${table.is_archived} = false and ${table.slug} is not null`),
+]);
+
+// ── guest_onboarding_claims ──────────────────────────────────────────────────
+export const guest_onboarding_claims = pgTable('guest_onboarding_claims', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).unique().notNull(),
+  token_hash: text('token_hash').unique().notNull(),
+  status: text('status').notNull().default('active'),
+  profile_json: jsonb('profile_json').$type<{
+    startupStage?: string;
+    entryGoal?: EntryGoal;
+  }>(),
+  ip_hash: text('ip_hash'),
+  request_count: integer('request_count').notNull().default(0),
+  expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+  claimed_by_user_id: uuid('claimed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  claimed_at: timestamp('claimed_at', { withTimezone: true }),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('guest_onboarding_claims_ip_created_idx').on(table.ip_hash, table.created_at),
+  index('guest_onboarding_claims_expires_idx').on(table.expires_at),
 ]);
 
 // ── outreach_projects ────────────────────────────────────────────────────────
@@ -697,6 +728,7 @@ export type Insight = typeof insights.$inferSelect;
 export type OnboardingSession = typeof onboarding_sessions.$inferSelect;
 export type OnboardingMessage = typeof onboarding_messages.$inferSelect;
 export type OnboardingStateRow = typeof onboarding_state.$inferSelect;
+export type GuestOnboardingClaim = typeof guest_onboarding_claims.$inferSelect;
 export type ProjectFoundation = typeof project_foundations.$inferSelect;
 export type ProjectMatchProfile = typeof project_match_profiles.$inferSelect;
 export type Transcript = typeof transcripts.$inferSelect;

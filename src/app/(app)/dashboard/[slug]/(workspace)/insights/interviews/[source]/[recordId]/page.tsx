@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
-import { getProjectBySlugOrId } from '@/lib/backend-server';
+import { notFound } from 'next/navigation';
 import { getProjectTranscriptInsight } from '@/lib/ai/synthesize-insights';
+import { requireOwnedProjectBySlug } from '@/lib/project-access';
 import { InterviewDetailContent } from '../../../InterviewDetailContent';
 import styles from '../../../InsightsPage.module.css';
 
@@ -15,9 +15,7 @@ export default async function InterviewInsightPage({
   const { slug, source, recordId } = await params;
   if (source !== 'interaction' && source !== 'transcript') notFound();
 
-  const lookup = await getProjectBySlugOrId(slug);
-  const project = lookup?.project;
-  if (!project) redirect('/dashboard');
+  const { project } = await requireOwnedProjectBySlug(slug);
 
   const record = await getProjectTranscriptInsight(project.id, source, recordId);
   if (!record) notFound();

@@ -6,9 +6,9 @@ export const CRM_STAGE_IDS = ['to_contact', 'sent', 'scheduled', 'completed'] as
 export const BOARD_STATUS_VALUES = ['bookmarked', 'sent', 'scheduled', 'completed'] as const;
 
 export const CRM_STAGES: { id: CRMStage; label: string }[] = [
-  { id: 'to_contact', label: 'To Contact' },
-  { id: 'sent',       label: 'Sent' },
-  { id: 'scheduled',  label: 'Scheduled' },
+  { id: 'to_contact', label: 'Researched' },
+  { id: 'sent',       label: 'Contacted' },
+  { id: 'scheduled',  label: 'To Interview' },
   { id: 'completed',  label: 'Completed' },
 ];
 

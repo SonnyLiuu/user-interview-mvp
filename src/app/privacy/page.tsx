@@ -43,6 +43,11 @@ export default function PrivacyPage() {
               outputs, and other content you provide.
             </li>
             <li>
+              <strong>Pre-account startup intake:</strong> if you pressure-test an idea before creating an account, we
+              temporarily store your answers and AI-generated startup foundation for up to seven days so you can resume
+              the flow and attach the work to an account.
+            </li>
+            <li>
               <strong>Interview and notetaker data:</strong> meeting metadata, transcript text, speaker labels, user
               notes, checklist events, session status, and technical information needed to operate the desktop or live
               notetaker experience.
@@ -80,7 +85,8 @@ export default function PrivacyPage() {
           <p className={styles.body}>
             User Interview uses third-party AI providers to generate parts of the product experience. We may send your
             project content, pasted research, transcripts, notes, and related context to those providers solely to
-            provide the requested functionality, improve reliability, and operate the service.
+            provide the requested functionality, improve reliability, and operate the service. This includes startup
+            information submitted during the pre-account pressure-testing flow.
           </p>
           <p className={styles.body}>
             AI outputs can be inaccurate, incomplete, or based on the context you provide. You are responsible for

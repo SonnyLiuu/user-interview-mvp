@@ -35,5 +35,13 @@ export default async function BoardPage({
     .map((row) => row.personId)
     .filter((id): id is string => !!id);
 
-  return <BoardPageClient initialPeople={boardPeople} slug={slug} initialCallBriefPersonIds={callBriefPersonIds} />;
+  return (
+    <BoardPageClient
+      key={project.id}
+      initialPeople={boardPeople}
+      projectId={project.id}
+      slug={slug}
+      initialCallBriefPersonIds={callBriefPersonIds}
+    />
+  );
 }

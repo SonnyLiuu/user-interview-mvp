@@ -26,6 +26,18 @@ async def find_owned_project(conn, user_id: str, project_id: str):
     )
 
 
+async def find_unowned_project(conn, project_id: str):
+    return await conn.fetchrow(
+        """
+        select *
+        from projects
+        where id = $1 and user_id is null and is_archived = false
+        limit 1
+        """,
+        project_id,
+    )
+
+
 async def find_owned_project_by_slug_or_id(conn, user_id: str, slug_or_id: str):
     by_slug = await conn.fetchrow(
         """
@@ -65,7 +77,7 @@ async def find_latest_project(conn, user_id: str):
     )
 
 
-async def create_project(conn, user_id: str, name: str, slug: str | None, project_type: str):
+async def create_project(conn, user_id: str | None, name: str, slug: str | None, project_type: str):
     return await conn.fetchrow(
         """
         insert into projects (user_id, name, slug, project_type)

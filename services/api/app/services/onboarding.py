@@ -19,10 +19,14 @@ from ..repositories import projects as project_repo
 from ..utils import slugify
 
 
-async def _get_context(user_id: str, project_id: str):
+async def _get_context(user_id: str | None, project_id: str, *, guest: bool = False):
     pool = get_pool()
     async with pool.acquire() as conn:
-        project = await project_repo.find_owned_project(conn, user_id, project_id)
+        project = (
+            await project_repo.find_unowned_project(conn, project_id)
+            if guest
+            else await project_repo.find_owned_project(conn, user_id, project_id)
+        )
         if not project:
             raise NotFoundError("Not found")
         session = await onboarding_repo.get_session(conn, project_id)
@@ -158,6 +162,18 @@ def _ensure_startup_foundation_defaults(state: dict, foundation: dict, project_t
         if value:
             next_foundation[key] = value
 
+    if not next_foundation.get("keyAssumptions"):
+        assumptions = []
+        if next_foundation.get("targetUser") and next_foundation.get("painPoint"):
+            assumptions.append(
+                f"{next_foundation['targetUser']} experiences {next_foundation['painPoint']}"
+            )
+        if next_foundation.get("valueProp"):
+            assumptions.append(
+                f"The proposed value is meaningful enough to motivate a change: {next_foundation['valueProp']}"
+            )
+        next_foundation["keyAssumptions"] = assumptions
+
     recommendation = next_foundation.get("recommendedOutreachProject")
     if not isinstance(recommendation, dict) or recommendation.get("type") != "idea_validation":
         bottleneck = state.get("biggestBottleneck") or "your current startup uncertainty"
@@ -197,8 +213,14 @@ async def _persist_state_and_next_turn(
     return _chat_response(chat_history, current_turn, finishable, next_status)
 
 
-async def process_onboarding_request(user_id: str, project_id: str, body):
-    project, session, state, chat_history, last_turn = await _get_context(user_id, project_id)
+async def process_onboarding_request(
+    user_id: str | None,
+    project_id: str,
+    body,
+    *,
+    guest: bool = False,
+):
+    project, session, state, chat_history, last_turn = await _get_context(user_id, project_id, guest=guest)
     project_type = normalize_project_type(dict(project).get("project_type"))
     body = _request_data(body)
     request_type = body.get("type")
@@ -234,7 +256,8 @@ async def process_onboarding_request(user_id: str, project_id: str, body):
             async with conn.transaction():
                 await onboarding_repo.insert_foundation(conn, project_id, foundation)
                 await onboarding_repo.complete_session(conn, session["id"])
-                await _auto_name_draft_startup(conn, project, user_id, state, foundation)
+                if not guest and user_id:
+                    await _auto_name_draft_startup(conn, project, user_id, state, foundation)
                 await project_repo.update_project(conn, project_id, intake_status="complete")
         return _chat_response(chat_history, None, True, "completed")
 
@@ -242,6 +265,8 @@ async def process_onboarding_request(user_id: str, project_id: str, body):
         message = (body.get("message") or "").strip()
         if not message:
             raise BadRequestError("Message is required")
+        if len(message) > 4000:
+            raise BadRequestError("Message is too long")
         async with pool.acquire() as conn:
             await onboarding_repo.save_message(conn, session["id"], project_id, "user", message, "custom_answer")
         chat_history.append({"role": "user", "content": message, "messageType": "custom_answer"})
@@ -254,6 +279,8 @@ async def process_onboarding_request(user_id: str, project_id: str, body):
         if not last_turn:
             raise BadRequestError("No active turn to answer")
         custom_text = (body.get("customText") or "").strip()
+        if len(custom_text) > 2000:
+            raise BadRequestError("Answer is too long")
         selected_choices = _resolve_selected_choices(last_turn, body.get("choiceIds") or [])
         if not custom_text and not selected_choices:
             raise BadRequestError("Answer text or choices are required")
@@ -282,3 +309,7 @@ async def process_onboarding_request(user_id: str, project_id: str, body):
         return await _persist_state_and_next_turn(session, project_id, next_state, chat_history, project_type)
 
     raise BadRequestError("Invalid request type")
+
+
+async def process_guest_onboarding_request(project_id: str, body):
+    return await process_onboarding_request(None, project_id, body, guest=True)

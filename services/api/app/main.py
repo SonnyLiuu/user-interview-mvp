@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from .config import Settings, get_settings
 from .db import close_pool, init_pool
 from .errors import AIServiceError, BadRequestError, DatabaseUnavailableError, NotFoundError, UnauthorizedError
-from .routers import call_prep, dashboard, desktop, fireflies, intake, live_sessions, onboarding, otter, outreach, outreach_projects, projects, recall, workspace, zoom_rtms
+from .routers import call_prep, dashboard, desktop, fireflies, guest_onboarding, intake, live_sessions, onboarding, otter, outreach, outreach_projects, projects, recall, workspace, zoom_rtms
 
 import logging
 
@@ -39,6 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(projects.router)
     app.include_router(onboarding.router)
+    app.include_router(guest_onboarding.router)
     app.include_router(intake.router)
     app.include_router(call_prep.router)
     app.include_router(desktop.router)

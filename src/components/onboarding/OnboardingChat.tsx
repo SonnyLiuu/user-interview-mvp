@@ -144,6 +144,11 @@ export default function OnboardingChat({
       ? NETWORKING_FINISHING_STATUSES
       : STARTUP_FINISHING_STATUSES;
   const chatEndpoint = endpointPath ?? `/v1/projects/${projectId}/onboarding/chat`;
+  const requestChat = useCallback((init: RequestInit) => (
+    chatEndpoint.startsWith('/api/')
+      ? fetch(chatEndpoint, { cache: 'no-store', ...init })
+      : backendClientFetch(chatEndpoint, init)
+  ), [chatEndpoint]);
 
   const syncScrollIntent = useCallback(() => {
     const container = messagesRef.current;
@@ -183,7 +188,7 @@ export default function OnboardingChat({
     setError('');
 
     try {
-      const res = await backendClientFetch(chatEndpoint, {
+      const res = await requestChat({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: '__init__' }),
@@ -200,7 +205,7 @@ export default function OnboardingChat({
     } finally {
       setLoading(false);
     }
-  }, [applyResponse, chatEndpoint]);
+  }, [applyResponse, requestChat]);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -231,7 +236,7 @@ export default function OnboardingChat({
     shouldStickToBottomRef.current = true;
 
     try {
-      const res = await backendClientFetch(chatEndpoint, {
+      const res = await requestChat({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'kickoff', message: text }),
@@ -281,7 +286,7 @@ export default function OnboardingChat({
     shouldStickToBottomRef.current = true;
 
     try {
-      const res = await backendClientFetch(chatEndpoint, {
+      const res = await requestChat({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -312,7 +317,7 @@ export default function OnboardingChat({
     setError('');
 
     try {
-      const res = await backendClientFetch(chatEndpoint, {
+      const res = await requestChat({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'finish' }),
@@ -417,6 +422,7 @@ export default function OnboardingChat({
                   }
                 }}
                 rows={2}
+                maxLength={4000}
                 disabled={submitting}
               />
               <button
@@ -460,6 +466,7 @@ export default function OnboardingChat({
                 className={styles.customTextarea}
                 placeholder={currentTurn.customPlaceholder}
                 value={customText}
+                maxLength={2000}
                 onChange={(e) => {
                   setCustomText(e.target.value);
                   if (error) setError('');

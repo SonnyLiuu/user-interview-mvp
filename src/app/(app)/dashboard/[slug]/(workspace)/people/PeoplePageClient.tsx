@@ -107,7 +107,7 @@ export function PeoplePageClient({ initialPeople, projectId, outreachProjectId, 
       }
 
       const ids = toUpdate.map((person) => person.id).join(',');
-      const res = await fetch(`/api/people?ids=${encodeURIComponent(ids)}`);
+      const res = await fetch(`/api/people?projectId=${encodeURIComponent(projectId)}&ids=${encodeURIComponent(ids)}`);
       if (!res.ok) return;
       const updatedPeople = await res.json() as Person[];
       if (updatedPeople.length === 0) return;
@@ -116,7 +116,7 @@ export function PeoplePageClient({ initialPeople, projectId, outreachProjectId, 
     }, 3000);
 
     return () => clearInterval(id);
-  }, [hasInProgress]);
+  }, [hasInProgress, projectId]);
 
   // Client-side safety net: if a person has been active for >10 min with no
   // resolution (e.g. after() was orphaned), flip locally

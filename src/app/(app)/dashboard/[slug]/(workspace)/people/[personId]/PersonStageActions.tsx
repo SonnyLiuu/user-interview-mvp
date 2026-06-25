@@ -30,9 +30,10 @@ type ActionsProps = {
   person: Person;
   stage: CRMStage;
   onUpdate: (updated: Person) => void;
+  compact?: boolean;
 };
 
-export function StageActions({ person, stage, onUpdate }: ActionsProps) {
+export function StageActions({ person, stage, onUpdate, compact = false }: ActionsProps) {
   const [showSchedule, setShowSchedule] = useState(false);
   const [showIneffective, setShowIneffective] = useState(false);
   const [scheduledAt, setScheduledAt] = useState('');
@@ -108,16 +109,27 @@ export function StageActions({ person, stage, onUpdate }: ActionsProps) {
   }
 
   if (stage === 'to_contact') {
+    if (compact) {
+      return (
+        <button
+          type="button"
+          className={`${styles.actionBtn} ${styles.compactPrimaryAction}`}
+          onClick={() => document.getElementById('outreach')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        >
+          Prepare outreach
+        </button>
+      );
+    }
     return (
       <div className={styles.actionNote}>
-        Ready to reach out. Generate a message below and copy it to move this person to <strong>Sent</strong>.
+        Ready to reach out. Generate a message below and copy it to move this person to <strong>Messaged</strong>.
       </div>
     );
   }
 
   if (stage === 'sent') {
     return (
-      <div className={styles.actions}>
+      <div className={`${styles.actions} ${compact ? styles.compactActions : ''}`}>
         <button
           type="button"
           className={styles.actionBtn}
@@ -184,7 +196,7 @@ export function StageActions({ person, stage, onUpdate }: ActionsProps) {
       ? new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(person.call_scheduled_at))
       : null;
     return (
-      <div className={styles.actions}>
+      <div className={`${styles.actions} ${compact ? styles.compactActions : ''}`}>
         <button
           type="button"
           className={styles.actionBtn}

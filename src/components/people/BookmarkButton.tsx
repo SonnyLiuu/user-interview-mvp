@@ -4,13 +4,14 @@ type Props = {
   bookmarked: boolean;
   onToggle: () => void;
   loading?: boolean;
+  showLabel?: boolean;
 };
 
-export function BookmarkButton({ bookmarked, onToggle, loading }: Props) {
+export function BookmarkButton({ bookmarked, onToggle, loading, showLabel = false }: Props) {
   return (
     <button
       type="button"
-      className={`${styles.btn} ${bookmarked ? styles.active : ''}`}
+      className={`${styles.btn} ${showLabel ? styles.withLabel : ''} ${bookmarked ? styles.active : ''}`}
       onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggle(); }}
       disabled={loading}
       aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this person'}
@@ -32,6 +33,7 @@ export function BookmarkButton({ bookmarked, onToggle, loading }: Props) {
           />
         )}
       </svg>
+      {showLabel && <span>{loading ? 'Saving…' : bookmarked ? 'Saved' : 'Save'}</span>}
     </button>
   );
 }

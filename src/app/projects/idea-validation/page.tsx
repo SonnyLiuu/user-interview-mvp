@@ -45,7 +45,7 @@ export default function IdeaValidationPage() {
           <Link href="/" className={styles.wordmark}>User Interview</Link>
           <div className={styles.navLinks}>
             <Link href="/login" className={styles.login}>Log in</Link>
-            <Link href="/signup" className={styles.navCta}>Get started</Link>
+            <Link href="/get-started" className={styles.navCta}>Get started</Link>
           </div>
         </div>
       </nav>
@@ -63,7 +63,7 @@ export default function IdeaValidationPage() {
                   and turn every conversation into evidence you can act on.
                 </p>
                 <div className={styles.heroActions}>
-                  <Link href="/signup" className={styles.primaryAction}>Start validating for free</Link>
+                  <Link href="/get-started" className={styles.primaryAction}>Start validating for free</Link>
                   <span>No credit card required</span>
                 </div>
               </div>
@@ -124,7 +124,7 @@ export default function IdeaValidationPage() {
           <p className={styles.eyebrow}>Idea Validation</p>
           <h2>Get closer to the truth, one conversation at a time.</h2>
           <p>Build your brief, find the right people, and start learning today.</p>
-          <Link href="/signup" className={styles.primaryAction}>Get started for free</Link>
+          <Link href="/get-started" className={styles.primaryAction}>Get started for free</Link>
         </section>
       </main>
 

@@ -90,3 +90,16 @@ async def insert_foundation(conn, project_id: str, foundation: dict):
         project_id,
         foundation,
     )
+
+
+async def get_latest_foundation(conn, project_id: str):
+    return await conn.fetchrow(
+        """
+        select *
+        from project_foundations
+        where project_id = $1
+        order by generated_at desc
+        limit 1
+        """,
+        project_id,
+    )

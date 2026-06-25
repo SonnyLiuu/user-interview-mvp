@@ -30,6 +30,7 @@ import styles from './BoardPageClient.module.css';
 
 type Props = {
   initialPeople: Person[];
+  projectId: string;
   slug: string;
   initialCallBriefPersonIds: string[];
 };
@@ -47,7 +48,7 @@ function groupByStage(people: Person[]): Record<CRMStage, Person[]> {
   return groups;
 }
 
-export function BoardPageClient({ initialPeople, slug, initialCallBriefPersonIds }: Props) {
+export function BoardPageClient({ initialPeople, projectId, slug, initialCallBriefPersonIds }: Props) {
   const [people, setPeople] = useState<Person[]>(initialPeople);
   const [activePerson, setActivePerson] = useState<Person | null>(null);
   const [overStage, setOverStage] = useState<CRMStage | null>(null);
@@ -122,7 +123,7 @@ export function BoardPageClient({ initialPeople, slug, initialCallBriefPersonIds
   }
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-project-id={projectId}>
       <div className={styles.header}>
         <h1 className={styles.title}>Board</h1>
         <p className={styles.subtitle}>Drag people between stages to track your outreach progress.</p>

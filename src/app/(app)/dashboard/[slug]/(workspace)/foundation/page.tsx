@@ -8,6 +8,7 @@ import ProjectPageRecommendationBand, { type RecommendationBandAlert } from './P
 import { getFoundationView, getProjectBySlugOrId, listOutreachProjects } from '@/lib/backend-server';
 import { getProjectPathSegment } from '@/lib/projects';
 import { adaptFoundationForMode } from '@/lib/project-modes';
+import EntryGoalWelcome from '@/components/welcome/EntryGoalWelcome';
 
 function cleanText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -91,10 +92,13 @@ function StartupRecommendationPanel({
 
 export default async function ProjectPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ welcome?: string }>;
 }) {
   const { slug } = await params;
+  const query = await searchParams;
   const lookup = await getProjectBySlugOrId(slug);
   const project = lookup?.project;
 
@@ -126,6 +130,14 @@ export default async function ProjectPage({
     >
       <div className={styles.layout}>
         <div className={styles.briefPane}>
+          {query?.welcome === '1' && (
+            <EntryGoalWelcome
+              entryGoal={project.entry_goal}
+              projectId={project.id}
+              actionHref={`/dashboard/${pathSegment}/outreach-projects`}
+              actionLabel="View outreach plan"
+            />
+          )}
           {project.project_type === 'startup' && (
             <StartupRecommendationPanel
               foundation={foundation}

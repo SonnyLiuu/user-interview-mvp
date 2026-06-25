@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people } from '@/lib/db/schema';
 import { listOutreachProjects } from '@/lib/backend-server';
@@ -7,13 +7,14 @@ import { getOutreachProjectTypeConfig } from '@/lib/outreach-projects';
 import { requireOwnedProjectBySlug } from '@/lib/project-access';
 import { tagModeForOutreachProjectType } from '@/components/people/persona-tags';
 import { PeoplePageClient } from './PeoplePageClient';
+import EntryGoalWelcome from '@/components/welcome/EntryGoalWelcome';
 import styles from './people-page.module.css';
 
 export const dynamic = 'force-dynamic';
 
 function buildResearchOverview(project: OutreachProjectRecord | null) {
   if (!project) {
-    return 'Add people you may want to interview, then research their background and fit before moving them into outreach.';
+    return 'Add people you may want to interview to automatically research their background and fit before moving them into outreach.';
   }
 
   const config = getOutreachProjectTypeConfig(project.type);
@@ -25,7 +26,7 @@ export default async function PeoplePage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ outreachProjectId?: string | string[] }>;
+  searchParams?: Promise<{ outreachProjectId?: string | string[]; welcome?: string }>;
 }) {
   const { slug } = await params;
   const query = await searchParams;
@@ -40,7 +41,6 @@ export default async function PeoplePage({
     outreachProjects.find((candidate) => (
       candidate.id === requestedOutreachProjectId && candidate.status !== 'archived'
     )) ?? null;
-  const defaultOutreachProjectId = outreachProjects.find((candidate) => candidate.status !== 'archived')?.id ?? null;
   const researchTitle = selectedOutreachProject
     ? `${getOutreachProjectTypeConfig(selectedOutreachProject.type).label} Research`
     : 'Research';
@@ -51,18 +51,14 @@ export default async function PeoplePage({
       : 'none'
     : 'none';
 
-  // Load people for the selected outreach project. Null outreach ids are legacy
-  // records from before per-project research views, so keep them in the default view.
+  // Keep General research and each outreach project as distinct people sets.
+  // General contains only unassigned people; outreach views contain only people
+  // explicitly created for that outreach project.
   const now = new Date();
-  const includeLegacyPeople = selectedOutreachProject?.id === defaultOutreachProjectId;
   const selectedProjectFilter = selectedOutreachProject
-    ? includeLegacyPeople
-      ? or(eq(people.outreach_project_id, selectedOutreachProject.id), isNull(people.outreach_project_id))
-      : eq(people.outreach_project_id, selectedOutreachProject.id)
-    : undefined;
-  const peopleFilters = selectedProjectFilter
-    ? and(eq(people.project_id, project.id), selectedProjectFilter)
-    : eq(people.project_id, project.id);
+    ? eq(people.outreach_project_id, selectedOutreachProject.id)
+    : isNull(people.outreach_project_id);
+  const peopleFilters = and(eq(people.project_id, project.id), selectedProjectFilter);
   const activePeople = await db
     .select()
     .from(people)
@@ -103,7 +99,11 @@ export default async function PeoplePage({
 
   return (
     <div className={styles.page}>
+      {query?.welcome === '1' && (
+        <EntryGoalWelcome entryGoal={project.entry_goal} projectId={project.id} />
+      )}
       <PeoplePageClient
+        key={`${project.id}:${selectedOutreachProject?.id ?? 'all'}`}
         initialPeople={peopleForClient}
         projectId={project.id}
         outreachProjectId={selectedOutreachProject?.id ?? null}

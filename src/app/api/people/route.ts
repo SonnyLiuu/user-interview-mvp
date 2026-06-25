@@ -33,8 +33,9 @@ export async function GET(req: NextRequest) {
     .map((id) => id.trim())
     .filter(Boolean)
     .slice(0, 100);
+  const projectId = req.nextUrl.searchParams.get('projectId')?.trim();
 
-  if (ids.length === 0) {
+  if (ids.length === 0 || !projectId) {
     return NextResponse.json([]);
   }
 
@@ -43,7 +44,11 @@ export async function GET(req: NextRequest) {
     .from(people)
     .innerJoin(projects, eq(people.project_id, projects.id))
     .innerJoin(users, eq(projects.user_id, users.id))
-    .where(and(inArray(people.id, ids), eq(users.clerk_user_id, clerkUserId)));
+    .where(and(
+      inArray(people.id, ids),
+      eq(people.project_id, projectId),
+      eq(users.clerk_user_id, clerkUserId),
+    ));
 
   return NextResponse.json(rows.map((row) => row.person));
 }
