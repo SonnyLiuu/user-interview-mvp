@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import type { EntryGoal } from '@/lib/backend-types';
 import styles from './EntryGoalWelcome.module.css';
 
-const COPY: Record<EntryGoal, { title: string; body: string }> = {
+export const ENTRY_GOAL_COPY: Record<EntryGoal, { title: string; body: string }> = {
   pressure_test_idea: {
     title: 'Your pressure test is ready',
     body: 'Review the assumptions in your Foundation, then ask the advisor to sharpen the weakest part before you begin outreach.',
@@ -53,7 +53,7 @@ export default function EntryGoalWelcome({
     if (window.localStorage.getItem(storageKey) === 'dismissed') setVisible(false);
   }, [storageKey]);
   if (!entryGoal || !visible) return null;
-  const copy = COPY[entryGoal];
+  const copy = ENTRY_GOAL_COPY[entryGoal];
 
   function dismiss() {
     window.localStorage.setItem(storageKey, 'dismissed');

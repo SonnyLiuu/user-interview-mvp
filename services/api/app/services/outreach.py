@@ -3,14 +3,14 @@ from __future__ import annotations
 from fastapi.encoders import jsonable_encoder
 
 from ..ai import generate_outreach_message
-from ..db import get_pool
-from ..error_codes import FOUNDATION_REQUIRED, GENERATION_FAILED
-from ..errors import AIServiceError, BadRequestError, NotFoundError
+from ..core.db import get_pool
+from ..core.errors import FOUNDATION_REQUIRED, GENERATION_FAILED
+from ..core.errors import AIServiceError, BadRequestError, NotFoundError
 from ..repositories import foundations as foundation_repo
 from ..repositories import outreach_projects as outreach_project_repo
 from ..repositories import outreach as outreach_repo
 from ..repositories import people as people_repo
-from .project_context import apply_idea_validation_brief, foundation_to_project_context, normalize_json
+from ..domain.project_context import apply_idea_validation_brief, foundation_to_project_context, normalize_json
 
 
 OUTREACH_BODY_MAX_CHARS = 300

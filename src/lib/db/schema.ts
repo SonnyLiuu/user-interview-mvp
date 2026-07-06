@@ -542,11 +542,8 @@ export const live_call_sessions = pgTable('live_call_sessions', {
   user_id: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   person_id: uuid('person_id').references(() => people.id, { onDelete: 'cascade' }).notNull(),
   status: text('status').notNull().default('active'),
-  capture_provider: text('capture_provider').notNull().default('zoom_rtms'),
+  capture_provider: text('capture_provider').notNull().default('desktop_audio'),
   zoom_meeting_identifier: text('zoom_meeting_identifier'),
-  zoom_meeting_id: text('zoom_meeting_id'),
-  zoom_meeting_uuid: text('zoom_meeting_uuid'),
-  rtms_stream_id: text('rtms_stream_id'),
   topics_json: jsonb('topics_json').$type<LiveCallSessionTopic[]>().notNull(),
   metadata: jsonb('metadata').$type<LiveCallSessionMetadata>(),
   started_at: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
@@ -555,9 +552,6 @@ export const live_call_sessions = pgTable('live_call_sessions', {
 }, (table) => [
   index('live_call_sessions_user_status_idx').on(table.user_id, table.status),
   index('live_call_sessions_person_started_idx').on(table.person_id, table.started_at),
-  index('live_call_sessions_zoom_meeting_id_idx').on(table.zoom_meeting_id),
-  index('live_call_sessions_zoom_meeting_uuid_idx').on(table.zoom_meeting_uuid),
-  index('live_call_sessions_rtms_stream_id_idx').on(table.rtms_stream_id),
 ]);
 
 // ── live_transcript_turns ────────────────────────────────────────────────────
@@ -574,19 +568,6 @@ export const live_transcript_turns = pgTable('live_transcript_turns', {
   uniqueIndex('live_transcript_turns_external_turn_unique_idx')
     .on(table.live_session_id, table.external_turn_id)
     .where(sql`${table.external_turn_id} is not null`),
-]);
-
-export const zoom_rtms_unbound_events = pgTable('zoom_rtms_unbound_events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  event_type: text('event_type').notNull(),
-  zoom_meeting_id: text('zoom_meeting_id'),
-  zoom_meeting_uuid: text('zoom_meeting_uuid'),
-  rtms_stream_id: text('rtms_stream_id'),
-  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
-  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
-  index('zoom_rtms_unbound_events_meeting_id_idx').on(table.zoom_meeting_id),
-  index('zoom_rtms_unbound_events_meeting_uuid_idx').on(table.zoom_meeting_uuid),
 ]);
 
 // ── debriefs ──────────────────────────────────────────────────────────────────
@@ -722,7 +703,6 @@ export type CallPrep = typeof call_prep.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;
 export type LiveCallSession = typeof live_call_sessions.$inferSelect;
 export type LiveTranscriptTurnRow = typeof live_transcript_turns.$inferSelect;
-export type ZoomRtmsUnboundEvent = typeof zoom_rtms_unbound_events.$inferSelect;
 export type Debrief = typeof debriefs.$inferSelect;
 export type Insight = typeof insights.$inferSelect;
 export type OnboardingSession = typeof onboarding_sessions.$inferSelect;

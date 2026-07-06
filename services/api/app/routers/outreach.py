@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from ..auth import AuthContext, get_auth_context
+from ..core.auth import AuthContext, get_auth_context
 from ..services.outreach import refresh_outreach
 
 router = APIRouter(prefix="/v1/people/{person_id}/outreach", tags=["outreach"])

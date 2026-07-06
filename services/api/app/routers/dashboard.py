@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from ..auth import AuthContext, get_auth_context
+from ..core.auth import AuthContext, get_auth_context
 from ..schemas import LatestProjectResponse
 from ..services.dashboard import get_latest_project_for_user
 

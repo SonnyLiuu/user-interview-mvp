@@ -75,7 +75,6 @@ unsigned int visiblePickerRows(int overlayHeightDip) {
 
 struct ChecklistEntry {
     enum class Kind {
-        GoalHeader,
         QuestionHeader,
         Topic,
     };
@@ -88,26 +87,15 @@ std::vector<ChecklistEntry> checklistEntries(
     const std::vector<OverlayTopicRow>& topics,
     bool goalsCollapsed,
     bool questionsCollapsed) {
+    (void)goalsCollapsed;
     std::vector<ChecklistEntry> entries;
 
-    unsigned int goalCount = 0;
     unsigned int questionCount = 0;
     for (const auto& topic : topics) {
-        if (topic.category == TopicCategory::Goal) ++goalCount;
         if (topic.category == TopicCategory::Question) ++questionCount;
     }
 
     int visibleTopicIndex = 0;
-    if (goalCount > 0) {
-        entries.push_back({ChecklistEntry::Kind::GoalHeader, 0, -1});
-        if (!goalsCollapsed) {
-            for (unsigned int i = 0; i < topics.size(); ++i) {
-                if (topics[i].category != TopicCategory::Goal) continue;
-                entries.push_back({ChecklistEntry::Kind::Topic, i,
-                                   visibleTopicIndex++});
-            }
-        }
-    }
     if (questionCount > 0) {
         entries.push_back({ChecklistEntry::Kind::QuestionHeader, 0, -1});
         if (!questionsCollapsed) {
@@ -843,7 +831,7 @@ void renderOverlay(IDXGISwapChain* swapChain, const OverlayRenderState& state) {
             D2D1_RECT_F hint = D2D1::RectF(18.0f, 112.0f, sz.width - 18.0f,
                                           190.0f);
             const wchar_t* hintText =
-                L"Click Start below to pick a person and load their call brief goals.";
+                L"Click Start below to pick a person and load their call brief questions.";
             g_cachedRenderTarget->DrawTextW(
                 hintText, static_cast<UINT32>(wcslen(hintText)),
                 g_bodyFormat.Get(), hint, g_mutedBrush.Get());
@@ -851,7 +839,7 @@ void renderOverlay(IDXGISwapChain* swapChain, const OverlayRenderState& state) {
             D2D1_RECT_F hint = D2D1::RectF(18.0f, 112.0f, sz.width - 18.0f,
                                           190.0f);
             const wchar_t* emptyText =
-                L"No goals or questions found. Generate call prep for this person, or switch people.";
+                L"No questions found. Generate call prep for this person, or switch people.";
             g_cachedRenderTarget->DrawTextW(
                 emptyText, static_cast<UINT32>(wcslen(emptyText)),
                 g_bodyFormat.Get(), hint, g_mutedBrush.Get());
@@ -863,35 +851,27 @@ void renderOverlay(IDXGISwapChain* swapChain, const OverlayRenderState& state) {
                 state.topics, state.goalsCollapsed, state.questionsCollapsed);
             unsigned int offset = std::min<unsigned int>(
                 state.scrollOffset, static_cast<unsigned int>(entries.size()));
-            unsigned int goalCount = 0;
             unsigned int questionCount = 0;
             for (const auto& topic : state.topics) {
-                if (topic.category == TopicCategory::Goal) ++goalCount;
                 if (topic.category == TopicCategory::Question) ++questionCount;
             }
 
             for (unsigned int i = offset; i < entries.size(); ++i) {
                 const ChecklistEntry& entry = entries[i];
-                if (entry.kind == ChecklistEntry::Kind::GoalHeader ||
-                    entry.kind == ChecklistEntry::Kind::QuestionHeader) {
+                if (entry.kind == ChecklistEntry::Kind::QuestionHeader) {
                     float bottom = y + sectionHeaderHeight();
                     if (bottom > maxBottom) break;
-                    bool isGoal =
-                        entry.kind == ChecklistEntry::Kind::GoalHeader;
                     D2D1_RECT_F rect =
                         D2D1::RectF(topicLeft(), y, right, bottom);
                     drawSectionHeader(
-                        isGoal ? L"Goals" : L"Questions",
-                        isGoal ? goalCount : questionCount,
-                        isGoal ? state.goalsCollapsed
-                               : state.questionsCollapsed,
+                        L"Questions",
+                        questionCount,
+                        state.questionsCollapsed,
                         rect,
                         state.hoverTarget ==
-                            (isGoal ? OverlayHoverTarget::GoalSection
-                                    : OverlayHoverTarget::QuestionSection),
-                        isGoal ? g_goalHeaderBrush.Get()
-                               : g_questionHeaderBrush.Get(),
-                        isGoal ? g_goalBrush.Get() : g_questionBrush.Get());
+                            OverlayHoverTarget::QuestionSection,
+                        g_questionHeaderBrush.Get(),
+                        g_questionBrush.Get());
                     y = bottom + topicGap();
                     continue;
                 }
@@ -907,7 +887,7 @@ void renderOverlay(IDXGISwapChain* swapChain, const OverlayRenderState& state) {
             }
 
             unsigned int maxOffset = maxChecklistScrollOffset(
-                goalCount, questionCount, state.goalsCollapsed,
+                0, questionCount, state.goalsCollapsed,
                 state.questionsCollapsed, static_cast<int>(sz.height));
             if (maxOffset > 0) {
                 float cx = sz.width - 14.0f;
@@ -977,11 +957,9 @@ unsigned int maxChecklistScrollOffset(unsigned int goalCount,
                                       bool goalsCollapsed,
                                       bool questionsCollapsed,
                                       int overlayHeightDip) {
+    (void)goalCount;
+    (void)goalsCollapsed;
     unsigned int entries = 0;
-    if (goalCount > 0) {
-        ++entries;
-        if (!goalsCollapsed) entries += goalCount;
-    }
     if (questionCount > 0) {
         ++entries;
         if (!questionsCollapsed) entries += questionCount;
@@ -996,14 +974,13 @@ int topicSectionAtPoint(int x, int y,
                         bool goalsCollapsed,
                         bool questionsCollapsed,
                         unsigned int scrollOffset) {
+    (void)goalCount;
+    (void)goalsCollapsed;
     const float fx = static_cast<float>(x);
     const float fy = static_cast<float>(y);
     if (fx < topicLeft() || fy < topicTop()) return -1;
 
     std::vector<OverlayTopicRow> topics;
-    for (unsigned int i = 0; i < goalCount; ++i) {
-        topics.push_back({L"", TopicCategory::Goal, false});
-    }
     for (unsigned int i = 0; i < questionCount; ++i) {
         topics.push_back({L"", TopicCategory::Question, false});
     }
@@ -1017,7 +994,6 @@ int topicSectionAtPoint(int x, int y,
             : sectionHeaderHeight();
         float bottom = top + height;
         if (fy >= top && fy <= bottom) {
-            if (entry.kind == ChecklistEntry::Kind::GoalHeader) return 0;
             if (entry.kind == ChecklistEntry::Kind::QuestionHeader) return 1;
             return -1;
         }
@@ -1032,14 +1008,13 @@ int topicIndexAtPoint(int x, int y,
                       bool goalsCollapsed,
                       bool questionsCollapsed,
                       unsigned int scrollOffset) {
+    (void)goalCount;
+    (void)goalsCollapsed;
     const float fx = static_cast<float>(x);
     const float fy = static_cast<float>(y);
     if (fx < topicLeft() || fy < topicTop()) return -1;
 
     std::vector<OverlayTopicRow> topics;
-    for (unsigned int i = 0; i < goalCount; ++i) {
-        topics.push_back({L"", TopicCategory::Goal, false});
-    }
     for (unsigned int i = 0; i < questionCount; ++i) {
         topics.push_back({L"", TopicCategory::Question, false});
     }

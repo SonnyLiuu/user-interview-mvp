@@ -573,7 +573,7 @@ std::wstring startLiveSession(foundry::AppState& appState,
     appState.foundryBaseUrl = httpBaseNoSlash(
         foundry::json::wideValue(root, "foundryBaseUrl"));
     appState.captureProvider = foundry::json::wideValue(
-        root, "captureProvider", L"zoom_rtms");
+        root, "captureProvider", L"desktop_audio");
     appState.audioCaptureEnabled = root.value("audioCaptureEnabled", false);
     appState.liveTranscriptRaw.clear();
     appState.realtimeStatus.clear();
@@ -1075,10 +1075,9 @@ OverlayRenderState overlayRenderState(const foundry::AppState& appState,
     state.transcriptPreview = transcript.latestLine;
     state.people = people;
     for (const auto& topic : appState.topics) {
-        if (topic.category == foundry::TopicCategory::Signal) continue;
+        if (topic.category != foundry::TopicCategory::Question) continue;
         ++state.topicCount;
         if (topic.checked) ++state.checkedCount;
-        if (topic.category == foundry::TopicCategory::Goal) ++state.goalCount;
         OverlayTopicRow row;
         row.label = topic.label;
         row.category = toRenderCategory(topic.category);
@@ -1101,14 +1100,8 @@ std::vector<size_t> visibleChecklistTopicIndices(
     const foundry::AppState& appState,
     bool goalsCollapsed,
     bool questionsCollapsed) {
+    (void)goalsCollapsed;
     std::vector<size_t> indices;
-    if (!goalsCollapsed) {
-        for (size_t i = 0; i < appState.topics.size(); ++i) {
-            if (appState.topics[i].category == foundry::TopicCategory::Goal) {
-                indices.push_back(i);
-            }
-        }
-    }
     if (!questionsCollapsed) {
         for (size_t i = 0; i < appState.topics.size(); ++i) {
             if (appState.topics[i].category ==

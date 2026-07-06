@@ -4,10 +4,9 @@ The desktop notepad can auto-check call-brief goals and questions while a live
 call is in progress. This is a V1 server-side OpenAI Realtime integration: the
 desktop app never receives an OpenAI API key.
 
-The production-facing contract is transcript-turn ingestion, not Windows audio
-capture. Local audio is one adapter into that contract; Zoom RTMS or a Meeting
-SDK bot can feed the same transcript-turn boundary later. See
-`docs/notetaker-architecture.md`.
+The production-facing contract is transcript-turn ingestion. Local desktop audio
+feeds that contract after transcription, and manual upload/paste flows can submit
+transcript turns directly.
 
 ## Runtime Flow
 
@@ -42,7 +41,7 @@ SDK bot can feed the same transcript-turn boundary later. See
 8. Native applies the event to the overlay. The row gets a checkmark and
    strikethrough.
 
-Future ingestion adapters can bypass steps 5 and 6 by POSTing transcript turns
+Manual transcript ingestion can bypass steps 5 and 6 by POSTing transcript turns
 to `/v1/desktop/live-sessions/{sessionId}/transcript-turns`.
 
 ## Required OpenAI Setup
@@ -102,8 +101,8 @@ Realtime transcription or semantic matching quality.
 ## What Is Hooked Up
 
 - Live session creation from desktop through Next to FastAPI.
-- Transcript-turn ingestion as the shared adapter boundary for local audio,
-  Zoom RTMS, or a Meeting SDK bot.
+- Transcript-turn ingestion as the shared boundary for local audio and manual
+  transcript input.
 - Server-side Realtime WebSocket to OpenAI.
 - 24 kHz mono PCM audio streaming from native to FastAPI with source tags.
 - Separate live transcription streams for founder mic and interviewee loopback.

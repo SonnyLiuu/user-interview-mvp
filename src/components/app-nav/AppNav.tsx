@@ -8,6 +8,7 @@ import { useUser, useClerk } from '@clerk/nextjs';
 import styles from './AppNav.module.css';
 import type { ProjectNavItem, ProjectType } from '@/lib/backend-types';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { PanelHandle } from '@/components/panel-handle/PanelHandle';
 
 const STORAGE_KEY = 'startup-foundry:nav-expanded';
 
@@ -198,22 +199,12 @@ export function AppNav({ slug, projectId, projectName, projectType, initialProje
       </nav>
 
       {/* Handle */}
-      <button
-        type="button"
-        className={styles.handle}
+      <PanelHandle
+        side="right"
+        expanded={expanded}
         onClick={toggle}
-        aria-label={expanded ? 'Collapse' : 'Expand'}
-      >
-        <svg viewBox="0 0 8 14" fill="none" aria-hidden="true">
-          <path
-            d={expanded ? 'M6 1L2 7l4 6' : 'M2 1l4 6-4 6'}
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+        label={expanded ? 'Collapse' : 'Expand'}
+      />
     </aside>
   );
 }

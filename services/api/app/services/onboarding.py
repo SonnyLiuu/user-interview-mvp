@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 
 from ..ai import extract_custom_slot_answer, extract_kickoff_idea, generate_foundation, generate_next_question
-from ..db import get_pool
-from ..errors import BadRequestError, NotFoundError
-from ..onboarding_engine import (
+from ..core.db import get_pool
+from ..core.errors import BadRequestError, NotFoundError
+from ..domain.onboarding_engine import (
     choose_next_slot,
     is_onboarding_finishable,
     merge_kickoff_context,
@@ -13,10 +13,11 @@ from ..onboarding_engine import (
     normalize_onboarding_state,
     validate_choices,
 )
-from ..project_modes import get_fallback_turn, get_kickoff_question, normalize_project_type
+from ..domain.project_modes import get_fallback_turn, get_kickoff_question, normalize_project_type
 from ..repositories import onboarding as onboarding_repo
 from ..repositories import projects as project_repo
-from ..utils import slugify
+from ..core.utils import slugify
+from .guest_onboarding import ENTRY_GOALS, GOAL_BOTTLENECKS
 
 
 async def _get_context(user_id: str | None, project_id: str, *, guest: bool = False):
@@ -313,3 +314,29 @@ async def process_onboarding_request(
 
 async def process_guest_onboarding_request(project_id: str, body):
     return await process_onboarding_request(None, project_id, body, guest=True)
+
+
+async def save_startup_profile(user_id: str, project_id: str, startup_stage: str, entry_goal: str):
+    stage = (startup_stage or "").strip()[:80]
+    if not stage:
+        raise BadRequestError("Startup stage is required")
+    if entry_goal not in ENTRY_GOALS:
+        raise BadRequestError("Invalid entry goal")
+
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        project = await project_repo.find_owned_project(conn, user_id, project_id)
+        if not project:
+            raise NotFoundError("Not found")
+        project_type = normalize_project_type(dict(project).get("project_type"))
+        state_row = await onboarding_repo.get_state_row(conn, project_id)
+        state = normalize_onboarding_state(
+            state_row["state_json"] if state_row and state_row["state_json"] else None,
+            project_type,
+        )
+        state = merge_slot_patch(state, "startupStage", stage, "solid", project_type)
+        state = merge_slot_patch(state, "biggestBottleneck", GOAL_BOTTLENECKS[entry_goal], "solid", project_type)
+        async with conn.transaction():
+            await onboarding_repo.save_state(conn, project_id, state)
+            await project_repo.update_project(conn, project_id, entry_goal=entry_goal)
+    return {"profile": {"startupStage": stage, "entryGoal": entry_goal}}

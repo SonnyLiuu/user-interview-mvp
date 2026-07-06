@@ -91,10 +91,11 @@ export async function POST(request: Request) {
       }
     }
 
-    const backendTranscriptRaw = liveSessionId && liveToken && !hasSubmittedTranscript
+    const shouldFetchBackendTranscript = liveSessionId && liveToken && (!hasSubmittedTranscript || !transcriptRaw);
+    const backendTranscriptRaw = shouldFetchBackendTranscript
       ? cleanTranscriptHistoryContent(await fetchBackendTranscript({ liveSessionId, liveToken }))
       : '';
-    const finalTranscriptRaw = hasSubmittedTranscript ? transcriptRaw : backendTranscriptRaw;
+    const finalTranscriptRaw = transcriptRaw || backendTranscriptRaw;
 
     const checkedTopics = topics.filter((topic) => topic.checked);
     const autoCheckedTopics = checkedTopics.filter((topic) => topic.checkedBy === 'gpt_realtime');

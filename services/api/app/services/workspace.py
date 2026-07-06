@@ -4,8 +4,8 @@ import json
 
 from fastapi.encoders import jsonable_encoder
 
-from ..db import get_pool
-from ..errors import NotFoundError
+from ..core.db import get_pool
+from ..core.errors import NotFoundError
 from ..repositories import foundations as foundation_repo
 from ..repositories import intake as intake_repo
 from ..repositories import projects as project_repo

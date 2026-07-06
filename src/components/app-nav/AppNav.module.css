@@ -107,31 +107,6 @@
 
 .collapsed .itemLabel { display: none; }
 
-/* ── Handle ──────────────────────────────────────────────────────────────── */
-.handle {
-  position: absolute;
-  top: 50%;
-  right: -18px;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 36px;
-  background: #fffdf8;
-  border: 1px solid #e8d9c4;
-  border-left: none;
-  border-radius: 0 7px 7px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #b89c84;
-  z-index: 20;
-  padding: 0;
-  transition: background 100ms, color 100ms;
-}
-
-.handle:hover { background: #f5e2d0; color: #5a4534; }
-.handle svg { width: 7px; height: 12px; }
-
 /* ── User avatar ─────────────────────────────────────────────────────────── */
 .avatarImg {
   width: 28px;

@@ -82,7 +82,7 @@ struct OverlayRenderState {
 // Caller must Present afterwards.
 void renderOverlay(IDXGISwapChain* swapChain, const OverlayRenderState& state);
 
-// Returns 0 for Goals, 1 for Questions, or -1 when not over a section header.
+// Returns 1 for Questions, or -1 when not over a section header.
 int topicSectionAtPoint(int x, int y,
                         unsigned int goalCount,
                         unsigned int questionCount,
@@ -91,7 +91,7 @@ int topicSectionAtPoint(int x, int y,
                         unsigned int scrollOffset);
 
 // Returns the zero-based visible checklist row at the given client coordinate,
-// or -1. Signals are not included in this count.
+// or -1. Only question topics are visible in this count.
 int topicIndexAtPoint(int x, int y,
                       unsigned int goalCount,
                       unsigned int questionCount,

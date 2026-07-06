@@ -1,3 +1,26 @@
+"""Checklist auto-cross-off engine for live interview sessions.
+
+Architecture: one :class:`ChecklistEvaluator` per live session. Incoming
+transcript turns only mark the evaluator dirty; after a short debounce it runs
+a single STATELESS evaluation — all still-unchecked checklist items plus a
+window of the most recent transcript are sent to the model, which returns tool
+calls marking covered items. Because every evaluation re-evaluates all
+unchecked items against the window:
+
+- a failed or skipped evaluation self-heals (the next one covers it),
+- items that only become clear with later context are picked up naturally,
+- no conversation state accumulates, so nothing can drift or grow unbounded.
+
+Transports (selected by CHECKLIST_AI_PROVIDER):
+
+- ``openai`` / ``azure`` — persistent realtime WebSocket using out-of-band
+  responses (``conversation: "none"`` with per-response instructions/tools),
+  reconnecting on demand. Idle sockets routinely get closed by the provider
+  mid-call; reconnect-on-use makes that a non-event.
+- ``gemini`` / ``anthropic`` — per-evaluation REST calls.
+- ``mock`` — deterministic local matcher for tests and demos.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,7 +34,7 @@ from urllib.parse import quote, urlparse
 
 import websockets
 
-from ..config import get_settings
+from ..core.config import get_settings
 
 if TYPE_CHECKING:
     from .live_sessions import LiveSessionState
@@ -21,15 +44,25 @@ logger = logging.getLogger(__name__)
 RealtimeToolHandler = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 RealtimeStatusHandler = Callable[[str, str | None], None]
 
+_TOOL_NAMES = {"mark_item_covered", "mark_items_covered"}
+
+# Evaluation cadence. Module constants are read at call time so tests can
+# patch them.
+_DEBOUNCE_SECONDS = 1.2       # quiet time after a turn before evaluating
+_WINDOW_TURNS = 30            # transcript turns included per evaluation
+_TURN_CHAR_LIMIT = 300        # per-turn excerpt length in the window
+_BACKOFF_BASE_SECONDS = 1.0
+_MAX_BACKOFF_SECONDS = 30.0
+
 
 @dataclass
 class NormalizedTurn:
-    """Provider-agnostic transcript turn passed to the checklist bridge.
+    """Provider-agnostic transcript turn passed to the checklist evaluator.
 
-    The bridge only looks at *speaker_label* and *text* — never at the raw
+    The evaluator only looks at *speaker_label* and *text* — never at the raw
     source string.  *provider* is informational for logging.
     """
-    provider: str       # "desktop_audio" | "zoom_rtms"
+    provider: str       # e.g. "desktop_audio", "recall_ai", "fireflies", "otter"
     speaker_label: str  # "Founder" | "Interviewee" | participant name
     text: str
     timestamp_ms: int = 0
@@ -47,73 +80,69 @@ class RealtimeConnectionConfig:
     target: str
 
 
-def _checkable_topics(session: LiveSessionState) -> list[dict[str, str]]:
-    return [
-        {"id": topic.id, "label": topic.label, "category": topic.category}
-        for topic in session.topics
-        if topic.category in {"goal", "question"}
-    ]
+# ---------------------------------------------------------------------------
+# Prompting
+# ---------------------------------------------------------------------------
+
+_RUBRIC = (
+    "You are a silent checklist assistant for a live customer-discovery interview. "
+    "Each request gives you (1) the checklist items that are still unchecked and "
+    "(2) a window of the most recent transcript, labeled by speaker. Decide which "
+    "unchecked items the transcript clearly covers, then call mark_items_covered "
+    "with every covered item (or mark_item_covered for a single one). If nothing "
+    "is covered, reply with the single word no_op.\n\n"
+    "Speaker labels:\n"
+    "- Founder: the interviewer (asks questions, guides the conversation).\n"
+    "- Interviewee: the person being interviewed (gives answers and experiences).\n"
+    "- Speaker or a participant name: unknown side — judge by content. A turn that "
+    "asks a question reads as Founder; one that answers or explains reads as "
+    "Interviewee.\n\n"
+    "What counts as covered:\n"
+    "- [question] items: the founder asked it — verbatim, near-verbatim, or with "
+    "the same practical intent.\n"
+    "- [goal] items: the interviewee said something that provides usable evidence "
+    "for the goal. A founder merely restating a hoped-for answer does not cover a "
+    "goal; the interviewee's own words do.\n\n"
+    "Decision rubric, in priority order:\n"
+    "1. CLEAR MATCH -> mark it. The exact question was asked, or an answer "
+    "directly addresses the item.\n"
+    "2. STRONG IMPLICATION -> mark it. The core intent was addressed in different "
+    "words. Example: item says 'What workaround do you use?' and the interviewee "
+    "says 'We export to Excel and email it around' -> covered.\n"
+    "3. PARTIAL / RELATED -> mark it only if you are at least 70% confident. A "
+    "false positive is cheap to uncheck; a missed item is easy to overlook.\n"
+    "4. VAGUE / UNRELATED -> skip it. If you would have to guess, do not mark.\n\n"
+    "Hard rules:\n"
+    "- Only use item ids that appear in the unchecked list of the current request.\n"
+    "- Evidence must be one short sentence grounded in what was actually said.\n"
+    "- Never speak to the participants; your only outputs are tool calls or no_op."
+)
 
 
-def _instructions(session: LiveSessionState) -> str:
-    topics = "\n".join(
-        f"- {topic['id']} [{topic['category']}]: {topic['label']}"
-        for topic in _checkable_topics(session)
+def _evaluation_prompt(
+    person_name: str,
+    unchecked: list[Any],
+    window: list[Any],
+) -> str:
+    items = "\n".join(
+        f"- {topic.id} [{topic.category}]: {topic.label}" for topic in unchecked
+    )
+    transcript = "\n".join(
+        f"{turn.speaker}: {turn.text[:_TURN_CHAR_LIMIT]}" for turn in window
     )
     return (
-        "You are a silent customer-interview notepad assistant. "
-        "Read source-labeled live transcript turns and keep track of which "
-        "existing checklist items have clearly been covered.\n\n"
-        "Rules:\n"
-        "- Do not speak to the meeting participants.\n"
-        "- Do not create, edit, save, or delete checklist items.\n"
-        "- Only call mark_item_covered or mark_items_covered for existing item IDs listed below.\n"
-        "- Transcript turns are labeled as Founder: ..., Interviewee: ..., Speaker: ..., or a participant name.\n"
-        "- Questions should normally be marked only from Founder: turns.\n"
-        "- Goals should normally be marked only from Interviewee: turns.\n"
-        "- If the label is a participant name or Speaker, use the content of the exchange rather than the label alone.\n"
-        "- Do not mark a goal from Founder: restating a hoped-for answer unless "
-        "an Interviewee: turn confirms it.\n"
-        "- Call the tool when the founder clearly asked the question, or "
-        "the interviewee produced usable evidence for the goal.\n"
-        "- For long checklist items, match the core intent rather than requiring "
-        "every word in the item to be repeated.\n"
-        "- If a listed question is asked verbatim, nearly verbatim, or with the "
-        "same practical intent, mark that question immediately.\n"
-        "- If one answer or exchange clearly covers multiple listed items, call "
-        "mark_items_covered with every covered item.\n"
-        "- Never mark signal items covered in this V1.\n"
-        "- Keep evidence to one short sentence grounded in what was heard.\n\n"
-        "HOW TO DECIDE — use this priority:\n"
-        "1. CLEAR MATCH → Call the tool immediately. The speaker asked the exact question "
-        "or gave an answer that directly addresses the checklist item.\n"
-        "2. STRONG IMPLICATION → Call the tool. The speaker addressed the core intent even if "
-        "they used different words. Example: checklist says 'What workaround do you use?' and "
-        "interviewee says 'Right now we export to Excel and email it' → mark it.\n"
-        "3. PARTIAL / RELATED → Call the tool if you are reasonably confident (70%+). "
-        "Better to mark a partially-covered item than leave it blank. The user can uncheck "
-        "it later. Example: checklist says 'How often does this happen?' and "
-        "interviewee says 'It happens a lot, probably every few weeks' → mark it.\n"
-        "4. VAGUE / UNRELATED → Do nothing. If the connection is thin or you would need to "
-        "guess, skip it. But err on the side of marking — it's easier for the user to "
-        "uncheck a false positive than to notice a missed item.\n\n"
-        "SPEAKER LABEL GUIDANCE:\n"
-        "- Founder: = the interviewer (asking questions, guiding the conversation).\n"
-        "- Interviewee: = the person being interviewed (giving answers, describing experiences).\n"
-        "- Speaker: = unknown/ambiguous (could be either). Treat as neutral and use content "
-        "to decide. If the turn sounds like a question being asked, treat as Founder:. "
-        "If it sounds like an answer or explanation, treat as Interviewee:.\n"
-        "- If you see a mix of Speaker: and named labels, prefer the named labels for "
-        "identifying who is asking vs answering.\n\n"
-        "CONTEXT REFRESH: You will periodically receive the full checklist and recent "
-        "transcript history. When this happens, re-evaluate ALL unchecked items against "
-        "the full context — earlier turns may now clearly cover items that were ambiguous "
-        "when first seen.\n\n"
-        f"Interviewee: {session.person_name}\n"
-        "Checklist:\n"
-        f"{topics or '- No checkable items'}"
+        f"Interviewee: {person_name}\n\n"
+        "Unchecked checklist items:\n"
+        f"{items}\n\n"
+        f"Transcript (most recent {len(window)} turns, oldest first):\n"
+        f"{transcript}\n\n"
+        "Mark every unchecked item that this transcript clearly covers."
     )
 
+
+# ---------------------------------------------------------------------------
+# Tool schemas
+# ---------------------------------------------------------------------------
 
 def _item_tool_schema() -> dict:
     return {
@@ -146,7 +175,7 @@ def _bulk_tool_schema() -> dict:
     return {
         "type": "function",
         "name": "mark_items_covered",
-        "description": "Mark several existing interview checklist items as covered from the same exchange.",
+        "description": "Mark several existing interview checklist items as covered.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -184,9 +213,21 @@ def _tool_schemas() -> list[dict]:
     return [_item_tool_schema(), _bulk_tool_schema()]
 
 
-def _safety_identifier(session: LiveSessionState) -> str:
-    return hashlib.sha256(session.user_id.encode("utf-8")).hexdigest()
+def _rest_tool_declarations() -> list[dict]:
+    """Provider-neutral tool declarations (name/description/parameters)."""
+    return [
+        {
+            "name": schema["name"],
+            "description": schema["description"],
+            "parameters": schema["parameters"],
+        }
+        for schema in _tool_schemas()
+    ]
 
+
+# ---------------------------------------------------------------------------
+# Provider configuration
+# ---------------------------------------------------------------------------
 
 def _checklist_provider() -> str:
     settings = get_settings()
@@ -200,6 +241,10 @@ def _checklist_provider() -> str:
 def _realtime_api_key() -> str | None:
     settings = get_settings()
     return settings.openai_realtime_api_key or settings.openai_api_key
+
+
+def _safety_identifier(session: LiveSessionState) -> str:
+    return hashlib.sha256(session.user_id.encode("utf-8")).hexdigest()
 
 
 def _azure_realtime_endpoint() -> str:
@@ -226,7 +271,17 @@ def _azure_realtime_endpoint() -> str:
             "AZURE_OPENAI_REALTIME_ENDPOINT must be an Azure OpenAI endpoint ending in openai.azure.com, "
             "for example https://user-interview-ai-resource.openai.azure.com."
         )
-    return f"wss://{parsed.netloc}/openai/realtime"
+    return f"wss://{parsed.netloc}"
+
+
+def _azure_realtime_url(deployment: str) -> str:
+    endpoint = _azure_realtime_endpoint()
+    if "preview" in deployment.lower():
+        return (
+            f"{endpoint}/openai/realtime"
+            f"?api-version=2025-04-01-preview&deployment={quote(deployment, safe='')}"
+        )
+    return f"{endpoint}/openai/v1/realtime?model={quote(deployment, safe='')}"
 
 
 def _azure_realtime_deployment() -> str:
@@ -240,391 +295,241 @@ def _azure_realtime_api_key() -> str | None:
     return get_settings().azure_openai_realtime_api_key
 
 
-class RealtimeBridge:
+def _realtime_connection_config(provider: str, session: LiveSessionState) -> RealtimeConnectionConfig:
+    settings = get_settings()
+    if provider == "openai":
+        api_key = _realtime_api_key()
+        if not api_key:
+            raise ValueError("OPENAI_REALTIME_API_KEY or OPENAI_API_KEY is not configured")
+        model = settings.openai_realtime_model
+        return RealtimeConnectionConfig(
+            url=f"wss://api.openai.com/v1/realtime?model={quote(model, safe='')}",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "OpenAI-Safety-Identifier": _safety_identifier(session),
+            },
+            model=model,
+            provider="openai",
+            target="api.openai.com",
+        )
+
+    if provider == "azure":
+        api_key = _azure_realtime_api_key()
+        if not api_key:
+            raise ValueError("AZURE_OPENAI_REALTIME_API_KEY is not configured")
+        deployment = _azure_realtime_deployment()
+        url = _azure_realtime_url(deployment)
+        parsed = urlparse(url)
+        return RealtimeConnectionConfig(
+            url=url,
+            headers={"api-key": api_key},
+            model=deployment,
+            provider="azure",
+            target=parsed.netloc,
+        )
+
+    raise ValueError("CHECKLIST_AI_PROVIDER must be openai, azure, gemini, anthropic, or mock")
+
+
+# ---------------------------------------------------------------------------
+# Evaluator
+# ---------------------------------------------------------------------------
+
+class ChecklistEvaluator:
+    """Auto-cross-off engine for one live session. See module docstring."""
+
     def __init__(
         self,
         session: LiveSessionState,
         *,
         on_tool_call: RealtimeToolHandler,
         on_status: RealtimeStatusHandler,
+        transport_factory: Callable[[], _EvaluationTransport] | None = None,
     ) -> None:
         self.session = session
         self._on_tool_call = on_tool_call
         self._on_status = on_status
+        self._transport_factory = transport_factory
+        self._provider = _checklist_provider()
         self._task: asyncio.Task | None = None
-        self._turn_task: asyncio.Task | None = None
         self._stop = asyncio.Event()
-        self._send_lock = asyncio.Lock()
-        self._ws = None
-        self._handled_call_ids: set[str] = set()
+        self._dirty = asyncio.Event()
+        self._transport: _EvaluationTransport | None = None
         self._mock_checked_ids: set[str] = set()
-        self._turn_queue: asyncio.Queue[NormalizedTurn] = asyncio.Queue()
-        self._response_done = asyncio.Event()
-        self._response_done.set()
-        self._connection_provider = ""
-        self._turns_sent = 0
-        self._seen_event_types: set[str] = set()
-        self._pending_turn: NormalizedTurn | None = None
-        self._pending_flush_task: asyncio.Task | None = None
+        self._consecutive_failures = 0
+        self._had_error = False
+        self._evaluations = 0
 
     def start(self) -> None:
         if self._task and not self._task.done():
             return
-        self._task = asyncio.create_task(self.run())
+        self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
         self._stop.set()
-        if self._ws is not None:
-            await self._ws.close()
-        if self._pending_flush_task and not self._pending_flush_task.done():
-            self._pending_flush_task.cancel()
-            try:
-                await self._pending_flush_task
-            except asyncio.CancelledError:
-                pass
-        # Flush any pending coalesced turn before stopping the worker
-        if self._pending_turn is not None:
-            self._turn_queue.put_nowait(self._pending_turn)
-            self._pending_turn = None
-        if self._turn_task and not self._turn_task.done():
-            self._turn_task.cancel()
-            try:
-                await self._turn_task
-            except asyncio.CancelledError:
-                pass
+        self._dirty.set()
         if self._task and not self._task.done():
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
-
-    async def run(self) -> None:
-        provider = _checklist_provider()
-        if provider == "mock":
-            await self._run_mock()
-            return
-
-        try:
-            connection = self._connection_config(provider)
-        except ValueError as exc:
-            self._on_status("error", str(exc))
-            return
-
-        logger.warning(
-            "Starting realtime checklist bridge session=%s provider=%s target=%s model=%s",
-            self.session.session_id,
-            connection.provider,
-            connection.target,
-            connection.model,
-        )
-        self._connection_provider = connection.provider
-
-        try:
-            async with websockets.connect(connection.url, additional_headers=connection.headers) as ws:
-                self._ws = ws
-                self._on_status("connecting", None)
-                await self._configure_session(connection)
-                self._on_status("connected", None)
-                self._turn_task = asyncio.create_task(self._turn_worker())
-                while not self._stop.is_set():
-                    raw = await ws.recv()
-                    await self._handle_event(json.loads(raw))
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            logger.exception("Realtime bridge failed for session %s", self.session.session_id)
-            self._on_status("error", str(exc))
-        finally:
-            self._ws = None
-            if self.session.status == "active" and self.session.realtime_status != "error":
-                self._on_status("closed", None)
-
-    def _connection_config(self, provider: str) -> RealtimeConnectionConfig:
-        settings = get_settings()
-        if provider == "openai":
-            api_key = _realtime_api_key()
-            if not api_key:
-                raise ValueError("OPENAI_REALTIME_API_KEY or OPENAI_API_KEY is not configured")
-            model = settings.openai_realtime_model
-            return RealtimeConnectionConfig(
-                url=f"wss://api.openai.com/v1/realtime?model={quote(model, safe='')}",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "OpenAI-Safety-Identifier": _safety_identifier(self.session),
-                },
-                model=model,
-                provider="openai",
-                target="api.openai.com",
-            )
-
-        if provider == "azure":
-            api_key = _azure_realtime_api_key()
-            if not api_key:
-                raise ValueError("AZURE_OPENAI_REALTIME_API_KEY is not configured")
-            deployment = _azure_realtime_deployment()
-            endpoint = _azure_realtime_endpoint()
-            parsed = urlparse(endpoint)
-            return RealtimeConnectionConfig(
-                url=f"{endpoint}?api-version=2024-10-01-preview&deployment={quote(deployment, safe='')}",
-                headers={"api-key": api_key},
-                model=deployment,
-                provider="azure",
-                target=parsed.netloc,
-            )
-
-        raise ValueError("CHECKLIST_AI_PROVIDER must be openai, azure, or mock for checklist matching")
-
-    async def _run_mock(self) -> None:
-        logger.warning("Starting mock realtime checklist bridge session=%s", self.session.session_id)
-        self._connection_provider = "mock"
-        self._on_status("connected", None)
-        try:
-            await self._stop.wait()
-        finally:
-            if self.session.status == "active" and self.session.realtime_status != "error":
-                self._on_status("closed", None)
-
-    async def _configure_session(self, connection: RealtimeConnectionConfig) -> None:
-        session = {
-            "type": "realtime",
-            "model": connection.model,
-            "instructions": _instructions(self.session),
-            "output_modalities": ["text"],
-            "tools": _tool_schemas(),
-            "tool_choice": "auto",
-        }
-
-        await self._send({"type": "session.update", "session": session})
-
-    async def _handle_event(self, event: dict[str, Any]) -> None:
-        event_type = event.get("type")
-        if event_type and event_type not in self._seen_event_types:
-            self._seen_event_types.add(event_type)
-            logger.warning("Realtime first event session=%s type=%s", self.session.session_id, event_type)
-        if event_type == "error":
-            error = event.get("error") or {}
-            self._on_status("error", error.get("message") or "Realtime API error")
-            self._response_done.set()
-            return
-
-        if event_type in {
-            "session.created",
-            "session.updated",
-            "response.created",
-        }:
-            logger.warning("Realtime event session=%s type=%s", self.session.session_id, event_type)
-            return
-        if event_type == "response.done":
-            logger.warning("Realtime event session=%s type=%s", self.session.session_id, event_type)
-            self._response_done.set()
-            return
-
-        if event_type == "response.output_item.done":
-            item = event.get("item") or {}
-            logger.warning(
-                "Realtime output item session=%s item_type=%s name=%s",
-                self.session.session_id,
-                item.get("type"),
-                item.get("name"),
-            )
-            if item.get("type") == "function_call":
-                await self._handle_function_call(item)
-            return
-
-        if event_type == "response.function_call_arguments.done":
-            logger.warning(
-                "Realtime function args done session=%s name=%s",
-                self.session.session_id,
-                event.get("name"),
-            )
-            await self._handle_function_call(event)
-
-    async def _handle_function_call(self, item: dict[str, Any]) -> None:
-        name = item.get("name")
-        if name not in {"mark_item_covered", "mark_items_covered"}:
-            return
-        logger.warning("Realtime requested tool session=%s name=%s", self.session.session_id, name)
-
-        call_id = item.get("call_id") or item.get("callId") or item.get("id")
-        if call_id and call_id in self._handled_call_ids:
-            return
-        if call_id:
-            self._handled_call_ids.add(call_id)
-
-        raw_args = item.get("arguments") or "{}"
-        try:
-            args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-        except json.JSONDecodeError:
-            args = {}
-
-        result = await self._on_tool_call(name, args if isinstance(args, dict) else {})
-        logger.warning(
-            "Realtime tool result session=%s name=%s accepted=%s reason=%s args=%s",
-            self.session.session_id,
-            name,
-            result.get("accepted") if isinstance(result, dict) else None,
-            result.get("reason") if isinstance(result, dict) else None,
-            args,
-        )
-        if call_id:
-            await self._send(
-                {
-                    "type": "conversation.item.create",
-                    "item": {
-                        "type": "function_call_output",
-                        "call_id": call_id,
-                        "output": json.dumps(result),
-                    },
-                }
-            )
-
-    async def _send(self, event: dict[str, Any]) -> None:
-        if self._ws is None:
-            raise RuntimeError("Realtime WebSocket is not connected")
-        async with self._send_lock:
-            await self._ws.send(json.dumps(event, separators=(",", ":")))
-
-    async def _send_user_message_and_create_response(self, text: str) -> None:
-        await self._response_done.wait()
-        self._response_done.clear()
-        await self._send(
-            {
-                "type": "conversation.item.create",
-                "item": {
-                    "type": "message",
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": text,
-                        }
-                    ],
-                },
-            }
-        )
-        await self._send(
-            {
-                "type": "response.create",
-                "response": {
-                    "output_modalities": ["text"],
-                },
-            }
-        )
+        if self._transport is not None:
+            await self._transport.close()
+            self._transport = None
 
     async def send_labeled_turn(self, turn: NormalizedTurn) -> bool:
         text = " ".join(turn.text.strip().split())
         if not text:
             return False
-        if _checklist_provider() == "mock":
-            return await self._send_mock_turn_for_turn(turn)
-
-        # Coalesce consecutive same-speaker turns within a short window so that
-        # VAD-split utterances arrive at the model as a single coherent turn.
-        if self._pending_turn is not None and self._pending_turn.speaker_label == turn.speaker_label:
-            merged_text = f"{self._pending_turn.text} {text}"
-            self._pending_turn = NormalizedTurn(
-                provider=turn.provider,
-                speaker_label=turn.speaker_label,
-                text=merged_text,
-                timestamp_ms=turn.timestamp_ms,
-            )
-            # Reset the flush timer
-            if self._pending_flush_task and not self._pending_flush_task.done():
-                self._pending_flush_task.cancel()
-            self._pending_flush_task = asyncio.create_task(self._flush_pending_after_delay())
-            return True
-
-        # Different speaker (or first turn) — flush any pending turn first
-        if self._pending_turn is not None:
-            await self._turn_queue.put(self._pending_turn)
-            if self._pending_flush_task and not self._pending_flush_task.done():
-                self._pending_flush_task.cancel()
-
-        self._pending_turn = NormalizedTurn(
-            provider=turn.provider,
-            speaker_label=turn.speaker_label,
-            text=text,
-            timestamp_ms=turn.timestamp_ms,
-        )
-        self._pending_flush_task = asyncio.create_task(self._flush_pending_after_delay())
+        if self._provider == "mock":
+            return await self._mock_evaluate(turn, text)
+        self._dirty.set()
         return True
 
-    async def _flush_pending_after_delay(self) -> None:
-        """Flush the pending coalesced turn into the worker queue after a short delay."""
-        await asyncio.sleep(0.8)
-        if self._pending_turn is not None:
-            turn = self._pending_turn
-            self._pending_turn = None
-            await self._turn_queue.put(turn)
+    # -- worker ------------------------------------------------------------
 
-    async def _turn_worker(self) -> None:
-        _REVAL_INTERVAL = 10  # send full context refresh every N turns
-        turns_since_reval = 0
-        while not self._stop.is_set():
-            turn: NormalizedTurn = await self._turn_queue.get()
+    async def _run(self) -> None:
+        if self._provider == "mock":
+            logger.warning(
+                "Starting mock checklist evaluator session=%s", self.session.session_id
+            )
+            self._on_status("connected", None)
             try:
-                await self._send_user_message_and_create_response(turn.to_labeled_line())
-                self._turns_sent += 1
-                turns_since_reval += 1
-                if self._turns_sent in {1, 5, 25} or self._turns_sent % 100 == 0:
-                    logger.warning(
-                        "Sent labeled transcript turn session=%s provider=%s turns=%s",
-                        self.session.session_id,
-                        turn.provider,
-                        self._turns_sent,
-                    )
-
-                # Periodic full re-evaluation: send unchecked topics + recent
-                # transcript so the AI can catch items that became clear with
-                # later context.
-                if turns_since_reval >= _REVAL_INTERVAL:
-                    turns_since_reval = 0
-                    unchecked = [
-                        topic for topic in self.session.topics
-                        if topic.category in {"goal", "question"}
-                        and not topic.checked
-                        and not topic.manual_override
-                    ]
-                    if unchecked:
-                        # Build a condensed transcript of last ~20 turns
-                        recent = self.session.transcript_turns[-20:]
-                        history = "\n".join(
-                            f"{turn.speaker}: {turn.text[:200]}"
-                            for turn in recent
-                        )
-                        unchecked_list = "\n".join(
-                            f"- {topic.id} [{topic.category}]: {topic.label}"
-                            for topic in unchecked
-                        )
-                        reval_msg = (
-                            "CONTEXT REFRESH — re-evaluate all unchecked items "
-                            "against the full transcript below.\n\n"
-                            "Remaining unchecked items:\n"
-                            f"{unchecked_list}\n\n"
-                            "Recent transcript:\n"
-                            f"{history}\n\n"
-                            "Check each unchecked item above. If any are now "
-                            "clearly covered by the transcript above, call "
-                            "mark_item_covered or mark_items_covered."
-                        )
-                        await self._send_user_message_and_create_response(reval_msg)
-                        logger.warning(
-                            "Re-evaluation sent session=%s unchecked=%s",
-                            self.session.session_id,
-                            len(unchecked),
-                        )
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                self._response_done.set()
-                self._on_status("error", f"Realtime text matcher failed: {exc}")
+                await self._stop.wait()
             finally:
-                self._turn_queue.task_done()
+                self._finish_status()
+            return
 
-    async def _send_mock_turn_for_turn(self, turn: NormalizedTurn) -> bool:
-        if not turn.text:
-            return False
+        try:
+            if self._transport_factory is not None:
+                transport = self._transport_factory()
+            else:
+                transport = _make_transport(self._provider, self.session)
+        except ValueError as exc:
+            self._on_status("error", str(exc))
+            return
+        self._transport = transport
+
+        logger.warning(
+            "Starting checklist evaluator session=%s provider=%s target=%s model=%s",
+            self.session.session_id,
+            transport.provider,
+            transport.target,
+            transport.model,
+        )
+        try:
+            await transport.prepare()
+            self._on_status("connected", None)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # Not fatal: evaluations reconnect on demand.
+            self._had_error = True
+            self._on_status("error", f"Checklist matcher connect failed: {exc}")
+
+        try:
+            while not self._stop.is_set():
+                await self._dirty.wait()
+                if self._stop.is_set():
+                    break
+                # Debounce so VAD-fragmented utterances evaluate as one batch.
+                await asyncio.sleep(_DEBOUNCE_SECONDS)
+                self._dirty.clear()
+                await self._evaluate_once()
+        except asyncio.CancelledError:
+            raise
+        finally:
+            self._finish_status()
+
+    def _finish_status(self) -> None:
+        if self.session.status == "active" and self.session.realtime_status != "error":
+            self._on_status("closed", None)
+
+    async def _evaluate_once(self) -> None:
+        if self.session.status != "active":
+            return
+        unchecked = [
+            topic
+            for topic in self.session.topics
+            if topic.category in {"goal", "question"}
+            and not topic.checked
+            and not topic.manual_override
+        ]
+        if not unchecked:
+            return
+        window = list(self.session.transcript_turns)[-_WINDOW_TURNS:]
+        if not window:
+            return
+
+        prompt = _evaluation_prompt(
+            getattr(self.session, "person_name", "") or "Unknown",
+            unchecked,
+            window,
+        )
+        timeout = get_settings().ai_request_timeout_seconds + 15
+        try:
+            assert self._transport is not None
+            tool_calls = await asyncio.wait_for(
+                self._transport.evaluate(_RUBRIC, prompt),
+                timeout=timeout,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._consecutive_failures += 1
+            self._had_error = True
+            logger.exception(
+                "Checklist evaluation failed session=%s failures=%s",
+                self.session.session_id,
+                self._consecutive_failures,
+            )
+            self._on_status("error", f"Checklist matcher failed: {exc}")
+            # A timed-out WebSocket may be mid-response; drop it so the next
+            # evaluation starts on a clean connection.
+            if self._transport is not None:
+                await self._transport.close()
+            # Self-heal: retry (with backoff) even if no new turns arrive.
+            self._dirty.set()
+            await asyncio.sleep(
+                min(
+                    _BACKOFF_BASE_SECONDS * (2 ** (self._consecutive_failures - 1)),
+                    _MAX_BACKOFF_SECONDS,
+                )
+            )
+            return
+
+        self._consecutive_failures = 0
+        if self._had_error:
+            self._had_error = False
+            self._on_status("connected", None)
+
+        self._evaluations += 1
+        if self._evaluations in {1, 5, 25} or self._evaluations % 100 == 0:
+            logger.warning(
+                "Checklist evaluation session=%s count=%s unchecked=%s tool_calls=%s",
+                self.session.session_id,
+                self._evaluations,
+                len(unchecked),
+                len(tool_calls),
+            )
+
+        for name, args in tool_calls:
+            if name not in _TOOL_NAMES:
+                continue
+            result = await self._on_tool_call(name, args)
+            logger.warning(
+                "Checklist tool result session=%s name=%s accepted=%s args=%s",
+                self.session.session_id,
+                name,
+                result.get("accepted") if isinstance(result, dict) else None,
+                args,
+            )
+
+    async def _mock_evaluate(self, turn: NormalizedTurn, text: str) -> bool:
+        # Deterministic local matcher used by tests and demo mode: checks the
+        # first eligible topic per turn (questions from the founder, goals
+        # from the interviewee).
         is_founder = turn.speaker_label == "Founder"
         for topic in self.session.topics:
             if topic.category not in {"goal", "question"}:
@@ -640,7 +545,7 @@ class RealtimeBridge:
                 "mark_item_covered",
                 {
                     "item_id": topic.id,
-                    "evidence": f"{turn.speaker_label} said: {turn.text[:160]}",
+                    "evidence": f"{turn.speaker_label} said: {text[:160]}",
                     "reason": "question_asked" if topic.category == "question" else "goal_covered",
                 },
             )
@@ -648,350 +553,324 @@ class RealtimeBridge:
         return True
 
 
-def _speaker_for_source(source: str) -> str:
-    if source == "mic":
-        return "Founder"
-    if source == "loopback":
-        return "Interviewee"
-    if source in {"rtms", "meeting_sdk", "external"}:
-        return "Speaker"
-    return "Unknown"
-
-
 # ---------------------------------------------------------------------------
-# REST-based checklist bridge (for Gemini, Anthropic, and non-OpenAI providers)
+# Transports
 # ---------------------------------------------------------------------------
 
-_REST_FLUSH_INTERVAL_SECONDS = 2.0  # was 4.0 — faster response for live calls
-_REST_MAX_TURNS_PER_FLUSH = 6       # was 8 — flush sooner to reduce latency
+class _EvaluationTransport:
+    """One evaluation request/response. Implementations must be safe to call
+    repeatedly and to close() at any time."""
+
+    provider = ""
+    target = ""
+    model = ""
+
+    async def prepare(self) -> None:
+        """Optional eager setup so connection problems surface at start."""
+
+    async def evaluate(self, rubric: str, prompt: str) -> list[tuple[str, dict]]:
+        raise NotImplementedError
+
+    async def close(self) -> None:
+        pass
 
 
-def _rest_tool_declarations() -> list[dict]:
-    return [
-        {
-            "name": "mark_item_covered",
-            "description": "Mark one existing interview checklist item as covered.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "item_id": {"type": "string", "description": "The exact checklist item id to mark covered."},
-                    "evidence": {"type": "string", "description": "One short sentence explaining what was heard."},
-                    "reason": {"type": "string", "enum": ["question_asked", "goal_covered"]},
-                },
-                "required": ["item_id", "evidence", "reason"],
-            },
-        },
-        {
-            "name": "mark_items_covered",
-            "description": "Mark several existing interview checklist items as covered from the same exchange.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "items": {
-                        "type": "array",
-                        "minItems": 1,
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "item_id": {"type": "string", "description": "The exact checklist item id to mark covered."},
-                                "evidence": {"type": "string", "description": "One short sentence explaining what was heard."},
-                                "reason": {"type": "string", "enum": ["question_asked", "goal_covered"]},
-                            },
-                            "required": ["item_id", "evidence", "reason"],
-                        },
-                    },
-                },
-                "required": ["items"],
-            },
-        },
-    ]
+def _make_transport(provider: str, session: LiveSessionState) -> _EvaluationTransport:
+    if provider in {"openai", "azure"}:
+        return _RealtimeWSTransport(_realtime_connection_config(provider, session))
+    if provider == "gemini":
+        return _GeminiTransport()
+    if provider == "anthropic":
+        return _AnthropicTransport()
+    raise ValueError("CHECKLIST_AI_PROVIDER must be openai, azure, gemini, anthropic, or mock")
 
 
-def _rest_tool_declarations_openai() -> list[dict]:
-    """OpenAI REST format: type: function + function: {name, description, parameters}."""
-    result = []
-    for decl in _rest_tool_declarations():
-        result.append({"type": "function", "function": decl})
-    return result
+class _RealtimeWSTransport(_EvaluationTransport):
+    """Stateless evaluations over a persistent realtime WebSocket.
 
-
-class RestChecklistBridge:
-    """Checklist matcher that uses REST API calls instead of a persistent WebSocket.
-
-    Transcript turns are buffered and flushed periodically (every ~4 s or after
-    8 turns).  On each flush the accumulated turns are sent to the AI provider
-    with function-calling tool definitions.  Any tool calls returned by the AI
-    are forwarded to the same ``on_tool_call`` handler used by the realtime
-    bridge.
+    Each evaluation is an out-of-band response (``conversation: "none"``) with
+    per-response instructions, tools, and input — the server-side conversation
+    never grows. The socket reconnects on demand, so provider-side idle
+    disconnects between utterances (or before the call starts) cannot kill
+    auto-cross-off for the rest of the session.
     """
 
-    def __init__(
-        self,
-        session: LiveSessionState,
-        *,
-        on_tool_call: RealtimeToolHandler,
-        on_status: RealtimeStatusHandler,
-    ) -> None:
-        self._session = session
-        self._on_tool_call = on_tool_call
-        self._on_status = on_status
-        self._task: asyncio.Task | None = None
-        self._stop = asyncio.Event()
-        self._provider = _checklist_provider()
-        self._buffer: list[dict[str, str]] = []  # [{speaker, text}, ...]
-        self._buffer_event = asyncio.Event()
+    def __init__(self, config: RealtimeConnectionConfig) -> None:
+        self._config = config
+        self._ws = None
+        self.provider = config.provider
+        self.target = config.target
+        self.model = config.model
 
-    def start(self) -> None:
-        if self._task and not self._task.done():
-            return
-        self._task = asyncio.create_task(self._run())
+    async def prepare(self) -> None:
+        await self._ensure_connected()
 
-    async def stop(self) -> None:
-        self._stop.set()
-        self._buffer_event.set()  # wake the worker
-        if self._task and not self._task.done():
-            self._task.cancel()
+    async def close(self) -> None:
+        ws, self._ws = self._ws, None
+        if ws is not None:
             try:
-                await self._task
-            except asyncio.CancelledError:
+                await ws.close()
+            except Exception:
                 pass
 
-    async def send_labeled_turn(self, turn: NormalizedTurn) -> bool:
-        text = " ".join(turn.text.strip().split())
-        if not text:
-            return False
-        self._buffer.append({"speaker": turn.speaker_label, "text": text})
-        if len(self._buffer) >= _REST_MAX_TURNS_PER_FLUSH:
-            self._buffer_event.set()
-        return True
-
-    async def _run(self) -> None:
-        logger.warning(
-            "Starting REST checklist bridge session=%s provider=%s",
-            self._session.session_id,
-            self._provider,
-        )
-        self._on_status("connected", None)
-        flush_count = 0
-        _REVAL_EVERY_N_FLUSHES = 3  # re-evaluate all unchecked every 3rd flush
+    async def evaluate(self, rubric: str, prompt: str) -> list[tuple[str, dict]]:
         try:
-            while not self._stop.is_set():
-                try:
-                    await asyncio.wait_for(
-                        self._buffer_event.wait(),
-                        timeout=_REST_FLUSH_INTERVAL_SECONDS,
-                    )
-                except TimeoutError:
-                    pass  # periodic flush
-                self._buffer_event.clear()
-                if self._buffer:
-                    await self._flush()
-                    flush_count += 1
-                    # Periodic full re-evaluation
-                    if flush_count % _REVAL_EVERY_N_FLUSHES == 0:
-                        await self._reval()
-        except asyncio.CancelledError:
+            await self._ensure_connected()
+            return await self._evaluate_on_socket(rubric, prompt)
+        except (websockets.ConnectionClosed, OSError):
+            # The socket died since last use (idle timeouts are routine on
+            # long calls) — reconnect once and retry.
+            await self.close()
+            await self._ensure_connected()
+            return await self._evaluate_on_socket(rubric, prompt)
+
+    async def _ensure_connected(self) -> None:
+        if self._ws is not None:
+            return
+        ws = await websockets.connect(
+            self._config.url, additional_headers=self._config.headers
+        )
+        try:
+            # GA requires session.type; everything else is supplied per
+            # response, keeping evaluations stateless.
+            session_payload: dict[str, Any] = {
+                "type": "realtime",
+                "output_modalities": ["text"],
+            }
+            if self._config.provider != "azure":
+                # Azure selects the deployment via the URL's model query param.
+                session_payload["model"] = self._config.model
+            await ws.send(json.dumps({"type": "session.update", "session": session_payload}))
+        except Exception:
+            try:
+                await ws.close()
+            except Exception:
+                pass
             raise
-        except Exception as exc:
-            logger.exception(
-                "REST checklist bridge failed for session %s",
-                self._session.session_id,
+        self._ws = ws
+
+    async def _evaluate_on_socket(self, rubric: str, prompt: str) -> list[tuple[str, dict]]:
+        ws = self._ws
+        if ws is None:
+            raise RuntimeError("Realtime WebSocket is not connected")
+        await ws.send(
+            json.dumps(
+                {
+                    "type": "response.create",
+                    "response": {
+                        "conversation": "none",
+                        "output_modalities": ["text"],
+                        "instructions": rubric,
+                        "tools": _tool_schemas(),
+                        "tool_choice": "auto",
+                        "input": [
+                            {
+                                "type": "message",
+                                "role": "user",
+                                "content": [{"type": "input_text", "text": prompt}],
+                            }
+                        ],
+                    },
+                },
+                separators=(",", ":"),
             )
-            self._on_status("error", str(exc))
-        finally:
-            if (
-                self._session.status == "active"
-                and self._session.realtime_status != "error"
-            ):
-                self._on_status("closed", None)
+        )
 
-    async def _flush(self) -> None:
-        if not self._buffer or self._session.status != "active":
-            self._buffer.clear()
+        calls: list[tuple[str, dict]] = []
+        seen_call_ids: set[str] = set()
+        while True:
+            event = json.loads(await ws.recv())
+            event_type = event.get("type")
+            if event_type == "error":
+                error = event.get("error") or {}
+                logger.warning(
+                    "Realtime API error target=%s error=%s",
+                    self.target,
+                    json.dumps(error),
+                )
+                raise RuntimeError(error.get("message") or "Realtime API error")
+            if event_type == "response.output_item.done":
+                item = event.get("item") or {}
+                if item.get("type") == "function_call":
+                    _collect_function_call(item, calls, seen_call_ids)
+            elif event_type == "response.function_call_arguments.done":
+                _collect_function_call(event, calls, seen_call_ids)
+            elif event_type == "response.done":
+                return calls
+
+
+def _collect_function_call(
+    item: dict[str, Any],
+    calls: list[tuple[str, dict]],
+    seen_call_ids: set[str],
+) -> None:
+    name = item.get("name")
+    if name not in _TOOL_NAMES:
+        return
+    call_id = item.get("call_id") or item.get("id")
+    if call_id:
+        if call_id in seen_call_ids:
             return
+        seen_call_ids.add(call_id)
+    raw_args = item.get("arguments") or "{}"
+    try:
+        args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+    except json.JSONDecodeError:
+        args = {}
+    calls.append((name, args if isinstance(args, dict) else {}))
 
-        turns = self._buffer[:]
-        self._buffer.clear()
 
-        labeled = "\n".join(
-            f"{turn['speaker']}: {turn['text']}" for turn in turns
-        )
-        prompt = (
-            "Recent transcript turns (labeled by speaker source):\n\n"
-            f"{labeled}\n\n"
-            "Call mark_item_covered or mark_items_covered for any checklist items "
-            "that have clearly been covered in these turns.  If nothing is clearly "
-            "covered, respond with a single 'no_op' text."
-        )
+class _GeminiTransport(_EvaluationTransport):
+    provider = "gemini"
+    target = "generativelanguage.googleapis.com"
 
-        try:
-            tool_calls = await self._call_ai(prompt)
-            for name, args in tool_calls:
-                if name in {"mark_item_covered", "mark_items_covered"}:
-                    result = await self._on_tool_call(name, args)
-                    logger.warning(
-                        "REST tool result session=%s name=%s accepted=%s",
-                        self._session.session_id,
-                        name,
-                        result.get("accepted") if isinstance(result, dict) else None,
-                    )
-        except Exception:
-            logger.exception("REST flush failed session=%s", self._session.session_id)
+    def __init__(self) -> None:
+        self.model = get_settings().gemini_model
 
-    async def _reval(self) -> None:
-        """Periodic full re-evaluation: send all unchecked topics + recent
-        transcript history so the AI can catch items that became clear with
-        later context."""
-        unchecked = [
-            topic for topic in self._session.topics
-            if topic.category in {"goal", "question"}
-            and not topic.checked
-            and not topic.manual_override
-        ]
-        if not unchecked:
-            return
+    async def prepare(self) -> None:
+        if not get_settings().gemini_api_key:
+            raise ValueError("GEMINI_API_KEY is not configured")
 
-        recent = self._session.transcript_turns[-20:]
-        history = "\n".join(
-            f"{turn.speaker}: {turn.text[:200]}" for turn in recent
-        )
-        unchecked_list = "\n".join(
-            f"- {topic.id} [{topic.category}]: {topic.label}"
-            for topic in unchecked
-        )
-        prompt = (
-            "CONTEXT REFRESH — re-evaluate all remaining unchecked items "
-            "against the full transcript below.\n\n"
-            "Remaining unchecked items:\n"
-            f"{unchecked_list}\n\n"
-            "Recent transcript:\n"
-            f"{history}\n\n"
-            "Check each unchecked item above. If any are now clearly covered "
-            "by the transcript above, call mark_item_covered or "
-            "mark_items_covered. If nothing is covered, say 'no_op'."
-        )
-
-        try:
-            tool_calls = await self._call_ai(prompt)
-            for name, args in tool_calls:
-                if name in {"mark_item_covered", "mark_items_covered"}:
-                    result = await self._on_tool_call(name, args)
-                    logger.warning(
-                        "REST reval result session=%s name=%s accepted=%s",
-                        self._session.session_id,
-                        name,
-                        result.get("accepted") if isinstance(result, dict) else None,
-                    )
-        except Exception:
-            logger.exception("REST reval failed session=%s", self._session.session_id)
-
-    async def _call_ai(self, prompt: str) -> list[tuple[str, dict]]:
+    async def evaluate(self, rubric: str, prompt: str) -> list[tuple[str, dict]]:
         settings = get_settings()
-        instructions = _instructions(self._session)
-
-        if self._provider == "gemini":
-            return await self._call_gemini(settings, instructions, prompt)
-        if self._provider == "openai":
-            return await self._call_openai_rest(settings, instructions, prompt)
-        if self._provider == "anthropic":
-            return await self._call_anthropic(settings, instructions, prompt)
-        # Fallback: try OpenAI REST if key is available, else no-op
-        if settings.openai_api_key:
-            return await self._call_openai_rest(settings, instructions, prompt)
-        logger.warning(
-            "REST bridge: unsupported provider %s, no API key available",
-            self._provider,
-        )
-        return []
-
-    async def _call_gemini(
-        self, settings, instructions: str, prompt: str
-    ) -> list[tuple[str, dict]]:
         if not settings.gemini_api_key:
-            self._on_status("error", "GEMINI_API_KEY is not configured")
-            return []
+            raise ValueError("GEMINI_API_KEY is not configured")
 
         import google.generativeai as genai
 
         genai.configure(api_key=settings.gemini_api_key)
-        # Gemini expects tools wrapped in {"function_declarations": [...]}
         gemini_tools = [{"function_declarations": _rest_tool_declarations()}]
         model = genai.GenerativeModel(
             model_name=settings.gemini_model,
-            system_instruction=instructions,
+            system_instruction=rubric,
             tools=gemini_tools,
         )
-        tool_config = {"function_calling_config": {"mode": "auto"}}
-
-        try:
-            response = await asyncio.wait_for(
-                model.generate_content_async(
-                    prompt,
-                    tools=gemini_tools,
-                    tool_config=tool_config,
-                    request_options={"timeout": int(settings.ai_request_timeout_seconds)},
-                ),
-                timeout=settings.ai_request_timeout_seconds + 10,
-            )
-        except Exception as exc:
-            self._on_status("error", f"Gemini REST call failed: {exc}")
-            return []
-
+        response = await model.generate_content_async(
+            prompt,
+            tools=gemini_tools,
+            tool_config={"function_calling_config": {"mode": "auto"}},
+            request_options={"timeout": int(settings.ai_request_timeout_seconds)},
+        )
         return _extract_gemini_tool_calls(response)
 
-    async def _call_openai_rest(
-        self, settings, instructions: str, prompt: str
-    ) -> list[tuple[str, dict]]:
-        api_key = settings.openai_api_key
-        if not api_key:
-            self._on_status("error", "OPENAI_API_KEY is not configured")
-            return []
+
+class _OpenAIRestTransport(_EvaluationTransport):
+    provider = "openai_rest"
+    target = "api.openai.com"
+
+    def __init__(self) -> None:
+        self.model = get_settings().openai_model
+
+    async def prepare(self) -> None:
+        if not get_settings().openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not configured")
+
+    async def evaluate(self, rubric: str, prompt: str) -> list[tuple[str, dict]]:
+        settings = get_settings()
+        if not settings.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not configured")
 
         import httpx
 
-        url = "https://api.openai.com/v1/chat/completions"
         body = {
             "model": settings.openai_model,
             "messages": [
-                {"role": "system", "content": instructions},
+                {"role": "system", "content": rubric},
                 {"role": "user", "content": prompt},
             ],
-            "tools": _rest_tool_declarations_openai(),
+            "tools": [
+                {"type": "function", "function": declaration}
+                for declaration in _rest_tool_declarations()
+            ],
             "tool_choice": "auto",
         }
-        try:
-            async with httpx.AsyncClient(timeout=settings.ai_request_timeout_seconds + 10) as client:
-                response = await client.post(
-                    url,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=body,
-                )
-            if response.status_code >= 400:
-                self._on_status(
-                    "error",
-                    f"OpenAI REST call failed with HTTP {response.status_code}",
-                )
-                return []
-            payload = response.json()
-        except Exception as exc:
-            self._on_status("error", f"OpenAI REST call failed: {exc}")
-            return []
+        async with httpx.AsyncClient(timeout=settings.ai_request_timeout_seconds + 10) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.openai_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=body,
+            )
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"OpenAI API error HTTP {response.status_code}: {response.text[:200]}"
+            )
+        return _extract_openai_tool_calls(response.json())
 
-        return _extract_openai_tool_calls(payload)
 
-    async def _call_anthropic(
-        self, settings, instructions: str, prompt: str
-    ) -> list[tuple[str, dict]]:
+class _AnthropicTransport(_EvaluationTransport):
+    provider = "anthropic"
+    target = "api.anthropic.com"
+
+    def __init__(self) -> None:
+        self.model = get_settings().anthropic_model
+
+    async def prepare(self) -> None:
+        if not get_settings().anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY is not configured")
+
+    async def evaluate(self, rubric: str, prompt: str) -> list[tuple[str, dict]]:
+        settings = get_settings()
         if not settings.anthropic_api_key:
-            self._on_status("error", "ANTHROPIC_API_KEY is not configured")
-            return []
+            raise ValueError("ANTHROPIC_API_KEY is not configured")
 
-        # Anthropic has its own tool-use format. For now, skip.
-        logger.warning("REST bridge: Anthropic tool use not implemented yet")
-        return []
+        import httpx
+
+        body = {
+            "model": settings.anthropic_model,
+            "max_tokens": 1024,
+            "system": rubric,
+            "messages": [{"role": "user", "content": prompt}],
+            "tools": [
+                {
+                    "name": declaration["name"],
+                    "description": declaration["description"],
+                    "input_schema": declaration["parameters"],
+                }
+                for declaration in _rest_tool_declarations()
+            ],
+        }
+        async with httpx.AsyncClient(timeout=settings.ai_request_timeout_seconds + 10) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": settings.anthropic_api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json=body,
+            )
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Anthropic API error HTTP {response.status_code}: {response.text[:200]}"
+            )
+        payload = response.json()
+        calls: list[tuple[str, dict]] = []
+        for block in payload.get("content") or []:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            name = block.get("name")
+            if name not in _TOOL_NAMES:
+                continue
+            args = block.get("input") or {}
+            calls.append((name, args if isinstance(args, dict) else {}))
+        return calls
+
+
+def _proto_to_plain(value: Any) -> Any:
+    """Convert Gemini proto MapComposite/RepeatedComposite values into plain
+    dicts/lists so downstream isinstance checks work."""
+    if isinstance(value, dict):
+        return {key: _proto_to_plain(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_proto_to_plain(item) for item in value]
+    if hasattr(value, "items"):
+        return {key: _proto_to_plain(item) for key, item in value.items()}
+    if hasattr(value, "__iter__") and not isinstance(value, (str, bytes)):
+        return [_proto_to_plain(item) for item in value]
+    return value
 
 
 def _extract_gemini_tool_calls(response) -> list[tuple[str, dict]]:
@@ -1004,8 +883,8 @@ def _extract_gemini_tool_calls(response) -> list[tuple[str, dict]]:
                 if fn is None:
                     continue
                 name = getattr(fn, "name", "") or ""
-                args = getattr(fn, "args", {}) or {}
-                if name in {"mark_item_covered", "mark_items_covered"}:
+                args = _proto_to_plain(getattr(fn, "args", {}) or {})
+                if name in _TOOL_NAMES:
                     results.append((name, args if isinstance(args, dict) else {}))
     except Exception:
         logger.exception("Failed to extract Gemini tool calls")
@@ -1020,15 +899,15 @@ def _extract_openai_tool_calls(payload: dict) -> list[tuple[str, dict]]:
         for choice in choices:
             message = choice.get("message") or {}
             tool_calls = message.get("tool_calls") or []
-            for tc in tool_calls:
-                fn = tc.get("function") or {}
+            for tool_call in tool_calls:
+                fn = tool_call.get("function") or {}
                 name = fn.get("name", "")
                 raw_args = fn.get("arguments", "{}")
                 try:
                     args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
                 except json.JSONDecodeError:
                     args = {}
-                if name in {"mark_item_covered", "mark_items_covered"}:
+                if name in _TOOL_NAMES:
                     results.append((name, args if isinstance(args, dict) else {}))
     except Exception:
         logger.exception("Failed to extract OpenAI tool calls")

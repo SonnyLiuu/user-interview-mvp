@@ -6,10 +6,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import Settings, get_settings
-from .db import close_pool, init_pool
-from .errors import AIServiceError, BadRequestError, DatabaseUnavailableError, NotFoundError, UnauthorizedError
-from .routers import call_prep, dashboard, desktop, fireflies, guest_onboarding, intake, live_sessions, onboarding, otter, outreach, outreach_projects, projects, recall, workspace, zoom_rtms
+from .core.config import Settings, get_settings
+from .core.db import close_pool, init_pool
+from .core.errors import AIServiceError, BadRequestError, DatabaseUnavailableError, NotFoundError, UnauthorizedError
+from .routers import call_prep, dashboard, desktop, guest_onboarding, intake, live_sessions, onboarding, outreach, outreach_projects, projects, workspace
 
 import logging
 
@@ -48,10 +48,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(outreach_projects.router)
     app.include_router(dashboard.router)
     app.include_router(workspace.router)
-    app.include_router(zoom_rtms.router)
-    app.include_router(recall.router)
-    app.include_router(fireflies.router)
-    app.include_router(otter.router)
 
     @app.get("/healthz")
     async def healthz():

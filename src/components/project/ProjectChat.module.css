@@ -7,7 +7,7 @@
   background: #fffdf8;
   border: 1px solid #e8d9c4;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .header {
@@ -84,45 +84,6 @@
   height: 100%;
   min-height: 0;
   overflow: visible;
-}
-
-.railNub {
-  position: absolute;
-  z-index: 5;
-  top: 50%;
-  left: -33px;
-  width: 34px;
-  height: 56px;
-  padding: 0;
-  transform: translateY(-50%);
-  border: 1px solid #e1cdb5;
-  border-right: 0;
-  border-radius: 10px 0 0 10px;
-  background: #fffdf8;
-  color: #715b49;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: -2px 0 5px rgb(46 33 21 / 5%);
-  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
-}
-
-.railNub svg {
-  display: block;
-  width: 18px;
-  height: 18px;
-}
-
-.railNub:hover {
-  color: #2e2115;
-  background: #f5eddf;
-  border-color: #c8ad91;
-}
-
-.railNub:focus-visible {
-  outline: 2px solid #a4532b;
-  outline-offset: 2px;
 }
 
 .activityDot {
@@ -236,20 +197,6 @@
   .typing span { animation-duration: 2.4s; }
   .activityDot { animation: none; }
   .refreshing svg { animation: none; }
-}
-
-@media (max-width: 900px) {
-  .railNub {
-    top: -33px;
-    left: 50%;
-    width: 56px;
-    height: 34px;
-    transform: translateX(-50%);
-    border-right: 1px solid #e1cdb5;
-    border-bottom: 0;
-    border-radius: 10px 10px 0 0;
-  }
-
 }
 
 .systemMsg {

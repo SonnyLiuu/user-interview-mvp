@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from ..auth import AuthContext, get_auth_context
+from ..core.auth import AuthContext, get_auth_context
 from ..services.intake import get_intake_payload, reset_conversation, stream_chat
 
 router = APIRouter(prefix="/v1/projects/{project_id}/intake", tags=["intake"])

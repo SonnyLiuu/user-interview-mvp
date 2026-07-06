@@ -7,7 +7,6 @@ class LiveSessionStartRequest(BaseModel):
     person_id: str = Field(alias="personId")
     capture_provider: str = Field(default="desktop_audio", alias="captureProvider")
     zoom_meeting_identifier: str | None = Field(default=None, alias="zoomMeetingIdentifier")
-    meeting_url: str | None = Field(default=None, alias="meetingUrl")
 
 
 class LiveTopic(BaseModel):

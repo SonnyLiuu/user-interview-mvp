@@ -41,7 +41,7 @@ The backend sends the current foundation keys:
 
 Structured backend error codes are now defined in:
 
-- `services/api/app/error_codes.py`
+- `services/api/app/core/errors.py`
 - `src/lib/error-codes.ts`
 
 Current codes:
@@ -74,7 +74,7 @@ The stage update API now validates incoming JSON with Zod instead of trusting a 
 | Project nav/latest/workspace payloads | `services/api/app/schemas/projects.py` | `src/lib/backend-types.ts` | Aligned. |
 | Foundation view payload | `services/api/app/schemas/workspace.py` | `src/lib/backend-types.ts` | Aligned enough; foundation remains `dict` on Python side. |
 | Onboarding chat payload | `services/api/app/schemas/onboarding.py` | `src/components/onboarding/OnboardingChat.tsx` | Aligned. |
-| Backend error codes | `services/api/app/error_codes.py` | `src/lib/error-codes.ts` | Mirrored constants. |
+| Backend error codes | `services/api/app/core/errors.py` | `src/lib/error-codes.ts` | Mirrored constants. |
 | CRM stages/board status | N/A, Next local API only | `src/lib/crm.ts`, `src/lib/validation.ts` | Centralized and runtime-validated. |
 
 ## Remaining Watchpoints

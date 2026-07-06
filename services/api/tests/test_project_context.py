@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.project_context import apply_idea_validation_brief, foundation_to_project_context
+from app.domain.project_context import apply_idea_validation_brief, foundation_to_project_context
 
 
 class ProjectContextTests(unittest.TestCase):

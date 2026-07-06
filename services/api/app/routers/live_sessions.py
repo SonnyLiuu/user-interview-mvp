@@ -7,8 +7,8 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, Header, Query, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import StreamingResponse
 
-from ..auth import AuthContext, get_auth_context
-from ..errors import UnauthorizedError
+from ..core.auth import AuthContext, get_auth_context
+from ..core.errors import UnauthorizedError
 from ..schemas.live_sessions import (
     LiveSessionEndResponse,
     LiveSessionResponse,
@@ -55,7 +55,6 @@ async def create_live_session(
         body.person_id,
         capture_provider=body.capture_provider,
         zoom_meeting_identifier=body.zoom_meeting_identifier,
-        meeting_url=body.meeting_url,
     )
     response["foundryBaseUrl"] = (
         request.app.state.settings.foundry_desktop_api_public_url

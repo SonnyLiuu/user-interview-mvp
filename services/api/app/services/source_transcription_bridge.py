@@ -12,7 +12,7 @@ from urllib.parse import quote, urlparse
 
 import websockets
 
-from ..config import get_settings
+from ..core.config import get_settings
 
 if TYPE_CHECKING:
     from .live_sessions import LiveSessionState
@@ -24,9 +24,9 @@ TranscriptionStatusHandler = Callable[[str, str | None], None]
 
 _TRANSCRIPTION_SOURCES = ("mic", "loopback")
 _TRANSCRIPTION_MODEL = "gpt-4o-transcribe"
-# Azure deployment name for transcription; falls back to the realtime deployment if unset.
-# This is distinct from the OpenAI model name — Azure uses custom deployment names.
-_AZURE_TRANSCRIPTION_MODEL = "whisper-1"
+# Azure deployment name for input transcription. If unset, Azure uses the
+# realtime deployment as a text-only transcriber instead.
+# Deployment names are distinct from OpenAI model names.
 _TRANSCRIPTION_MODE_INPUT = "input_transcription"
 _TRANSCRIPTION_MODE_REALTIME_TEXT = "realtime_text"
 
@@ -78,7 +78,17 @@ def _azure_realtime_endpoint() -> str:
         )
     if not host.endswith(".openai.azure.com"):
         raise ValueError("AZURE_OPENAI_REALTIME_ENDPOINT must end in openai.azure.com")
-    return f"wss://{parsed.netloc}/openai/realtime"
+    return f"wss://{parsed.netloc}"
+
+
+def _azure_realtime_url(deployment: str) -> str:
+    endpoint = _azure_realtime_endpoint()
+    if "preview" in deployment.lower():
+        return (
+            f"{endpoint}/openai/realtime"
+            f"?api-version=2025-04-01-preview&deployment={quote(deployment, safe='')}"
+        )
+    return f"{endpoint}/openai/v1/realtime?model={quote(deployment, safe='')}"
 
 
 def _azure_realtime_deployment() -> str:
@@ -121,20 +131,21 @@ def _connection_config(session: LiveSessionState) -> TranscriptionConnectionConf
             raise ValueError("AZURE_OPENAI_REALTIME_API_KEY is not configured")
         deployment = _azure_realtime_deployment()
         transcription_deployment = _azure_transcription_deployment()
-        endpoint = _azure_realtime_endpoint()
-        parsed = urlparse(endpoint)
-        # Use the realtime deployment for transcription when no separate
-        # transcription deployment is configured (input_transcription mode
-        # runs on the same connection).
+        # Azure requires input_audio_transcription.model to be an existing
+        # transcription deployment. When one is not configured, use the realtime
+        # deployment itself as a text-only transcriber instead.
+        mode = _TRANSCRIPTION_MODE_INPUT if transcription_deployment else _TRANSCRIPTION_MODE_REALTIME_TEXT
         model = transcription_deployment or deployment
+        url = _azure_realtime_url(deployment)
+        parsed = urlparse(url)
         return TranscriptionConnectionConfig(
-            url=f"{endpoint}?api-version=2024-10-01-preview&deployment={quote(deployment, safe='')}",
+            url=url,
             headers={"api-key": api_key},
             provider="azure",
             target=parsed.netloc,
             session_type="realtime",
             model=model,
-            mode=_TRANSCRIPTION_MODE_INPUT,
+            mode=mode,
         )
 
     raise ValueError("CHECKLIST_AI_PROVIDER must be openai, azure, or mock for transcription")
@@ -272,23 +283,32 @@ class _SourceTranscriber:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.exception(
-                "Source transcription failed session=%s source=%s",
-                self.session.session_id,
-                self.source,
-            )
-            self._on_status("error", f"{self.source} transcription failed: {exc}")
+            if self._stop.is_set():
+                # stop() closed the socket; the resulting ConnectionClosed is a
+                # normal shutdown, not an error.
+                logger.info(
+                    "Source transcription closed session=%s source=%s",
+                    self.session.session_id,
+                    self.source,
+                )
+            else:
+                logger.exception(
+                    "Source transcription failed session=%s source=%s",
+                    self.session.session_id,
+                    self.source,
+                )
+                self._on_status("error", f"{self.source} transcription failed: {exc}")
         finally:
             self._ws = None
 
     async def _configure_session(self) -> None:
         audio_input = {
+            # GA `audio/pcm` accepts only `type` and `rate` (16-bit mono
+            # little-endian is implied); extra keys are rejected with
+            # unknown_parameter.
             "format": {
                 "type": "audio/pcm",
                 "rate": 24000,
-                "bit_depth": 16,
-                "channels": 1,
-                "byte_order": "little-endian",
             },
             "noise_reduction": {
                 "type": "near_field" if self.source == "mic" else "far_field",
@@ -302,6 +322,9 @@ class _SourceTranscriber:
         }
 
         session: dict[str, Any] = {
+            # Required by the GA realtime API on both OpenAI and Azure
+            # `/openai/v1/realtime`; omitting it fails with
+            # "Missing required parameter: 'session.type'".
             "type": self.config.session_type,
             "audio": {
                 "input": audio_input,
@@ -317,7 +340,8 @@ class _SourceTranscriber:
             audio_input["turn_detection"]["create_response"] = False
         else:
             audio_input["turn_detection"]["create_response"] = True
-            session["model"] = self.config.model
+            if self.config.provider != "azure":
+                session["model"] = self.config.model
             session["instructions"] = _realtime_text_transcription_instructions(self.source)
             session["output_modalities"] = ["text"]
 
@@ -361,6 +385,12 @@ class _SourceTranscriber:
             )
         if event_type == "error":
             error = event.get("error") or {}
+            logger.warning(
+                "Transcription API error session=%s source=%s error=%s",
+                self.session.session_id,
+                self.source,
+                json.dumps(error),
+            )
             self._on_status(
                 "error",
                 f"{self.source} transcription error: {error.get('message') or 'Realtime transcription API error'}",
@@ -391,17 +421,29 @@ class _SourceTranscriber:
 
     async def _handle_realtime_text_event(self, event: dict[str, Any]) -> None:
         event_type = event.get("type")
-        if event_type == "response.output_text.delta":
+        if event_type in {
+            "response.output_text.delta",
+            "response.text.delta",
+            "response.audio_transcript.delta",
+        }:
             response_id = _response_id(event)
             delta = event.get("delta")
             if isinstance(delta, str):
                 self._response_text.setdefault(response_id, []).append(delta)
             return
 
-        if event_type == "response.output_text.done":
+        if event_type in {
+            "response.output_text.done",
+            "response.text.done",
+            "response.audio_transcript.done",
+        }:
             response_id = _response_id(event)
-            text = _clean_transcript(event.get("text")) or _clean_transcript(
-                "".join(self._response_text.pop(response_id, []))
+            text = (
+                _clean_transcript(event.get("text"))
+                or _clean_transcript(event.get("transcript"))
+                or _clean_transcript(
+                    "".join(self._response_text.pop(response_id, []))
+                )
             )
             if text:
                 self._completed_response_ids.add(response_id)

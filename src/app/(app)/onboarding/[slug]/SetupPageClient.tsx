@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import OnboardingChat from '@/components/onboarding/OnboardingChat';
 import { backendClientFetch } from '@/lib/backend-client';
-import type { ProjectType } from '@/lib/backend-types';
+import type { ProjectNavItem, ProjectType } from '@/lib/backend-types';
+import { getProjectPathSegment } from '@/lib/projects';
 import styles from './setup-page.module.css';
 
 type SetupStage = 'chat' | 'name' | 'done';
@@ -44,12 +45,14 @@ export default function SetupPageClient({
   projectType,
   initialStage = 'chat',
   hasFoundation = false,
+  isDraft = false,
 }: {
   projectId: string;
   projectSlug: string;
   projectType: ProjectType;
   initialStage?: SetupStage;
   hasFoundation?: boolean;
+  isDraft?: boolean;
 }) {
   const router = useRouter();
   const [stage, setStage] = useState<SetupStage>(initialStage);
@@ -57,6 +60,8 @@ export default function SetupPageClient({
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   useEffect(() => {
     if (stage !== 'done') return;
@@ -116,9 +121,45 @@ export default function SetupPageClient({
     }
   }
 
+  async function leaveOnboarding() {
+    if (cancelling) return;
+
+    setCancelling(true);
+    setCancelError('');
+
+    try {
+      if (isDraft) {
+        const deleteResponse = await backendClientFetch(`/v1/projects/${projectId}`, { method: 'DELETE' });
+        if (!deleteResponse.ok) throw new Error('Could not delete draft project');
+      }
+
+      const projectsResponse = await backendClientFetch('/v1/projects');
+      if (!projectsResponse.ok) throw new Error('Could not load projects');
+      const projects = await projectsResponse.json() as ProjectNavItem[];
+      const nextProject = projects.find((project) => project.id !== projectId && project.slug !== null) ?? null;
+      router.replace(nextProject ? `/dashboard/${getProjectPathSegment(nextProject)}/foundation` : '/');
+      router.refresh();
+    } catch {
+      setCancelError('Could not leave setup. Please try again.');
+      setCancelling(false);
+    }
+  }
+
   if (stage === 'chat') {
     return (
       <div className={styles.intakePage}>
+        <header className={styles.intakeHeader}>
+          <button
+            type="button"
+            className={styles.backArrow}
+            onClick={() => void leaveOnboarding()}
+            aria-label="Cancel setup"
+            disabled={cancelling}
+          >
+            ←
+          </button>
+          {cancelError && <p className={styles.cancelError}>{cancelError}</p>}
+        </header>
         <div className={styles.intakeChatArea}>
           <OnboardingChat
             projectId={projectId}

@@ -8,7 +8,7 @@ import ProjectPageRecommendationBand, { type RecommendationBandAlert } from './P
 import { getFoundationView, getProjectBySlugOrId, listOutreachProjects } from '@/lib/backend-server';
 import { getProjectPathSegment } from '@/lib/projects';
 import { adaptFoundationForMode } from '@/lib/project-modes';
-import EntryGoalWelcome from '@/components/welcome/EntryGoalWelcome';
+import { ENTRY_GOAL_COPY } from '@/components/welcome/EntryGoalWelcome';
 
 function cleanText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -39,11 +39,13 @@ function StartupRecommendationPanel({
   outreachProjects,
   startupPath,
   startupProjectId,
+  leadAlert,
 }: {
   foundation: Foundation;
   outreachProjects: OutreachProjectRecord[];
   startupPath: string;
   startupProjectId: string;
+  leadAlert?: RecommendationBandAlert | null;
 }) {
   const recommendation = ideaValidationRecommendation(foundation);
   const ideaValidationProject = outreachProjects.find((project) => (
@@ -53,17 +55,19 @@ function StartupRecommendationPanel({
     ? ideaValidationProject
     : null;
   const showIdeaValidationRecommendation = !isFullyCreatedIdeaValidationProject(ideaValidationProject);
-  const alerts: RecommendationBandAlert[] = [
-    {
-      id: 'ongoing-advisor-first-run',
-      eyebrow: 'Foundation advisor',
-      title: 'Let the advisor sharpen your foundation',
-      body: 'New here? Ask the Ongoing Advisor to add more detail to your startup foundation. It can suggest changes, make edits for you, and help pressure-test weak spots before you start outreach.',
-      actionLabel: 'Try the advisor',
-      actionTargetId: 'ongoing-advisor-input',
-      actionEventName: 'foundation-advisor:try',
-    },
-  ];
+  const alerts: RecommendationBandAlert[] = [];
+
+  if (leadAlert) alerts.push(leadAlert);
+
+  alerts.push({
+    id: 'ongoing-advisor-first-run',
+    eyebrow: 'Foundation advisor',
+    title: 'Let the advisor sharpen your foundation',
+    body: 'New here? Ask the Ongoing Advisor to add more detail to your startup foundation. It can suggest changes, make edits for you, and help pressure-test weak spots before you start outreach.',
+    actionLabel: 'Try the advisor',
+    actionTargetId: 'ongoing-advisor-input',
+    actionEventName: 'foundation-advisor:try',
+  });
 
   if (showIdeaValidationRecommendation) {
     alerts.push({
@@ -123,6 +127,22 @@ export default async function ProjectPage({
     ? await listOutreachProjects(project.id)
     : [];
 
+  // Post-onboarding welcome joins the recommendation band as its first slide
+  // instead of stacking a second banner above it.
+  const welcomeCopy = query?.welcome === '1' && project.entry_goal
+    ? ENTRY_GOAL_COPY[project.entry_goal]
+    : null;
+  const welcomeAlert: RecommendationBandAlert | null = welcomeCopy
+    ? {
+        id: 'entry-goal-welcome',
+        eyebrow: 'Your recommended first step',
+        title: welcomeCopy.title,
+        body: welcomeCopy.body,
+        actionLabel: 'View outreach plan',
+        actionHref: `/dashboard/${pathSegment}/outreach-projects`,
+      }
+    : null;
+
   return (
     <FoundationProvider
       projectId={project.id}
@@ -130,22 +150,17 @@ export default async function ProjectPage({
     >
       <div className={styles.layout}>
         <div className={styles.briefPane}>
-          {query?.welcome === '1' && (
-            <EntryGoalWelcome
-              entryGoal={project.entry_goal}
-              projectId={project.id}
-              actionHref={`/dashboard/${pathSegment}/outreach-projects`}
-              actionLabel="View outreach plan"
-            />
-          )}
-          {project.project_type === 'startup' && (
+          {project.project_type === 'startup' ? (
             <StartupRecommendationPanel
               foundation={foundation}
               outreachProjects={outreachProjects}
               startupPath={pathSegment}
               startupProjectId={project.id}
+              leadAlert={welcomeAlert}
             />
-          )}
+          ) : welcomeAlert ? (
+            <ProjectPageRecommendationBand alerts={[welcomeAlert]} storageScope={project.id} />
+          ) : null}
           <div className={styles.foundationArea}>
             <FoundationView projectId={project.id} initialFoundation={foundation} projectType={project.project_type} />
           </div>

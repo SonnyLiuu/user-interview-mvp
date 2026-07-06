@@ -21,15 +21,13 @@ Content-Type: application/json
 {
   "personId": "PERSON_ID",
   "launchToken": "LAUNCH_TOKEN",
-  "captureProvider": "zoom_rtms",
+  "captureProvider": "desktop_audio",
   "zoomMeetingIdentifier": "ZOOM_ID"
 }
 ```
 
 The response includes `sessionId`, `liveToken`, `foundryBaseUrl`, topics, and
 the active capture provider. Only `desktop_audio` enables local audio streaming.
-macOS v1 uses `zoom_rtms` by default and does not require local system-audio
-capture.
 
 ## Live Updates
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import ANY, AsyncMock, patch
 
-from app.onboarding_engine import empty_onboarding_state
+from app.domain.onboarding_engine import empty_onboarding_state
 from app.services import onboarding as onboarding_service
 
 

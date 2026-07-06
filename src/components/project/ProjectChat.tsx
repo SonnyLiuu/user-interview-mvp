@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { backendClientFetch } from '@/lib/backend-client';
 import { useFoundation } from '@/components/brief/FoundationContext';
 import type { Foundation } from '@/lib/backend-types';
+import { PanelHandle } from '@/components/panel-handle/PanelHandle';
 import styles from './ProjectChat.module.css';
 
 type Message = { role: 'assistant' | 'user'; content: string };
@@ -24,20 +25,6 @@ type Props = {
   advisorAlertId?: string;
   collapsible?: boolean;
 };
-
-function RailChevron({ collapsed }: { collapsed: boolean }) {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d={collapsed ? 'M10 3.5 5.5 8l4.5 4.5' : 'M6 3.5 10.5 8 6 12.5'}
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 function RefreshIcon() {
   return (
@@ -274,16 +261,12 @@ export default function ProjectChat({
   if (collapsible && collapsed) {
     return (
       <div className={styles.collapsedBar} data-collapsed="true">
-        <button
-          type="button"
-          className={styles.railNub}
+        <PanelHandle
+          side="left"
+          expanded={false}
           onClick={() => setCollapsed(false)}
-          aria-label={`Expand ${title}`}
-          aria-expanded="false"
-        >
-          <RailChevron collapsed />
-          {streaming && <span className={styles.activityDot} aria-label="Advisor is responding" />}
-        </button>
+          label={`Expand ${title}`}
+        />
       </div>
     );
   }
@@ -314,6 +297,15 @@ export default function ProjectChat({
       className={[styles.chat, fullPage && styles.chatFullPage, isEmpty && styles.chatEmpty].filter(Boolean).join(' ')}
       data-collapsed="false"
     >
+      {collapsible && (
+        <PanelHandle
+          side="left"
+          expanded
+          onClick={() => setCollapsed(true)}
+          label={`Collapse ${title}`}
+          controlsId={panelId}
+        />
+      )}
       {!fullPage && (
         <div className={styles.header}>
           <div className={styles.headerCopy}>
@@ -331,18 +323,6 @@ export default function ProjectChat({
                 disabled={streaming || resetting}
               >
                 <RefreshIcon />
-              </button>
-            )}
-            {collapsible && (
-              <button
-                type="button"
-                className={styles.headerCollapse}
-                onClick={() => setCollapsed(true)}
-                aria-label={`Collapse ${title}`}
-                aria-expanded="true"
-                aria-controls={panelId}
-              >
-                <RailChevron collapsed={false} />
               </button>
             )}
           </div>

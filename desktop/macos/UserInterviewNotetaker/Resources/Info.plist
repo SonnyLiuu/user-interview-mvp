@@ -41,5 +41,9 @@
   <string>NSApplication</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>User Interview Notetaker needs microphone access to capture audio during live call sessions for real-time transcription.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>User Interview Notetaker needs Screen Recording access to capture system audio from calls for live transcription.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>User Interview Notetaker needs audio capture access to capture system audio from calls for live transcription.</string>
 </dict>
 </plist>

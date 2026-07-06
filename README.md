@@ -181,10 +181,6 @@ Default URLs:
 | `FOUNDRY_DESKTOP_API_PUBLIC_URL` | No | Public FastAPI base URL used by the Windows overlay for live SSE/WebSocket streams; falls back to `FOUNDRY_API_BASE_URL`. |
 | `FOUNDRY_OVERLAY_INSTALLER_URL` | No | Public URL for the signed Windows installer shown on `/download` and settings. |
 | `FOUNDRY_BACKEND_SHARED_SECRET` | Yes | Shared HMAC secret for Next -> FastAPI calls. |
-| `ZOOM_RTMS_ENABLED` | No | Enables Zoom RTMS integration; defaults to `false`. |
-| `ZOOM_RTMS_CLIENT_ID` | Required for Zoom RTMS | Zoom RTMS client ID. |
-| `ZOOM_RTMS_CLIENT_SECRET` | Required for Zoom RTMS | Zoom RTMS client secret. |
-| `ZOOM_RTMS_WEBHOOK_SECRET_TOKEN` | Required for Zoom RTMS | Zoom RTMS webhook secret token. |
 | `RECALL_API_KEY` | Required for Recall.ai | Recall.ai meeting bot API key. |
 | `RECALL_REGION` | No | Recall.ai region; defaults to `us-west-2`. |
 | `RECALL_WEBHOOK_SECRET` | No | Recall.ai webhook signing secret. |
@@ -217,10 +213,6 @@ Default URLs:
 | `GEMINI_WEB_SEARCH_MODEL` | No | Optional model override for ongoing-advisor web search; defaults to `GEMINI_MODEL`. |
 | `GEMINI_THINKING_LEVEL` | No | Optional Gemini thinking control. |
 | `AI_REQUEST_TIMEOUT_SECONDS` | No | AI provider request timeout in seconds; defaults to `45`. |
-| `ZOOM_RTMS_ENABLED` | No | Enables Zoom RTMS integration; defaults to `false`. |
-| `ZOOM_RTMS_CLIENT_ID` | Required for Zoom RTMS | Zoom RTMS client ID. |
-| `ZOOM_RTMS_CLIENT_SECRET` | Required for Zoom RTMS | Zoom RTMS client secret. |
-| `ZOOM_RTMS_WEBHOOK_SECRET_TOKEN` | Required for Zoom RTMS | Zoom RTMS webhook secret token. |
 | `RECALL_API_KEY` | Required for Recall.ai | Recall.ai meeting bot API key. |
 | `RECALL_REGION` | No | Recall.ai region; defaults to `us-west-2`. |
 | `RECALL_WEBHOOK_SECRET` | No | Recall.ai webhook signing secret. |
@@ -305,7 +297,7 @@ The highest-value next refactor target is `PersonDetailClient`, followed by `App
 - `FOUNDRY_BACKEND_SHARED_SECRET` matches in both services.
 - `npm run db:migrate` applied.
 - FastAPI deployed and reachable at `FOUNDRY_API_BASE_URL`.
-- FastAPI CORS origins updated for production in `services/api/app/config.py` or environment/config layer.
+- FastAPI CORS origins updated for production in `services/api/app/core/config.py` or environment/config layer.
 - Local verification passes:
 
 ```powershell

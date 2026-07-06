@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..project_modes import LEGACY_OUTREACH_TYPE_IDEA_VALIDATION, OUTREACH_TYPE_IDEA_VALIDATION
+from ..domain.project_modes import LEGACY_OUTREACH_TYPE_IDEA_VALIDATION, OUTREACH_TYPE_IDEA_VALIDATION
 
 
 async def list_for_startup(conn, startup_project_id: str):

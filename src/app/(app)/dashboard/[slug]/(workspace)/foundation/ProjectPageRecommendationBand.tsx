@@ -90,6 +90,12 @@ export default function ProjectPageRecommendationBand({
   const activeAlert = visibleAlerts[Math.min(activeIndex, alertCount - 1)];
   const hasMultipleAlerts = alertCount > 1;
 
+  function dismissAlert(alert: RecommendationBandAlert) {
+    window.localStorage.setItem(dismissedStorageKey(alert.id), 'true');
+    setDismissedAlertIds((current) => new Set(current).add(alert.id));
+    setActiveIndex((current) => Math.max(0, Math.min(current, alertCount - 2)));
+  }
+
   function goPrevious() {
     setActiveIndex((current) => (current - 1 + alertCount) % alertCount);
   }
@@ -194,17 +200,27 @@ export default function ProjectPageRecommendationBand({
               aria-hidden={index !== activeIndex}
             >
               <p className={styles.recommendationReason}>{alert.body}</p>
-              {alert.actionLabel && (alert.actionHref || alert.actionTargetId || alert.outreachAction) && (
+              <div className={styles.recommendationActions}>
+                {alert.actionLabel && (alert.actionHref || alert.actionTargetId || alert.outreachAction) && (
+                  <button
+                    type="button"
+                    className={styles.recommendationAction}
+                    tabIndex={index === activeIndex ? 0 : -1}
+                    onClick={() => runAlertAction(alert)}
+                    disabled={loadingActionId === alert.id}
+                  >
+                    {loadingActionId === alert.id ? 'Starting...' : alert.actionLabel}
+                  </button>
+                )}
                 <button
                   type="button"
-                  className={styles.recommendationAction}
+                  className={styles.recommendationDismiss}
                   tabIndex={index === activeIndex ? 0 : -1}
-                  onClick={() => runAlertAction(alert)}
-                  disabled={loadingActionId === alert.id}
+                  onClick={() => dismissAlert(alert)}
                 >
-                  {loadingActionId === alert.id ? 'Starting...' : alert.actionLabel}
+                  Dismiss
                 </button>
-              )}
+              </div>
             </article>
           ))}
         </div>

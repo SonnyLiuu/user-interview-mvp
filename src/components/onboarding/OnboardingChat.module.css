@@ -246,6 +246,25 @@
   color: #715b49;
 }
 
+.showSuggestionsBtn {
+  align-self: flex-start;
+  padding: 8px 16px;
+  background: transparent;
+  color: #a4532b;
+  border: 1px solid #d4bfa6;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 450;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms;
+}
+
+.showSuggestionsBtn:hover {
+  background: #f5eddf;
+  border-color: #b39472;
+}
+
 .choiceBtn {
   max-width: min(100%, 420px);
   padding: 10px 14px;

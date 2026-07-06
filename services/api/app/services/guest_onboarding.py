@@ -5,15 +5,15 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.encoders import jsonable_encoder
 
-from ..db import get_pool
-from ..errors import BadRequestError, NotFoundError
-from ..onboarding_engine import merge_slot_patch, normalize_onboarding_state
-from ..project_modes import OUTREACH_TYPE_IDEA_VALIDATION
+from ..core.db import get_pool
+from ..core.errors import BadRequestError, NotFoundError
+from ..domain.onboarding_engine import merge_slot_patch, normalize_onboarding_state
+from ..domain.project_modes import OUTREACH_TYPE_IDEA_VALIDATION
 from ..repositories import guest_onboarding as guest_repo
 from ..repositories import onboarding as onboarding_repo
 from ..repositories import outreach_projects as outreach_repo
 from ..repositories import projects as project_repo
-from ..utils import slugify
+from ..core.utils import slugify
 
 SESSION_TTL = timedelta(days=7)
 IP_WINDOW = timedelta(days=1)

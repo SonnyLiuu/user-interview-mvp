@@ -35,12 +35,21 @@ if [ -n "$IDENTITY" ]; then
     "$APP_DIR"
 fi
 
+# Stage the app next to an /Applications symlink for drag-to-install.
+STAGING_DIR="$DIST_DIR/dmg-staging"
+rm -rf "$STAGING_DIR"
+mkdir -p "$STAGING_DIR"
+cp -R "$APP_DIR" "$STAGING_DIR/"
+ln -s /Applications "$STAGING_DIR/Applications"
+
 hdiutil create \
   -volname "$APP_NAME" \
-  -srcfolder "$APP_DIR" \
+  -srcfolder "$STAGING_DIR" \
   -ov \
   -format UDZO \
   "$DMG_PATH"
+
+rm -rf "$STAGING_DIR"
 
 if [ -n "$IDENTITY" ]; then
   codesign --force --timestamp --sign "$IDENTITY" "$DMG_PATH"

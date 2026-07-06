@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from ..auth import AuthContext, GuestAuthContext, get_auth_context, get_guest_auth_context
+from ..core.auth import AuthContext, GuestAuthContext, get_auth_context, get_guest_auth_context
 from ..schemas import OnboardingChatRequest, OnboardingChatResponse
 from ..services import guest_onboarding as guest_service
 from ..services.onboarding import process_guest_onboarding_request

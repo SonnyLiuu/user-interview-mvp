@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.encoders import jsonable_encoder
 
-from ..db import get_pool
+from ..core.db import get_pool
 from ..repositories import projects as project_repo
 
 

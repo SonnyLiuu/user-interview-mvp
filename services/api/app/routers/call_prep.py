@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from ..auth import AuthContext, get_auth_context
+from ..core.auth import AuthContext, get_auth_context
 from ..services.call_prep import get_call_brief, refresh_call_brief
 
 router = APIRouter(prefix="/v1/people/{person_id}/call-brief", tags=["call-prep"])

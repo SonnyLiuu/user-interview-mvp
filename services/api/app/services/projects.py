@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from fastapi.encoders import jsonable_encoder
 
-from ..db import get_pool
-from ..errors import BadRequestError, NotFoundError
-from ..project_modes import is_creatable_project_type, is_valid_project_type, normalize_project_type
+from ..core.db import get_pool
+from ..core.errors import BadRequestError, NotFoundError
+from ..domain.project_modes import is_creatable_project_type, is_valid_project_type, normalize_project_type
 from ..repositories import projects as project_repo
-from ..utils import slugify
+from ..core.utils import slugify
 
 
 async def list_projects_for_user(user_id: str):

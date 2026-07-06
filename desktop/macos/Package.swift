@@ -8,8 +8,7 @@ let package = Package(
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "UserInterviewNotetaker", targets: ["UserInterviewNotetaker"]),
-        .executable(name: "UserInterviewNotetakerCoreSmokeTests", targets: ["UserInterviewNotetakerCoreSmokeTests"])
+        .executable(name: "UserInterviewNotetaker", targets: ["UserInterviewNotetaker"])
     ],
     targets: [
         .target(
@@ -22,18 +21,12 @@ let package = Package(
             path: "UserInterviewNotetaker",
             exclude: [
                 "Packaging",
-                "Resources/Info.plist",
-                "Resources/UserInterviewNotetaker.entitlements"
-            ],
-            resources: [
-                .copy("Resources/AppIcon.icns")
+                // Bundled into the .app by Packaging/build-dmg.sh, not SwiftPM.
+                "Resources"
             ]
         ),
-        .executableTarget(
-            name: "UserInterviewNotetakerCoreSmokeTests",
-            dependencies: ["UserInterviewNotetakerCore"],
-            path: "UserInterviewNotetakerCoreSmokeTests"
-        ),
+        // Plain executable rather than a test target: the Command Line Tools
+        // toolchain has no XCTest. Run with `swift run UserInterviewNotetakerTests`.
         .executableTarget(
             name: "UserInterviewNotetakerTests",
             dependencies: ["UserInterviewNotetakerCore"],

@@ -35,6 +35,7 @@ export default async function ProjectOnboardingPage({
       projectType={project.project_type}
       initialStage={lookup.foundationExists || !newProjectOnboardingChatEnabled ? 'name' : 'chat'}
       hasFoundation={lookup.foundationExists}
+      isDraft={project.slug === null && !lookup.foundationExists}
     />
   );
 }

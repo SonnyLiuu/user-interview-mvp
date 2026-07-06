@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         personId: body.personId,
-        captureProvider: body.captureProvider || 'zoom_rtms',
+        captureProvider: body.captureProvider || 'desktop_audio',
         zoomMeetingIdentifier,
       }),
       cache: 'no-store',

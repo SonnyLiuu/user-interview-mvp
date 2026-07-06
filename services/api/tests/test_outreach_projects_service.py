@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app.errors import BadRequestError, NotFoundError
+from app.core.errors import BadRequestError, NotFoundError
 from app.services import outreach_projects as outreach_project_service
 
 

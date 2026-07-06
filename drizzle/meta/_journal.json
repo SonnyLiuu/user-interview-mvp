@@ -148,6 +148,20 @@
       "when": 1782345600000,
       "tag": "0020_guest_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1782691200000,
+      "tag": "0021_live_call_sessions_desktop_audio_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783345464000,
+      "tag": "0022_drop_zoom_rtms",
+      "breakpoints": true
     }
   ]
 }

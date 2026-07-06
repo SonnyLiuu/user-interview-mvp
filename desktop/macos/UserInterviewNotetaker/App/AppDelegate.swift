@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, OverlayActionHandler {
     private var statusItem: NSStatusItem?
     private var overlayWindow: OverlayWindowController?
     private var pendingDeepLink: String?
-    private var authReturnMode: OverlayMode = .main
+    private var retryDeepLinkOnUnauthorized: String?
 
     override init() {
         sessionOrchestrator = SessionOrchestrator(viewModel: viewModel)
@@ -32,8 +32,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, OverlayActionHandler {
             self?.audioCoordinator.stop()
         }
         sessionOrchestrator.onUnauthorized = { [weak self] in
-            self?.clearAuth()
-            self?.openSignIn()
+            guard let self else { return }
+            let retryDeepLink = self.retryDeepLinkOnUnauthorized
+            self.retryDeepLinkOnUnauthorized = nil
+            self.clearAuth()
+            if let retryDeepLink {
+                self.pendingDeepLink = retryDeepLink
+            }
+            self.openSignIn()
         }
     }
 
@@ -131,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, OverlayActionHandler {
         guard let authToken = viewModel.authToken else { return }
         Task {
             await viewModel.loadPeople(
+                using: desktopAPI,
                 apiBaseUrl: viewModel.settings.normalizedApiBaseUrl,
                 authToken: authToken
             )
@@ -138,7 +145,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, OverlayActionHandler {
     }
 
     func selectPerson(_ person: DesktopPerson) {
+        // A picker-started session supersedes any deep link that failed
+        // earlier; a later 401 must not resurrect it.
+        retryDeepLinkOnUnauthorized = nil
         sessionOrchestrator.selectPerson(person)
+    }
+
+    func returnToPeopleList() {
+        sessionOrchestrator.returnToPeopleList()
     }
 
     func startMonitoring() {
@@ -178,7 +192,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, OverlayActionHandler {
     }
 
     func openSignIn() {
-        authReturnMode = viewModel.overlayMode == .settings ? .settings : .main
         viewModel.overlayMode = .signIn
         showOverlay()
         NSApp.activate(ignoringOtherApps: true)
@@ -234,6 +247,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, OverlayActionHandler {
 
     func dismissAuxiliary() {
         viewModel.overlayMode = .main
+        viewModel.savedCallSummary = nil
     }
 
     private func handleDeepLink(_ raw: String) {
@@ -255,13 +269,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, OverlayActionHandler {
             return
         }
 
-        // Update unauthorized handler to save the pending deep link for retry.
-        sessionOrchestrator.onUnauthorized = { [weak self] in
-            self?.clearAuth()
-            self?.pendingDeepLink = raw
-            self?.openSignIn()
-        }
-        sessionOrchestrator.startFromDeepLink(personId: personId, zoomMeetingIdentifier: link.zoomMeetingIdentifier)
+        retryDeepLinkOnUnauthorized = raw
+        sessionOrchestrator.startFromDeepLink(
+            personId: personId,
+            zoomMeetingIdentifier: link.zoomMeetingIdentifier,
+            onStarted: { [weak self] in
+                self?.retryDeepLinkOnUnauthorized = nil
+            }
+        )
     }
 
     func toggleTopic(_ topic: Topic) {
@@ -273,12 +288,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, OverlayActionHandler {
     }
 
     func reviewSession() {
-        sessionOrchestrator.stopSession()
-        viewModel.overlayMode = .review
+        sessionOrchestrator.prepareReviewSession()
     }
 
     func saveReviewedSession() {
-        sessionOrchestrator.saveSession()
+        sessionOrchestrator.saveSession(preserveCurrentTranscript: true)
     }
 
     /// Direct end (deep links / status bar) skips review.

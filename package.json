@@ -10,6 +10,7 @@
     "test:web": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.ts\"",
     "test:backend": "cd services/api && if [ -x .venv/bin/python ]; then .venv/bin/python -m unittest discover -s tests -p \"test_*.py\"; elif [ -x venv/bin/python ]; then venv/bin/python -m unittest discover -s tests -p \"test_*.py\"; else python3 -m unittest discover -s tests -p \"test_*.py\"; fi",
     "typecheck": "tsc --noEmit",
+    "package:mac": "sh desktop/macos/UserInterviewNotetaker/Packaging/build-dmg.sh",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:push": "drizzle-kit push"

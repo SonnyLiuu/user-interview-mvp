@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from app import auth as auth_service
-from app.errors import DatabaseUnavailableError
+from app.core import auth as auth_service
+from app.core.errors import DatabaseUnavailableError
 
 
 class _TimeoutAcquire:

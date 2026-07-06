@@ -4,7 +4,7 @@ import unittest
 
 from pydantic import TypeAdapter, ValidationError
 
-from app.onboarding_engine import (
+from app.domain.onboarding_engine import (
     choose_next_slot,
     empty_onboarding_state,
     is_onboarding_finishable,
@@ -12,7 +12,7 @@ from app.onboarding_engine import (
     merge_slot_patch,
     validate_choices,
 )
-from app.project_modes import (
+from app.domain.project_modes import (
     get_outreach_project_type_config,
     get_outreach_project_type_configs,
     get_fallback_turn,

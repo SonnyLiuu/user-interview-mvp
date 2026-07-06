@@ -6,9 +6,9 @@ from typing import AsyncIterator
 from fastapi.encoders import jsonable_encoder
 
 from ..ai import get_advisor_web_context, stream_intake_reply
-from ..db import get_pool
-from ..errors import NotFoundError
-from ..project_modes import normalize_project_type
+from ..core.db import get_pool
+from ..core.errors import NotFoundError
+from ..domain.project_modes import normalize_project_type
 from ..repositories import foundations as foundation_repo
 from ..repositories import intake as intake_repo
 from ..repositories import projects as project_repo

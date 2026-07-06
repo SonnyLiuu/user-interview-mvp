@@ -48,6 +48,67 @@
   gap: 12px;
 }
 
+.wideCard {
+  max-width: 640px;
+}
+
+.choices {
+  margin-top: 24px;
+  display: grid;
+  gap: 10px;
+}
+
+.choice {
+  width: 100%;
+  padding: 15px 17px;
+  border: 1px solid #ddccb7;
+  border-radius: 10px;
+  background: #fffdf8;
+  color: #3b2b1d;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.choice:hover { border-color: #c08a63; }
+
+.choiceSelected { border-color: #a4532b; background: #fce9dc; }
+
+.blurb {
+  margin-top: 24px;
+  padding: 22px;
+  border-left: 4px solid #a4532b;
+  border-radius: 0 10px 10px 0;
+  background: #f9efe4;
+}
+
+.blurb h2 { margin: 0 0 8px; font-size: 19px; color: #2e2115; }
+.blurb p { margin: 0; color: #604b38; line-height: 1.6; font-size: 14px; }
+
+.actions {
+  margin-top: 28px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.secondary {
+  min-height: 46px;
+  padding: 0 20px;
+  border: 1px solid #d7c4ad;
+  border-radius: 10px;
+  background: transparent;
+  color: #5e4936;
+  font: inherit;
+  font-weight: 480;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .modeGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -177,6 +238,14 @@
   }
 
   .button {
+    width: 100%;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .secondary {
     width: 100%;
   }
 }

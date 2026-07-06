@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from ..auth import AuthContext, get_auth_context
+from ..core.auth import AuthContext, get_auth_context
 from ..schemas import FoundationViewResponse, ProjectLookupResponse, WorkspaceSummaryResponse
 from ..services.workspace import get_foundation_view, get_project_lookup, get_workspace_summary, update_project_foundation
 

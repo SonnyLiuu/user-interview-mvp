@@ -160,6 +160,37 @@
   cursor: not-allowed;
 }
 
+.recommendationActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.recommendationActions .recommendationAction {
+  margin-top: 0;
+}
+
+.recommendationDismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid #d7c2aa;
+  border-radius: 6px;
+  background: transparent;
+  color: #66503c;
+  font-size: 13px;
+  font-weight: 520;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.recommendationDismiss:hover {
+  background: rgba(215, 194, 170, 0.22);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .recommendationTrack,
   .recommendationArrow {

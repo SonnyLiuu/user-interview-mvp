@@ -8,4 +8,3 @@ httpx==0.28.1
 pydantic-settings==2.9.1
 python-multipart==0.0.20
 webvtt-py==0.5.1
-# rtms; platform_system != "Windows"  # not available on macOS

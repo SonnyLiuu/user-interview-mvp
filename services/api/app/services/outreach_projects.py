@@ -6,16 +6,16 @@ from typing import AsyncIterator
 from fastapi.encoders import jsonable_encoder
 
 from ..ai import stream_intake_reply
-from ..db import get_pool
-from ..errors import BadRequestError, NotFoundError
-from ..outreach_onboarding_modes import (
+from ..core.db import get_pool
+from ..core.errors import BadRequestError, NotFoundError
+from ..domain.outreach_onboarding_modes import (
     extract_outreach_update,
     get_outreach_onboarding_mode,
     is_ready as is_outreach_onboarding_ready,
     merge_update as merge_outreach_onboarding_update,
     normalize_state as normalize_outreach_onboarding_state,
 )
-from ..project_modes import (
+from ..domain.project_modes import (
     LEGACY_OUTREACH_TYPE_IDEA_VALIDATION,
     OUTREACH_TYPE_IDEA_VALIDATION,
     PROJECT_TYPE_STARTUP,

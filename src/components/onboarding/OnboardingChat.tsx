@@ -128,6 +128,7 @@ export default function OnboardingChat({
   const [error, setError] = useState('');
   const [customText, setCustomText] = useState('');
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [kickoffText, setKickoffText] = useState('');
   const [finishingStatusIndex, setFinishingStatusIndex] = useState(0);
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -163,7 +164,7 @@ export default function OnboardingChat({
     if (shouldStickToBottomRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' });
     }
-  }, [messages, currentTurn, loading]);
+  }, [messages, currentTurn, loading, showSuggestions]);
 
   const applyResponse = useCallback((data: ChatResponse) => {
     setMessages(data.messages);
@@ -171,6 +172,7 @@ export default function OnboardingChat({
     setIsFinishable(data.isFinishable);
     setCustomText('');
     setSelectedChoiceIds([]);
+    setShowSuggestions(false);
     setError('');
     shouldStickToBottomRef.current = true;
 
@@ -439,26 +441,43 @@ export default function OnboardingChat({
         {/* Choices phase */}
         {phase === 'choices' && !submitting && currentTurn && (
           <div className={styles.choicesArea}>
-            <p className={styles.choiceIntro}>
-              Select suggestions to combine, or reference their numbers while you refine your answer below.
-            </p>
-            <div className={styles.choiceGrid}>
-              {currentTurn.choices.map((choice, index) => {
-                const selected = selectedChoiceIds.includes(choice.id);
-                return (
-                  <button
-                    key={choice.id}
-                    className={[styles.choiceBtn, selected && styles.choiceBtnSelected].filter(Boolean).join(' ')}
-                    onClick={() => toggleChoice(choice)}
-                    aria-pressed={selected}
-                    disabled={submitting}
-                  >
-                    <span className={styles.choiceNumber}>{index + 1}</span>
-                    <span>{choice.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {currentTurn.choices.length > 0 && (
+              showSuggestions ? (
+                <>
+                  <p className={styles.choiceIntro}>
+                    Select suggestions to combine, or reference their numbers while you refine your answer below.
+                  </p>
+                  <div className={styles.choiceGrid}>
+                    {currentTurn.choices.map((choice, index) => {
+                      const selected = selectedChoiceIds.includes(choice.id);
+                      return (
+                        <button
+                          key={choice.id}
+                          className={[styles.choiceBtn, selected && styles.choiceBtnSelected].filter(Boolean).join(' ')}
+                          onClick={() => toggleChoice(choice)}
+                          aria-pressed={selected}
+                          disabled={submitting}
+                        >
+                          <span className={styles.choiceNumber}>{index + 1}</span>
+                          <span>{choice.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.showSuggestionsBtn}
+                  onClick={() => {
+                    shouldStickToBottomRef.current = true;
+                    setShowSuggestions(true);
+                  }}
+                >
+                  Show suggestions
+                </button>
+              )
+            )}
 
             <div className={styles.customInputRow}>
               <textarea

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import asyncio
 import hashlib
 import hmac
@@ -14,17 +15,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from ..config import get_settings
-from ..db import get_pool
-from ..errors import BadRequestError, NotFoundError, UnauthorizedError
+from ..core.config import get_settings
+from ..core.db import get_pool
+from ..core.errors import BadRequestError, NotFoundError, UnauthorizedError
 from ..repositories import call_prep as call_prep_repo
 from ..repositories import people as people_repo
 from .call_prep import fallback_call_brief_content, normalize_call_brief_content
-from .project_context import normalize_json
-from .realtime_bridge import NormalizedTurn, RealtimeBridge, RestChecklistBridge
-from .recall_provider import (
-    create_recall_bot,
-)
+from ..domain.project_context import normalize_json
+from .realtime_bridge import ChecklistEvaluator, NormalizedTurn
 from .source_transcription_bridge import SourceTranscriptionBridge
 from .transcript_parser import apply_speaker_map, parse_transcript
 from .zoom_meetings import normalize_zoom_meeting_identifier
@@ -113,12 +111,9 @@ class LiveSessionState:
     person_name: str
     status: str
     started_at: str
-    capture_provider: str = "zoom_rtms"
+    capture_provider: str = "desktop_audio"
     audio_capture_enabled: bool = False
     zoom_meeting_identifier: str | None = None
-    zoom_meeting_id: str | None = None
-    zoom_meeting_uuid: str | None = None
-    rtms_stream_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     topics: list[LiveTopicState] = field(default_factory=list)
     ended_at: str | None = None
@@ -151,7 +146,7 @@ class LiveSessionState:
 
 
 _sessions: dict[str, LiveSessionState] = {}
-_bridges: dict[str, RealtimeBridge | RestChecklistBridge] = {}
+_bridges: dict[str, ChecklistEvaluator] = {}
 _transcription_bridges: dict[str, SourceTranscriptionBridge] = {}
 _event_queues: dict[str, list[asyncio.Queue[LiveSessionEvent]]] = {}
 
@@ -203,11 +198,19 @@ def _verify_live_session_token_payload(token: str) -> dict[str, Any]:
         payload_part.encode("utf-8"),
         hashlib.sha256,
     ).digest()
-    actual = _b64url_decode(signature_part)
+    try:
+        actual = _b64url_decode(signature_part)
+    except (ValueError, binascii.Error) as exc:
+        raise UnauthorizedError("Invalid live session token") from exc
     if not hmac.compare_digest(expected, actual):
         raise UnauthorizedError("Invalid live session token signature")
 
-    payload = json.loads(_b64url_decode(payload_part).decode("utf-8"))
+    try:
+        payload = json.loads(_b64url_decode(payload_part).decode("utf-8"))
+    except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
+        raise UnauthorizedError("Invalid live session token") from exc
+    if not isinstance(payload, dict):
+        raise UnauthorizedError("Invalid live session token")
     if payload.get("typ") != "desktop_live_session":
         raise UnauthorizedError("Invalid live session token type")
     if payload.get("exp", 0) < int(time.time()):
@@ -297,7 +300,7 @@ def _speaker_for_source(source: str) -> str:
         return "Founder"
     if source == "loopback":
         return "Interviewee"
-    if source in {"rtms", "zoom_rtms", "meeting_sdk", "external", "manual_upload", "recall_ai", "fireflies", "otter"}:
+    if source in {"external", "manual_upload"}:
         return "Speaker"
     return "Unknown"
 
@@ -310,7 +313,7 @@ def format_transcript(session: LiveSessionState) -> str:
 
 def _capture_provider(value: str | None) -> str:
     provider = (value or "desktop_audio").strip().lower()
-    if provider not in {"zoom_rtms", "desktop_audio", "manual_upload", "recall_ai", "fireflies", "otter"}:
+    if provider not in {"desktop_audio", "manual_upload"}:
         raise BadRequestError("Unsupported capture provider")
     return provider
 
@@ -354,12 +357,9 @@ def _session_from_row(row: Any, turns: list[LiveTranscriptTurn]) -> LiveSessionS
         person_name=row["person_name"] or "Unnamed person",
         status=row["status"] or "active",
         started_at=started_at,
-        capture_provider=row["capture_provider"] or "zoom_rtms",
+        capture_provider=row["capture_provider"] or "desktop_audio",
         audio_capture_enabled=(row["capture_provider"] == "desktop_audio"),
         zoom_meeting_identifier=row["zoom_meeting_identifier"],
-        zoom_meeting_id=row["zoom_meeting_id"],
-        zoom_meeting_uuid=row["zoom_meeting_uuid"],
-        rtms_stream_id=row["rtms_stream_id"],
         metadata=normalize_json(row["metadata"]) or {},
         topics=topics,
         ended_at=ended_at,
@@ -422,17 +422,13 @@ async def _persist_session(session: LiveSessionState) -> None:
             """
             insert into live_call_sessions (
                 id, user_id, person_id, status, capture_provider,
-                zoom_meeting_identifier, zoom_meeting_id, zoom_meeting_uuid,
-                rtms_stream_id, topics_json, metadata, started_at, ended_at, updated_at
+                zoom_meeting_identifier, topics_json, metadata, started_at, ended_at, updated_at
             )
-            values ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::timestamptz, $13::timestamptz, now())
+            values ($1::uuid, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::timestamptz, $10::timestamptz, now())
             on conflict (id) do update set
                 status = excluded.status,
                 capture_provider = excluded.capture_provider,
                 zoom_meeting_identifier = excluded.zoom_meeting_identifier,
-                zoom_meeting_id = excluded.zoom_meeting_id,
-                zoom_meeting_uuid = excluded.zoom_meeting_uuid,
-                rtms_stream_id = excluded.rtms_stream_id,
                 topics_json = excluded.topics_json,
                 metadata = excluded.metadata,
                 ended_at = excluded.ended_at,
@@ -444,9 +440,6 @@ async def _persist_session(session: LiveSessionState) -> None:
             session.status,
             session.capture_provider,
             session.zoom_meeting_identifier,
-            session.zoom_meeting_id,
-            session.zoom_meeting_uuid,
-            session.rtms_stream_id,
             json.dumps([topic.to_dict() for topic in session.topics]),
             json.dumps(session.metadata),
             _parse_iso(session.started_at),
@@ -498,7 +491,6 @@ async def start_live_session(
     *,
     capture_provider: str = "desktop_audio",
     zoom_meeting_identifier: str | None = None,
-    meeting_url: str | None = None,
 ) -> dict:
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -514,9 +506,6 @@ async def start_live_session(
 
     provider = _capture_provider(capture_provider)
     normalized_zoom_meeting_identifier = normalize_zoom_meeting_identifier(zoom_meeting_identifier)
-    # Only desktop_audio enables local mic+loopback capture.
-    # All other providers (zoom_rtms, manual_upload, recall_ai, fireflies, otter)
-    # receive transcript turns through their own ingestion paths.
     session = LiveSessionState(
         session_id=str(uuid.uuid4()),
         user_id=user_id,
@@ -527,7 +516,6 @@ async def start_live_session(
         capture_provider=provider,
         audio_capture_enabled=provider == "desktop_audio" and _checklist_provider() != "mock",
         zoom_meeting_identifier=normalized_zoom_meeting_identifier,
-        zoom_meeting_id=normalized_zoom_meeting_identifier if normalized_zoom_meeting_identifier and normalized_zoom_meeting_identifier.isdigit() else None,
         topics=_topics_from_call_brief(content),
     )
     _sessions[session.session_id] = session
@@ -541,25 +529,6 @@ async def start_live_session(
     _start_realtime_bridge(session)
     if session.audio_capture_enabled:
         _start_transcription_bridge(session)
-
-    # Recall.ai: create a bot that joins the meeting
-    if provider == "recall_ai" and meeting_url:
-        try:
-            bot = await create_recall_bot(meeting_url)
-            bot_id = bot.get("id") or ""
-            session.metadata["recall"] = {
-                "botId": bot_id,
-                "meetingUrl": meeting_url,
-                "status": bot.get("status", "creating"),
-            }
-            logger.info("Recall bot %s created for session %s", bot_id, session.session_id)
-            await _persist_session(session)
-        except Exception as exc:
-            logger.exception("Recall bot creation failed for session %s", session.session_id)
-            session.metadata["recall"] = {
-                "error": str(exc),
-                "meetingUrl": meeting_url,
-            }
 
     token = sign_live_session_token(session)
     return session.to_dict(include_token=token)
@@ -782,169 +751,13 @@ async def end_live_session(session_id: str, live_token: str) -> dict:
     }
 
 
-async def ingest_rtms_transcript_turn(
-    session_id: str,
-    *,
-    speaker: str | None,
-    text: str,
-    external_turn_id: str | None = None,
-) -> None:
-    session = _sessions.get(session_id) or await _load_session_from_db(session_id)
-    if not session:
-        raise NotFoundError("Live session not found")
-    if session.status != "active":
-        return
-    _sessions[session.session_id] = session
-    _ensure_active_session_runtime(session)
-    await _handle_transcript_turn(
-        session,
-        "zoom_rtms",
-        text,
-        speaker=speaker,
-        external_turn_id=external_turn_id,
-    )
-
-
-async def bind_zoom_rtms_stream(
-    *,
-    zoom_meeting_id: str | None,
-    zoom_meeting_uuid: str | None,
-    rtms_stream_id: str | None,
-    metadata: dict[str, Any] | None = None,
-) -> LiveSessionState | None:
-    normalized_id = normalize_zoom_meeting_identifier(zoom_meeting_id)
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            select lcs.*, p.name as person_name
-            from live_call_sessions lcs
-            left join people p on p.id = lcs.person_id
-            where lcs.status = 'active'
-              and lcs.capture_provider = 'zoom_rtms'
-              and (
-                ($1::text is not null and (lcs.zoom_meeting_id = $1 or lcs.zoom_meeting_identifier = $1))
-                or ($2::text is not null and lcs.zoom_meeting_uuid = $2)
-              )
-            order by lcs.started_at desc
-            limit 1
-            """,
-            normalized_id,
-            zoom_meeting_uuid,
-        )
-        if not row:
-            return None
-        await conn.execute(
-            """
-            update live_call_sessions
-            set zoom_meeting_id = coalesce($2, zoom_meeting_id),
-                zoom_meeting_uuid = coalesce($3, zoom_meeting_uuid),
-                rtms_stream_id = coalesce($4, rtms_stream_id),
-                metadata = coalesce(metadata, '{}'::jsonb) || $5::jsonb,
-                updated_at = now()
-            where id = $1::uuid
-            """,
-            str(row["id"]),
-            normalized_id,
-            zoom_meeting_uuid,
-            rtms_stream_id,
-            json.dumps(metadata or {}),
-        )
-        turn_rows = await conn.fetch(
-            """
-            select * from live_transcript_turns
-            where live_session_id = $1::uuid
-            order by created_at asc, id asc
-            """,
-            str(row["id"]),
-        )
-    session = _sessions.get(str(row["id"]))
-    if not session:
-        session = _session_from_row(row, [_turn_from_row(turn) for turn in turn_rows])
-    session.zoom_meeting_id = normalized_id or session.zoom_meeting_id
-    session.zoom_meeting_uuid = zoom_meeting_uuid or session.zoom_meeting_uuid
-    session.rtms_stream_id = rtms_stream_id or session.rtms_stream_id
-    session.metadata = {**session.metadata, **(metadata or {})}
-    _sessions[session.session_id] = session
-    _ensure_active_session_runtime(session)
-    return session
-
-
-async def record_unbound_zoom_rtms_event(
-    *,
-    event_type: str,
-    zoom_meeting_id: str | None,
-    zoom_meeting_uuid: str | None,
-    rtms_stream_id: str | None,
-    payload: dict[str, Any],
-) -> None:
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            insert into zoom_rtms_unbound_events (
-                event_type, zoom_meeting_id, zoom_meeting_uuid, rtms_stream_id, payload
-            )
-            values ($1, $2, $3, $4, $5::jsonb)
-            """,
-            event_type,
-            normalize_zoom_meeting_identifier(zoom_meeting_id),
-            zoom_meeting_uuid,
-            rtms_stream_id,
-            json.dumps(payload),
-        )
-
-
-async def mark_zoom_rtms_stream_stopped(
-    *,
-    zoom_meeting_id: str | None,
-    zoom_meeting_uuid: str | None,
-    rtms_stream_id: str | None,
-) -> None:
-    normalized_id = normalize_zoom_meeting_identifier(zoom_meeting_id)
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            update live_call_sessions
-            set metadata = coalesce(metadata, '{}'::jsonb) || $4::jsonb,
-                updated_at = now()
-            where capture_provider = 'zoom_rtms'
-              and status = 'active'
-              and (
-                ($1::text is not null and (zoom_meeting_id = $1 or zoom_meeting_identifier = $1))
-                or ($2::text is not null and zoom_meeting_uuid = $2)
-                or ($3::text is not null and rtms_stream_id = $3)
-              )
-            """,
-            normalized_id,
-            zoom_meeting_uuid,
-            rtms_stream_id,
-            json.dumps({"rtmsStoppedAt": _now_iso()}),
-        )
-
-
 def _start_realtime_bridge(session: LiveSessionState) -> None:
     _set_realtime_status(session, "starting", None)
-    provider = _checklist_provider()
-    if provider in {"openai", "azure"}:
-        bridge = RealtimeBridge(
-            session,
-            on_tool_call=lambda name, args: _handle_realtime_tool_call(session, name, args),
-            on_status=lambda status, error: _set_realtime_status(session, status, error),
-        )
-    else:
-        logger.warning(
-            "Using REST checklist bridge for session=%s provider=%s "
-            "(WebSocket realtime only supports openai/azure)",
-            session.session_id,
-            provider,
-        )
-        bridge = RestChecklistBridge(
-            session,
-            on_tool_call=lambda name, args: _handle_realtime_tool_call(session, name, args),
-            on_status=lambda status, error: _set_realtime_status(session, status, error),
-        )
+    bridge = ChecklistEvaluator(
+        session,
+        on_tool_call=lambda name, args: _handle_realtime_tool_call(session, name, args),
+        on_status=lambda status, error: _set_realtime_status(session, status, error),
+    )
     _bridges[session.session_id] = bridge
     bridge.start()
 
@@ -1061,7 +874,7 @@ def _normalize_turn(
     """Convert a raw transcript turn into a provider-agnostic NormalizedTurn."""
     import time as _time
     return NormalizedTurn(
-        provider=capture_provider or "zoom_rtms",
+        provider=capture_provider or "desktop_audio",
         speaker_label=speaker_label,
         text=text,
         timestamp_ms=int(_time.time() * 1000),
@@ -1322,212 +1135,4 @@ def _reject_tool_call(
         "accepted": False,
         "reason": reason,
         "topic": topic.to_dict() if topic else None,
-    }
-
-
-async def _remember_provider_reference(
-    session: LiveSessionState,
-    provider: str,
-    key: str,
-    value: str,
-) -> None:
-    if not value:
-        return
-    if not isinstance(session.metadata, dict):
-        session.metadata = {}
-
-    provider_meta = session.metadata.get(provider)
-    if not isinstance(provider_meta, dict):
-        provider_meta = {}
-    provider_meta[key] = value
-    session.metadata[provider] = provider_meta
-    await _persist_session(session)
-
-
-async def _ingest_provider_turns(
-    session: LiveSessionState,
-    *,
-    source: str,
-    turns: list[dict[str, Any]],
-) -> int:
-    ingested = 0
-    for turn in turns:
-        text = _clean_arg(turn.get("text"))
-        if not text:
-            continue
-        recorded_turn = await _handle_transcript_turn(
-            session,
-            source=source,
-            transcript=text,
-            speaker=_clean_arg(turn.get("speaker")) or "Speaker",
-            external_turn_id=turn.get("external_turn_id"),
-        )
-        if recorded_turn is not None:
-            ingested += 1
-    return ingested
-
-
-def _find_session_by_provider_reference(
-    provider: str,
-    key: str,
-    value: str,
-) -> LiveSessionState | None:
-    for session in _sessions.values():
-        provider_meta = session.metadata.get(provider) if isinstance(session.metadata, dict) else None
-        if isinstance(provider_meta, dict) and provider_meta.get(key) == value:
-            return session
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Recall.ai integration
-# ---------------------------------------------------------------------------
-
-
-def find_session_by_bot_id(bot_id: str) -> LiveSessionState | None:
-    """Find the in-memory live session that owns a Recall.ai bot."""
-    return _find_session_by_provider_reference("recall", "botId", bot_id)
-
-
-async def recall_webhook_ingest(payload: dict[str, Any]) -> None:
-    """Ingest a Recall.ai webhook event into the matching live session.
-
-    Handles:
-    - bot.status_change: updates session metadata with bot status
-    - transcript.data: parses and ingests transcript turns
-    """
-    from .recall_provider import parse_recall_transcript
-
-    event_type = (payload.get("event") or "").lower()
-    data = payload.get("data") or {}
-    bot_id = data.get("bot_id") or data.get("botId") or payload.get("bot_id") or ""
-
-    session = find_session_by_bot_id(bot_id)
-    if not session:
-        logger.warning("Recall webhook: no active session found for bot=%s event=%s", bot_id, event_type)
-        return
-
-    if session.status != "active":
-        logger.info("Recall webhook: session %s is not active, ignoring event=%s", session.session_id, event_type)
-        return
-
-    if event_type == "bot.status_change":
-        new_status = data.get("status") or data.get("current_status") or ""
-        recall_meta = session.metadata.get("recall") if isinstance(session.metadata, dict) else {}
-        if isinstance(recall_meta, dict):
-            recall_meta["status"] = new_status
-            session.metadata["recall"] = recall_meta
-        logger.info(
-            "Recall bot status_change session=%s bot=%s status=%s",
-            session.session_id,
-            bot_id,
-            new_status,
-        )
-        await _persist_session(session)
-        return
-
-    if event_type == "transcript.data":
-        turns = parse_recall_transcript(data)
-        ingested = await _ingest_provider_turns(session, source="recall_ai", turns=turns)
-        logger.info(
-            "Recall transcript.data session=%s turns=%s ingested=%s",
-            session.session_id,
-            len(turns),
-            ingested,
-        )
-        return
-
-    # Unhandled event types: silently acknowledge
-    logger.debug("Recall webhook: unhandled event=%s for session=%s", event_type, session.session_id)
-
-
-# ---------------------------------------------------------------------------
-# Fireflies.ai integration
-# ---------------------------------------------------------------------------
-
-
-def find_session_by_fireflies_meeting(meeting_id: str) -> LiveSessionState | None:
-    """Find the in-memory live session that tracks a Fireflies meeting."""
-    return _find_session_by_provider_reference("fireflies", "meetingId", meeting_id)
-
-
-async def ingest_fireflies_webhook_turns(meeting_id: str, turns: list[dict[str, Any]]) -> int | None:
-    session = find_session_by_fireflies_meeting(meeting_id)
-    if not session or session.status != "active":
-        return None
-    return await _ingest_provider_turns(session, source="fireflies", turns=turns)
-
-
-async def fireflies_ingest_turns(
-    session_id: str,
-    live_token: str,
-    *,
-    turns: list[dict[str, Any]],
-    meeting_id: str = "",
-) -> dict[str, Any]:
-    """Ingest parsed Fireflies turns into a live session.
-
-    Called by the Fireflies import endpoint and webhook handler.
-    """
-    session = await _require_session_for_token(session_id, live_token, active=True)
-
-    # Store meeting reference for future webhook lookups
-    await _remember_provider_reference(session, "fireflies", "meetingId", meeting_id)
-    ingested = await _ingest_provider_turns(session, source="fireflies", turns=turns)
-
-    logger.info(
-        "Fireflies ingest session=%s meeting=%s turns=%s ingested=%s",
-        session.session_id,
-        meeting_id,
-        len(turns),
-        ingested,
-    )
-
-    return {
-        "sessionId": session.session_id,
-        "turnsIngested": ingested,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Otter.ai integration
-# ---------------------------------------------------------------------------
-
-
-def find_session_by_otter_speech(speech_id: str) -> LiveSessionState | None:
-    """Find the in-memory live session that tracks an Otter speech."""
-    return _find_session_by_provider_reference("otter", "speechId", speech_id)
-
-
-async def ingest_otter_webhook_turns(speech_id: str, turns: list[dict[str, Any]]) -> int | None:
-    session = find_session_by_otter_speech(speech_id)
-    if not session or session.status != "active":
-        return None
-    return await _ingest_provider_turns(session, source="otter", turns=turns)
-
-
-async def otter_ingest_turns(
-    session_id: str,
-    live_token: str,
-    *,
-    turns: list[dict[str, Any]],
-    speech_id: str = "",
-) -> dict[str, Any]:
-    """Ingest parsed Otter turns into a live session."""
-    session = await _require_session_for_token(session_id, live_token, active=True)
-
-    await _remember_provider_reference(session, "otter", "speechId", speech_id)
-    ingested = await _ingest_provider_turns(session, source="otter", turns=turns)
-
-    logger.info(
-        "Otter ingest session=%s speech=%s turns=%s ingested=%s",
-        session.session_id,
-        speech_id,
-        len(turns),
-        ingested,
-    )
-
-    return {
-        "sessionId": session.session_id,
-        "turnsIngested": ingested,
     }

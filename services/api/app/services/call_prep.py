@@ -5,14 +5,14 @@ from copy import deepcopy
 from fastapi.encoders import jsonable_encoder
 
 from ..ai import generate_call_brief
-from ..db import get_pool
-from ..error_codes import FOUNDATION_REQUIRED
-from ..errors import BadRequestError, NotFoundError
+from ..core.db import get_pool
+from ..core.errors import FOUNDATION_REQUIRED
+from ..core.errors import BadRequestError, NotFoundError
 from ..repositories import call_prep as call_prep_repo
 from ..repositories import foundations as foundation_repo
 from ..repositories import outreach_projects as outreach_project_repo
 from ..repositories import people as people_repo
-from .project_context import apply_idea_validation_brief, foundation_to_project_context, normalize_json
+from ..domain.project_context import apply_idea_validation_brief, foundation_to_project_context, normalize_json
 
 
 FALLBACK_CALL_BRIEF = {
