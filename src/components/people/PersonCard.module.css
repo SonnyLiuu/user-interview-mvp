@@ -112,6 +112,85 @@
   font-size: 11px;
   color: #b89c84;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 36px);
+}
+
+.loadingSpinner {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid #e8d9c4;
+  border-top-color: #b89c84;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.tickerText {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: tickerIn 260ms ease;
+}
+
+@keyframes tickerIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Phase progress — creeps during crawl, jumps ahead once analysis starts */
+.progressTrack {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #f5ede3;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  width: 45%;
+  border-radius: 0 2px 2px 0;
+  background: linear-gradient(90deg, #d9b98f, #c5975e);
+  animation: progressCreep 30s ease-out forwards;
+  transition: width 600ms ease;
+  position: relative;
+}
+
+.progressFill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 253, 248, 0.55), transparent);
+  animation: progressSheen 1.6s ease-in-out infinite;
+}
+
+.progressAnalyzing {
+  width: 85%;
+  animation: progressCreepLate 40s ease-out forwards;
+}
+
+@keyframes progressCreep {
+  from { width: 8%; }
+  to   { width: 55%; }
+}
+
+@keyframes progressCreepLate {
+  from { width: 62%; }
+  to   { width: 92%; }
+}
+
+@keyframes progressSheen {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 /* ── Error ───────────────────────────────────────────────────────────────── */

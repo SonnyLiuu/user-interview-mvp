@@ -60,18 +60,33 @@ def choose_next_slot(state: dict, project_type: str = "startup") -> str | None:
     for key in slot_order:
         if key not in required_slots and state["completeness"][key] == "missing":
             return key
+    for key in slot_order:
+        if (
+            key not in required_slots
+            and state["completeness"][key] == "weak"
+            and state["followUpCounts"].get(key, 0) < 1
+        ):
+            return key
     return None
+
+
+# Finish requires most required slots to be genuinely solid, not just present.
+# Slots that stay weak after their one follow-up probe count as exhausted so a
+# vague founder can still finish instead of dead-ending with no next question.
+FINISH_SOLID_REQUIRED_COUNT = 5
 
 
 def is_onboarding_finishable(state: dict, project_type: str = "startup") -> bool:
     required_slots = get_required_slots(project_type)
     solid_count = len([key for key in required_slots if state["completeness"][key] == "solid"])
     none_missing = all(state["completeness"][key] != "missing" for key in required_slots)
-    weak_slots_probed = all(
-        state["completeness"][key] != "weak" or state["followUpCounts"].get(key, 0) >= 1
+    all_exhausted = all(
+        state["completeness"][key] == "solid"
+        or (state["completeness"][key] == "weak" and state["followUpCounts"].get(key, 0) >= 1)
         for key in required_slots
     )
-    return none_missing and (solid_count >= 3 or weak_slots_probed)
+    solid_threshold = min(FINISH_SOLID_REQUIRED_COUNT, len(required_slots))
+    return none_missing and (solid_count >= solid_threshold or all_exhausted)
 
 
 def merge_slot_patch(state: dict, slot_key: str, value, quality: str, project_type: str = "startup") -> dict:

@@ -59,10 +59,10 @@ async def _get_context(user_id: str | None, project_id: str, *, guest: bool = Fa
     return project, session, state, chat_history, last_turn
 
 
-async def _generate_turn(state: dict, chat_history: list[dict], project_type: str) -> dict:
+async def _generate_turn(state: dict, chat_history: list[dict], project_type: str) -> dict | None:
     next_slot = choose_next_slot(state, project_type)
     if not next_slot:
-        raise BadRequestError("No next slot")
+        return None
     message_pairs = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history]
     try:
         result = await generate_next_question(next_slot, message_pairs, state, project_type)
@@ -198,7 +198,10 @@ async def _persist_state_and_next_turn(
     project_type: str,
 ) -> dict:
     finishable = is_onboarding_finishable(state, project_type)
-    current_turn = None if finishable else await _generate_turn(state, chat_history, project_type)
+    # Keep asking remaining questions (weak probes, optional slots) even once
+    # finishable; the UI offers finish alongside the question so the founder
+    # chooses between a quick Foundation and a sharper one.
+    current_turn = await _generate_turn(state, chat_history, project_type)
     next_status = "ready" if finishable else "active"
 
     pool = get_pool()
@@ -236,13 +239,13 @@ async def process_onboarding_request(
 
         current_turn = last_turn
         finishable = is_onboarding_finishable(state, project_type)
-        if not current_turn and not finishable and len(chat_history) > 1:
+        if not current_turn and len(chat_history) > 1:
             current_turn = await _generate_turn(state, chat_history, project_type)
             async with pool.acquire() as conn:
-                await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, "active")
+                await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, "ready" if finishable else "active")
         elif finishable:
             async with pool.acquire() as conn:
-                await onboarding_repo.persist_session_turn(conn, session["id"], None, "ready")
+                await onboarding_repo.persist_session_turn(conn, session["id"], current_turn, "ready")
 
         status = "ready" if finishable else (session["status"] or "active")
         return _chat_response(chat_history, current_turn, finishable, status)

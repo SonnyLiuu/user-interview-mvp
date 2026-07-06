@@ -59,7 +59,7 @@ export function CallBriefSection({ personId, slug, stage, initialPrep }: {
   if (!loading && !prep && !error && stage !== 'scheduled') return null;
 
   return (
-    <section id="call-brief" className={styles.section}>
+    <section id="call-brief" className={`${styles.section} ${styles.sectionCard}`}>
       <div className={styles.callBriefHeader}>
         <h2 className={styles.sectionTitle}>Call brief</h2>
         {prep && (

@@ -46,7 +46,7 @@ Research only the recipient background necessary for the outreach. The sender's 
 
 For summary: write one sentence naming the outreach angle, not a career summary.
 For key_insights: write 1-3 useful personalization hooks. Prefer lightweight hooks over comprehensive background.
-For recommended_questions: write message notes or conversation openers the sender could use with this specific person. Make them brief and grounded in the outreach goal.
+For approach_angles: write message notes or conversation openers the sender could use with this specific person. Make them brief and grounded in the outreach goal.
 For risk_factors: write details to avoid mentioning or reasons personalization may be weak.
 For why_they_matter: write compact card copy for the people page. Use 8-16 words, one sentence, no name, no company, no caveats. State the concrete outreach/interview value, like "Useful for pressure-testing market assumptions before scaling outreach."
 For sections: produce mode-specific profile sections for the UI:
@@ -96,10 +96,11 @@ ${analysisContent}
 
 Analyze this person's relevance to the founder's idea validation goals. Be honest and specific — do not inflate relevance. If this person is genuinely a weak match, say so.
 
-For recommended_questions: write questions the founder could ask this specific person that would validate or invalidate the project's key assumptions. Make them conversational and concrete, not generic.
-- Ask neutral questions about recent, specific behavior, existing workflows, past decisions, and current workarounds.
-- Do not ask leading solution-validation questions that embed the assumed pain or invite agreement with the proposed value.
-- Avoid questions like "Have you ever abandoned reaching out to a promising contact because finding enough relevant context took too long?" Instead ask for the last time they considered reaching out to someone and what they did to prepare.
+For approach_angles: write 3-5 concrete angles for how the founder should approach this conversation. Each angle should name the topic to explore and why this person's background makes it worth exploring.
+- Focus on learning angles, not fully scripted questions.
+- Ground each angle in recent behavior, existing workflows, past decisions, current workarounds, or relevant judgment this person can offer.
+- Do not frame angles around pitching the proposed solution or getting agreement with the assumed pain.
+- Prefer angles like "Explore how they prepared for the last high-stakes outreach sequence and where context gathering broke down" over yes/no validation prompts.
 For why_they_matter: write compact card copy for the people page. Use 8-16 words, one sentence, no name, no company, no caveats. State the concrete interview value, like "Strong fit for workflow pain and current workaround research."
 
 For contact_info: extract any email, Twitter/X handle, LinkedIn URL, or personal website found in the source material. Only include what is actually present.
@@ -143,7 +144,7 @@ Important: Do not assign low relevance solely because the person is not the exac
 
   const analysis = await generateObject<PersonAnalysis>(prompt, {
     type: 'object',
-    required: ['name', 'summary', 'relevance_rank', 'why_they_matter', 'key_insights', 'recommended_questions'],
+    required: ['name', 'summary', 'relevance_rank', 'why_they_matter', 'key_insights', 'approach_angles'],
     properties: {
       name: {
         type: 'string',
@@ -207,12 +208,12 @@ Important: Do not assign low relevance solely because the person is not the exac
         items: { type: 'string' },
         description: isNetworking ? '1-3 lightweight personalization hooks useful for outreach.' : 'Bullet points of what was learned about this person from the crawled content.',
       },
-      recommended_questions: {
+      approach_angles: {
         type: 'array',
         items: { type: 'string' },
         description: isNetworking
-          ? 'Specific questions or openers to use with this person.'
-          : 'Neutral, recent-behavior questions that test key project assumptions without leading the person or pitching the proposed value.',
+          ? 'Specific message angles, notes, or conversation openers to use with this person.'
+          : 'Concrete conversation angles grounded in this person\'s background and the project assumptions. These are topics to explore, not scripted questions.',
       },
       risk_factors: {
         type: 'array',

@@ -19,7 +19,7 @@ type ProjectModeConfig = {
   personSections: {
     summary: string;
     keyInsights: string;
-    recommendedQuestions: string;
+    approachAngles: string;
     riskFactors: string;
   };
 };
@@ -39,9 +39,9 @@ export const PROJECT_MODE_CONFIGS: Record<ProjectType, ProjectModeConfig> = {
       { key: 'differentiation', label: 'Differentiation', placeholder: 'What makes this different from existing solutions?', kind: 'text' },
     ],
     personSections: {
-      summary: 'Summary',
+      summary: 'Background',
       keyInsights: 'Key insights',
-      recommendedQuestions: 'Questions to ask',
+      approachAngles: 'Approach angles',
       riskFactors: 'Reasons to be cautious',
     },
   },
@@ -70,7 +70,7 @@ export const PROJECT_MODE_CONFIGS: Record<ProjectType, ProjectModeConfig> = {
     personSections: {
       summary: 'Outreach Angle',
       keyInsights: 'Useful Personalization',
-      recommendedQuestions: 'Message Notes',
+      approachAngles: 'Message Notes',
       riskFactors: 'Avoid Mentioning',
     },
   },

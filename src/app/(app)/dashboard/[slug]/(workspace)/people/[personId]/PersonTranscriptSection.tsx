@@ -16,21 +16,30 @@ export function TranscriptSection({ personId, stage, initialTranscripts }: Trans
   const [content, setContent] = useState('');
   const [type, setType] = useState<'call' | 'message'>('call');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!content.trim()) return;
     setSaving(true);
-    const res = await fetch(`/api/people/${personId}/transcripts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, type }),
-    });
-    setSaving(false);
-    if (res.ok) {
+    setError(null);
+    try {
+      const res = await fetch(`/api/people/${personId}/transcripts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, type }),
+      });
+      if (!res.ok) {
+        setError('Could not save the transcript. Please try again.');
+        return;
+      }
       const created = await res.json() as Transcript;
       setTranscripts((prev) => [created, ...prev]);
       setContent('');
+    } catch {
+      setError('Could not save the transcript. Check your connection and try again.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -71,6 +80,7 @@ export function TranscriptSection({ personId, stage, initialTranscripts }: Trans
               onChange={(e) => setContent(e.target.value)}
               rows={6}
             />
+            {error && <p className={styles.transcriptError} role="alert">{error}</p>}
             <button type="submit" className={styles.actionBtn} disabled={saving || !content.trim()}>
               {saving ? 'Saving…' : 'Save'}
             </button>

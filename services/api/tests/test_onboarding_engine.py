@@ -51,7 +51,7 @@ class OnboardingEngineTests(unittest.TestCase):
         state["followUpCounts"]["ideaSummary"] = 1
         self.assertEqual(choose_next_slot(state, "startup"), "targetUser")
 
-    def test_finishability_allows_three_solid_required_slots(self):
+    def test_finishability_requires_five_solid_required_slots(self):
         state = empty_onboarding_state("startup")
         for key in ["startupName", "ideaSummary", "targetUser"]:
             state["completeness"][key] = "solid"
@@ -60,7 +60,44 @@ class OnboardingEngineTests(unittest.TestCase):
             state["completeness"][key] = "weak"
             state[key] = [key] if key == "idealPeopleTypes" else key
 
+        self.assertFalse(is_onboarding_finishable(state, "startup"))
+
+        for key in ["painPoint", "valueProp"]:
+            state["completeness"][key] = "solid"
         self.assertTrue(is_onboarding_finishable(state, "startup"))
+
+    def test_finishability_allows_weak_slots_after_their_follow_up_probe(self):
+        state = empty_onboarding_state("startup")
+        for key in ["startupName", "ideaSummary", "targetUser"]:
+            state["completeness"][key] = "solid"
+            state[key] = key
+        for key in ["painPoint", "valueProp", "idealPeopleTypes", "biggestBottleneck"]:
+            state["completeness"][key] = "weak"
+            state[key] = [key] if key == "idealPeopleTypes" else key
+
+        self.assertFalse(is_onboarding_finishable(state, "startup"))
+
+        for key in ["painPoint", "valueProp", "idealPeopleTypes", "biggestBottleneck"]:
+            state["followUpCounts"][key] = 1
+        self.assertTrue(is_onboarding_finishable(state, "startup"))
+
+    def test_weak_optional_slot_gets_one_probe_after_required_and_missing_optional(self):
+        state = empty_onboarding_state("startup")
+        for key in ["startupName", "ideaSummary", "targetUser", "painPoint", "valueProp", "biggestBottleneck"]:
+            state["completeness"][key] = "solid"
+            state[key] = key
+        state["idealPeopleTypes"] = ["Operators"]
+        state["completeness"]["idealPeopleTypes"] = "solid"
+        for key in ["startupStage", "traction"]:
+            state["completeness"][key] = "solid"
+            state[key] = ["users"] if key == "traction" else "mvp"
+        state["completeness"]["differentiation"] = "weak"
+        state["differentiation"] = "Uses AI"
+
+        self.assertEqual(choose_next_slot(state, "startup"), "differentiation")
+
+        state["followUpCounts"]["differentiation"] = 1
+        self.assertIsNone(choose_next_slot(state, "startup"))
 
     def test_merge_slot_patch_respects_array_slots(self):
         state = empty_onboarding_state("startup")

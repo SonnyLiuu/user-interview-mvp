@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people } from '@/lib/db/schema';
 import { listOutreachProjects } from '@/lib/backend-server';
@@ -43,7 +43,7 @@ export default async function PeoplePage({
     )) ?? null;
   const researchTitle = selectedOutreachProject
     ? `${getOutreachProjectTypeConfig(selectedOutreachProject.type).label} Research`
-    : 'Research';
+    : 'Cumulative Research';
   const researchOverview = buildResearchOverview(selectedOutreachProject);
   const tagMode = project.project_type === 'startup'
     ? selectedOutreachProject
@@ -51,14 +51,12 @@ export default async function PeoplePage({
       : 'none'
     : 'none';
 
-  // Keep General research and each outreach project as distinct people sets.
-  // General contains only unassigned people; outreach views contain only people
-  // explicitly created for that outreach project.
+  // Cumulative shows every person in the startup; scoped outreach views contain
+  // only people explicitly created for that outreach project.
   const now = new Date();
-  const selectedProjectFilter = selectedOutreachProject
-    ? eq(people.outreach_project_id, selectedOutreachProject.id)
-    : isNull(people.outreach_project_id);
-  const peopleFilters = and(eq(people.project_id, project.id), selectedProjectFilter);
+  const peopleFilters = selectedOutreachProject
+    ? and(eq(people.project_id, project.id), eq(people.outreach_project_id, selectedOutreachProject.id))
+    : eq(people.project_id, project.id);
   const activePeople = await db
     .select()
     .from(people)

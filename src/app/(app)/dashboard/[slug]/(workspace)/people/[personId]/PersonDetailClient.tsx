@@ -147,7 +147,8 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
     : rankForScore(matchScore);
   const fit = fitPresentation(matchRank, projectType);
   const evidencePreview = analysis?.key_insights?.slice(0, 2) ?? [];
-  const questionsPreview = analysis?.recommended_questions?.slice(0, 2) ?? [];
+  const approachAngles = analysis?.approach_angles ?? analysis?.recommended_questions ?? [];
+  const approachAnglesPreview = approachAngles.slice(0, 2);
   const sourceLinks = [
     sources.linkedin ? { label: 'LinkedIn', url: sources.linkedin } : null,
     sources.twitter ? { label: 'Twitter / X', url: sources.twitter } : null,
@@ -389,13 +390,13 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
                 </section>
               )}
 
-              {questionsPreview.length > 0 && (
+              {approachAnglesPreview.length > 0 && (
                 <section className={`${styles.dashboardCard} ${styles.previewCard}`}>
-                  <h2 className={styles.cardEyebrow}>What to learn</h2>
-                  <h3 className={styles.cardHeadline}>Best questions for this conversation</h3>
+                  <h2 className={styles.cardEyebrow}>How to approach</h2>
+                  <h3 className={styles.cardHeadline}>Best angles for this conversation</h3>
                   <ul className={styles.previewList}>
-                    {questionsPreview.map((question, index) => (
-                      <li key={index}>{question}</li>
+                    {approachAnglesPreview.map((angle, index) => (
+                      <li key={index}>{angle}</li>
                     ))}
                   </ul>
                 </section>
@@ -431,7 +432,7 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
 
           {analysis?.sections?.length ? (
             analysis.sections.map((section) => (
-              <section key={section.id} className={styles.section}>
+              <section key={section.id} className={`${styles.section} ${styles.sectionCard}`}>
                 <h2 className={styles.sectionTitle}>{section.title}</h2>
                 {section.kind === 'text' ? (
                   <p className={styles.prose}>{section.text}</p>
@@ -447,14 +448,14 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
           ) : (
             <>
               {analysis?.summary && (
-                <section className={styles.section}>
+                <section className={`${styles.section} ${styles.sectionCard}`}>
                   <h2 className={styles.sectionTitle}>{modeConfig.personSections.summary}</h2>
                   <p className={styles.prose}>{analysis.summary}</p>
                 </section>
               )}
 
               {analysis?.key_insights?.length ? (
-                <section className={styles.section}>
+                <section className={`${styles.section} ${styles.sectionCard}`}>
                   <h2 className={styles.sectionTitle}>{modeConfig.personSections.keyInsights}</h2>
                   <ul className={styles.list}>
                     {analysis.key_insights.map((insight, i) => (
@@ -464,19 +465,19 @@ export function PersonDetailClient({ person: initialPerson, slug, projectType, t
                 </section>
               ) : null}
 
-              {analysis?.recommended_questions?.length ? (
-                <section className={styles.section}>
-                  <h2 className={styles.sectionTitle}>{modeConfig.personSections.recommendedQuestions}</h2>
+              {approachAngles.length ? (
+                <section className={`${styles.section} ${styles.sectionCard}`}>
+                  <h2 className={styles.sectionTitle}>{modeConfig.personSections.approachAngles}</h2>
                   <ol className={styles.questionList}>
-                    {analysis.recommended_questions.map((q, i) => (
-                      <li key={i} className={styles.question}>{q}</li>
+                    {approachAngles.map((angle, i) => (
+                      <li key={i} className={styles.question}>{angle}</li>
                     ))}
                   </ol>
                 </section>
               ) : null}
 
               {analysis?.risk_factors?.length ? (
-                <section className={styles.section}>
+                <section className={`${styles.section} ${styles.sectionCard}`}>
                   <h2 className={styles.sectionTitle}>{modeConfig.personSections.riskFactors}</h2>
                   <ul className={styles.list}>
                     {analysis.risk_factors.map((r, i) => (

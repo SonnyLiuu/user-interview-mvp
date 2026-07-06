@@ -798,12 +798,12 @@
 
 .previewProfileHeader {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 100px;
+  grid-template-columns: 46px minmax(0, 1fr) 96px;
   gap: 14px;
   padding: 18px;
-  border: 1px solid #e8d9c4;
+  border: 1px solid #e5cfb1;
   border-radius: 14px;
-  background: #fffdf8;
+  background: #fffdf9;
 }
 
 .previewAvatar {
@@ -840,13 +840,24 @@
   font-size: 12.5px;
 }
 
+/* Amber saved-bookmark pill, matching the in-app BookmarkButton. */
 .previewSaved {
-  padding: 3px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
   border-radius: 999px;
-  background: #f8eee2;
-  color: #9a552d;
+  background: #fef3e2;
+  color: #c97b2a;
   font-size: 10px;
   font-weight: 560;
+  white-space: nowrap;
+}
+
+.previewSaved svg {
+  width: 9px;
+  height: 12px;
+  flex-shrink: 0;
 }
 
 .previewProfileTags,
@@ -858,54 +869,97 @@
 
 .previewProfileTags { margin-top: 10px; }
 
+/* Persona bubbles, matching the in-app PersonaBubble variants. */
 .previewProfileTags span {
-  padding: 4px 8px;
-  border: 1px solid #d8c9ed;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: #f4effb;
-  color: #6446a8;
   font-size: 10px;
-  font-weight: 520;
+  font-weight: 500;
+  line-height: 1;
 }
 
-.previewProfileTags span:first-child {
-  border-color: #bcd4e9;
-  background: #edf6fd;
-  color: #2e6893;
+.previewProfileTags span svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 
-.previewProfileTags span:last-child {
-  border-color: #ead19f;
-  background: #fff7e7;
-  color: #946119;
-}
+.previewTagUser { background: #e8f0f8; color: #2d5f8f; border-color: #c8ddef; }
+.previewTagBuilder { background: #ede8f5; color: #5a3a94; border-color: #d0c4e8; }
 
 .previewProfileSummary {
   margin: 10px 0 0;
-  color: #5f4d3b;
+  color: #4c3829;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
-.previewSources { margin-top: 9px; }
-
-.previewSources span {
-  color: #8a705a;
+/* Slash-separated source links, matching the in-app source summary row. */
+.previewSources {
+  align-items: center;
+  gap: 5px;
+  margin-top: 9px;
+  color: #876f5d;
   font-size: 10px;
 }
 
-.previewMatchScore {
+.previewSources > * + *::before {
+  content: "/";
+  margin-right: 5px;
+  color: #bea78d;
+}
+
+.previewSources a { color: #9d502e; }
+
+/* Match gauge, matching the in-app MatchGauge arc. */
+.previewMatchGauge {
   position: relative;
+  width: 86px;
+  height: 60px;
   align-self: center;
+  color: #397a4b;
+}
+
+.previewMatchGauge svg {
+  display: block;
+  width: 86px;
+  height: 51px;
+  overflow: visible;
+}
+
+.previewGaugeTrack,
+.previewGaugeFill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.previewGaugeTrack { stroke: #eadfce; }
+.previewGaugeFill { stroke: #4b9162; }
+
+.previewGaugeValue {
+  position: absolute;
+  inset: 21px 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  color: #4a8c5c;
+  line-height: 1;
 }
 
-.previewMatchScore svg { width: 78px; height: 46px; }
-.previewMatchScore strong { margin-top: -18px; font-size: 20px; font-weight: 620; }
-.previewMatchScore span { margin-top: 3px; font-size: 10px; font-weight: 560; }
+.previewGaugeValue strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.previewGaugeValue span {
+  margin-top: 5px;
+  font-size: 9px;
+  font-weight: 540;
+}
 
 .previewDetailColumns {
   display: grid;
@@ -923,9 +977,9 @@
 
 .previewDetailCard {
   padding: 14px;
-  border: 1px solid #e8d9c4;
+  border: 1px solid #e5cfb1;
   border-radius: 12px;
-  background: #fffdf8;
+  background: #fffdf9;
 }
 
 .previewDetailCard h3 {
@@ -945,7 +999,7 @@
 
 .previewDetailHeading > div > span,
 .previewSectionKicker {
-  color: #9a6846;
+  color: #a55632;
   font-size: 9px;
   font-weight: 620;
   letter-spacing: .09em;
@@ -955,8 +1009,8 @@
 .previewFitBadge {
   padding: 4px 7px;
   border-radius: 999px;
-  background: #e9f5ee;
-  color: #36734a;
+  background: #eaf5ed;
+  color: #25703d;
   font-size: 9px;
   font-weight: 620;
   white-space: nowrap;
@@ -964,7 +1018,7 @@
 
 .previewFitSummary {
   margin: 9px 0 12px;
-  color: #654f3d;
+  color: #5a4030;
   font-size: 11px;
   line-height: 1.45;
 }
@@ -979,11 +1033,11 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  color: #725d4b;
+  color: #5f4a39;
   font-size: 9px;
 }
 
-.previewFactor strong { color: #4a8c5c; font-weight: 620; }
+.previewFactor strong { color: #5f4a39; font-weight: 560; }
 
 .previewFactor i {
   height: 5px;
@@ -991,7 +1045,7 @@
   margin-top: 4px;
   overflow: hidden;
   border-radius: 999px;
-  background: #eadfce;
+  background: #ead9c3;
 }
 
 .previewFactor b {
@@ -1012,7 +1066,7 @@
 .previewQuestionList li {
   position: relative;
   padding-left: 14px;
-  color: #654f3d;
+  color: #5a4030;
   font-size: 10.5px;
   line-height: 1.4;
 }
@@ -1024,22 +1078,34 @@
   color: #a4532b;
 }
 
+/* Four-stage CRM breadcrumb, matching the in-app StageBreadcrumb. */
 .previewStageTrack {
   display: flex;
   align-items: center;
   margin: 12px 0;
-  color: #9a826c;
+  color: #ae9580;
   font-size: 8px;
+  white-space: nowrap;
 }
+
+.previewStageTrack span {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.previewStageTrack span:first-child { flex: 0 0 auto; }
 
 .previewStageTrack i {
   height: 1px;
-  flex: 1;
+  flex: 1 1 10px;
+  min-width: 6px;
   margin: 0 5px;
   background: #ddcfbd;
 }
 
-.previewStageTrack .previewStageDone { color: #36734a; font-weight: 620; }
+.previewStageCurrent { color: #9a4d2b; font-weight: 620; }
 
 .previewPrimaryAction {
   width: 100%;
@@ -1053,10 +1119,24 @@
   font-weight: 560;
 }
 
-.previewEvidenceItem { margin-top: 11px; }
-.previewEvidenceItem + .previewEvidenceItem { padding-top: 10px; border-top: 1px solid #eee2d2; }
-.previewEvidenceItem strong { color: #3d3025; font-size: 10.5px; font-weight: 560; }
-.previewEvidenceItem p { margin: 3px 0 0; color: #796451; font-size: 9.5px; line-height: 1.4; }
+/* Divider-separated evidence paragraphs, matching the in-app evidence card. */
+.previewEvidenceList {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+
+.previewEvidenceList p {
+  margin: 0;
+  padding: 8px 0;
+  color: #4d3829;
+  font-size: 10px;
+  line-height: 1.45;
+  border-bottom: 1px solid #eadbc7;
+}
+
+.previewEvidenceList p:first-child { padding-top: 0; }
+.previewEvidenceList p:last-child { padding-bottom: 0; border-bottom: 0; }
 
 /* ── What You Get ────────────────────────────────────────────────────────── */
 .whatYouGet {
@@ -1462,7 +1542,7 @@
   .previewAvatar { width: 38px; height: 38px; font-size: 12px; }
   .previewNameRow h2 { font-size: 16px; }
   .previewProfileSummary { font-size: 10.5px; }
-  .previewMatchScore { display: none; }
+  .previewMatchGauge { display: none; }
   .previewSources span:last-child { display: none; }
   .previewDetailColumns { grid-template-columns: 1fr; }
   .previewDetailAside { display: none; }

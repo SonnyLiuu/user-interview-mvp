@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import type { TranscriptInsightRecord } from '@/lib/ai/synthesize-insights';
 import styles from './InsightsPage.module.css';
 
@@ -68,9 +67,6 @@ export function InterviewDetailContent({ record }: { record: TranscriptInsightRe
   const topInsights = topInterviewInsights(record);
   const missedProbes = record.review.missedProbes;
   const flags = record.review.questionFlags.map((f) => f.issue).filter(Boolean).slice(0, 3);
-  const checklistCoverage = record.checkedCount !== null && record.topicCount !== null
-    ? `${record.checkedCount}/${record.topicCount} checked`
-    : null;
 
   return (
     <>
@@ -79,14 +75,6 @@ export function InterviewDetailContent({ record }: { record: TranscriptInsightRe
           <p className={styles.eyebrow}>Interview analysis</p>
           <h1 className={styles.dataTitle}>{record.personName}</h1>
           <p className={styles.dataDescription}>{formatDate(record.completedAt)}</p>
-        </div>
-        <div className={styles.metricStrip}>
-          {checklistCoverage ? (
-            <div className={styles.metric}>
-              <span className={styles.metricValue}>{checklistCoverage}</span>
-              <span className={styles.metricLabel}>checklist</span>
-            </div>
-          ) : null}
         </div>
       </section>
 

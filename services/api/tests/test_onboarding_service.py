@@ -55,7 +55,7 @@ class OnboardingServiceTests(unittest.IsolatedAsyncioTestCase):
             patch.object(onboarding_service.onboarding_repo, "persist_session_turn", new=AsyncMock()),
         ]
 
-    async def test_kickoff_saves_state_and_returns_ready_when_finishable(self):
+    async def test_kickoff_with_weak_slots_keeps_probing_instead_of_finishing(self):
         state = empty_onboarding_state("startup")
         extracted = {
             "startupName": {"value": "Acme", "quality": "solid"},
@@ -67,14 +67,46 @@ class OnboardingServiceTests(unittest.IsolatedAsyncioTestCase):
             "biggestBottleneck": {"value": "Need to validate urgency", "quality": "weak"},
         }
         patches = self._patch_common(state, [{"role": "assistant", "content": "Kickoff", "messageType": "question"}])
-        patches.append(patch.object(onboarding_service, "extract_kickoff_idea", new=AsyncMock(return_value=extracted)))
+        patches.extend(
+            [
+                patch.object(onboarding_service, "extract_kickoff_idea", new=AsyncMock(return_value=extracted)),
+                patch.object(onboarding_service, "generate_next_question", new=AsyncMock(return_value=_turn("valueProp"))),
+            ]
+        )
 
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
+            response = await onboarding_service.process_onboarding_request("user-1", "project-1", {"type": "kickoff", "message": "Here is the idea"})
+
+            self.assertEqual(response["sessionStatus"], "active")
+            self.assertEqual(response["currentTurn"]["targetSlot"], "valueProp")
+            self.assertFalse(response["isFinishable"])
+            onboarding_service.onboarding_repo.save_state.assert_awaited()
+
+    async def test_solid_kickoff_is_finishable_but_still_offers_optional_questions(self):
+        state = empty_onboarding_state("startup")
+        extracted = {
+            "startupName": {"value": "Acme", "quality": "solid"},
+            "ideaSummary": {"value": "A scheduling tool", "quality": "solid"},
+            "targetUser": {"value": "Clinic managers", "quality": "solid"},
+            "painPoint": {"value": "Manual scheduling", "quality": "solid"},
+            "valueProp": {"value": "Saves admin time", "quality": "solid"},
+            "idealPeopleTypes": {"values": ["Clinic managers"], "quality": "solid"},
+            "biggestBottleneck": {"value": "Need to validate urgency", "quality": "solid"},
+        }
+        patches = self._patch_common(state, [{"role": "assistant", "content": "Kickoff", "messageType": "question"}])
+        patches.extend(
+            [
+                patch.object(onboarding_service, "extract_kickoff_idea", new=AsyncMock(return_value=extracted)),
+                patch.object(onboarding_service, "generate_next_question", new=AsyncMock(return_value=_turn("startupStage"))),
+            ]
+        )
+
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
             response = await onboarding_service.process_onboarding_request("user-1", "project-1", {"type": "kickoff", "message": "Here is the idea"})
 
             self.assertEqual(response["sessionStatus"], "ready")
-            self.assertIsNone(response["currentTurn"])
-            onboarding_service.onboarding_repo.save_state.assert_awaited()
+            self.assertTrue(response["isFinishable"])
+            self.assertEqual(response["currentTurn"]["targetSlot"], "startupStage")
 
     async def test_answer_with_choices_advances_to_next_turn(self):
         state = empty_onboarding_state("startup")

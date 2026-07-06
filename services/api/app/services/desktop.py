@@ -30,20 +30,8 @@ def _clean_transcript(value: str | None) -> str:
     return (value or "").strip()
 
 
-def _notes_from_topics(topics: list[DesktopTopicInput], notes_raw: str) -> str:
-    checked = [topic.label.strip() for topic in topics if topic.checked and topic.label.strip()]
-    unchecked = [topic.label.strip() for topic in topics if not topic.checked and topic.label.strip()]
-    parts = [
-        "Checked topics:",
-        "\n".join(f"- {label}" for label in checked) if checked else "- None",
-        "",
-        "Unchecked topics:",
-        "\n".join(f"- {label}" for label in unchecked) if unchecked else "- None",
-    ]
-    user_notes = notes_raw.strip()
-    if user_notes:
-        parts.extend(["", "Notes:", user_notes])
-    return "\n".join(parts)
+def _notes_from_topics(_topics: list[DesktopTopicInput], notes_raw: str) -> str:
+    return notes_raw.strip()
 
 
 async def _owned_person(conn, user_id: str, person_id: str):

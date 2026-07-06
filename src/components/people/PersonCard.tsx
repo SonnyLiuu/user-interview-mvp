@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Person, PersonAnalysis } from '@/lib/db/schema';
 import { PersonaBubble } from './PersonaBubble';
@@ -89,9 +89,69 @@ function CardActive({
 
 // ── Loading (skeleton) ────────────────────────────────────────────────────────
 
-function CardLoading() {
+function sourceHostLabel(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+function CardLoading({ person }: { person: Person }) {
+  const analyzing = person.crawl_status !== 'crawling' && person.analysis_status === 'analyzing';
+
+  const sources = useMemo(() => {
+    const urls = [
+      ...(person.source_urls ?? []),
+      ...(person.discovered_urls ?? []).map((d) => d.url),
+    ];
+    const seen = new Set<string>();
+    const labels: string[] = [];
+    for (const url of urls) {
+      const label = sourceHostLabel(url);
+      if (seen.has(label)) continue;
+      seen.add(label);
+      labels.push(label);
+    }
+    return labels;
+  }, [person.source_urls, person.discovered_urls]);
+
+  const steps = useMemo(() => {
+    const count = sources.length;
+    if (analyzing) {
+      return [
+        count ? `Read ${count} source${count === 1 ? '' : 's'}` : 'Sources read',
+        'Analyzing background…',
+        'Matching against your project…',
+        'Writing their profile…',
+      ];
+    }
+    return [
+      count ? `Found ${count} source${count === 1 ? '' : 's'}…` : 'Finding sources…',
+      ...sources.map((label) => `Reading ${label}…`),
+      'Looking for more links…',
+      'Cross-referencing details…',
+    ];
+  }, [analyzing, sources]);
+
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    setStep(0);
+  }, [analyzing]);
+
+  useEffect(() => {
+    const id = setInterval(() => setStep((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const label = steps[step % steps.length];
+
   return (
     <div className={styles.loading} aria-busy="true" aria-label="Researching person">
+      <div className={styles.progressTrack} aria-hidden="true">
+        <div className={`${styles.progressFill} ${analyzing ? styles.progressAnalyzing : ''}`} />
+      </div>
       <div className={styles.skeletonLine} style={{ width: '60%', height: 14 }} />
       <div className={styles.skeletonLine} style={{ width: '40%', height: 11, marginTop: 4 }} />
       <div className={styles.skeletonLine} style={{ width: '45%', height: 11, marginTop: 2 }} />
@@ -104,7 +164,10 @@ function CardLoading() {
         <div className={styles.skeletonLine} style={{ width: 72, height: 44 }} />
         <div className={styles.skeletonLine} style={{ width: '40%', height: 11 }} />
       </div>
-      <p className={styles.loadingLabel}>Researching...</p>
+      <p className={styles.loadingLabel} aria-hidden="true">
+        <span className={styles.loadingSpinner} />
+        <span key={`${analyzing}-${step}`} className={styles.tickerText}>{label}</span>
+      </p>
     </div>
   );
 }
@@ -323,7 +386,7 @@ export function PersonCard({ person, isFirstEmpty, projectId, outreachProjectId,
 
   return (
     <div className={styles.card}>
-      {isLoading && <CardLoading />}
+      {isLoading && <CardLoading person={person} />}
       {isError && <CardError onRetry={handleRetry} message={person.crawl_error} />}
       {isRetryableIncomplete && (
         <CardError onRetry={handleRetry} message={person.crawl_error ?? 'Research was not started'} />

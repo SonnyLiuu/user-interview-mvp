@@ -35,12 +35,13 @@ struct ReviewView: View {
                                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                         )
 
-                    if !viewModel.topics.isEmpty {
-                        Text("Topic summary")
+                    let questions = viewModel.topics.filter { $0.category == .question }
+                    if !questions.isEmpty {
+                        Text("Questions asked")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
                         VStack(alignment: .leading, spacing: 4) {
-                            ForEach(viewModel.topics.filter { $0.category != .signal }) { topic in
+                            ForEach(questions) { topic in
                                 HStack(spacing: 6) {
                                     Image(systemName: topic.checked ? "checkmark.circle.fill" : "circle")
                                         .foregroundStyle(topic.checked ? Color.green : Color.secondary)

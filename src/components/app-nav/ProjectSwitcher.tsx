@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ProjectNavItem } from '@/lib/backend-types';
 import { backendClientFetch } from '@/lib/backend-client';
 import { getProjectPathSegment } from '@/lib/projects';
@@ -62,6 +62,8 @@ export function ProjectSwitcher({ slug, projectId, projectName, expanded, initia
   const [deleting, setDeleting] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   async function loadProjects() {
     try {
@@ -107,7 +109,27 @@ export function ProjectSwitcher({ slug, projectId, projectName, expanded, initia
 
   function select(p: ProjectNavItem) {
     setOpen(false);
-    router.push(`/dashboard/${getProjectPathSegment(p)}/foundation`);
+    router.push(workspaceHrefForProject(p));
+  }
+
+  function workspaceHrefForProject(project: ProjectNavItem) {
+    const nextSlug = getProjectPathSegment(project);
+    const section = (() => {
+      if (pathname?.includes('/people')) return 'people';
+      if (pathname?.includes('/board')) return 'board';
+      if (pathname?.includes('/insights')) return 'insights';
+      if (pathname?.includes('/outreach-projects')) return 'outreach-projects';
+      return 'foundation';
+    })();
+
+    const params = new URLSearchParams();
+    if (section === 'insights') {
+      const tab = searchParams.get('tab');
+      if (tab) params.set('tab', tab);
+    }
+
+    const query = params.toString();
+    return `/dashboard/${nextSlug}/${section}${query ? `?${query}` : ''}`;
   }
 
   function startDelete(project: ProjectNavItem) {

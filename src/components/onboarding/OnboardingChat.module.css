@@ -347,6 +347,44 @@
   color: #a8917e;
 }
 
+/* ── Inline finish option shown alongside an active question ─────────────── */
+.finishInline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #f5ece1;
+  border: 1px solid #e5d5c3;
+  border-radius: 10px;
+}
+
+.finishInlineText {
+  font-size: 13px;
+  color: #715b49;
+  margin: 0;
+}
+
+.finishInlineBtn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  background: transparent;
+  color: #a4532b;
+  border: 1px solid #a4532b;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 450;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+
+.finishInlineBtn:hover {
+  background: #a4532b;
+  color: #faf4ec;
+}
+
 /* ── Finish prompt ───────────────────────────────────────────────────────── */
 .finishArea {
   display: flex;

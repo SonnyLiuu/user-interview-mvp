@@ -13,6 +13,7 @@ struct PersonPickerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            searchBar
             filters
             Divider().padding(.vertical, 8)
             if viewModel.isLoadingPeople {
@@ -26,7 +27,7 @@ struct PersonPickerView: View {
             } else if viewModel.filteredPeople.isEmpty {
                 Spacer()
                 VStack(spacing: 8) {
-                    Text(viewModel.message)
+                    Text(viewModel.filteredPeopleEmptyMessage)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -75,6 +76,41 @@ struct PersonPickerView: View {
             .buttonStyle(.borderless)
             .help("Settings")
         }
+        .padding(.bottom, 8)
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            TextField("Search people", text: $viewModel.peopleSearchQuery)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+
+            if !viewModel.peopleSearchQuery.isEmpty {
+                Button {
+                    viewModel.peopleSearchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(nsColor: .textBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+        )
         .padding(.bottom, 8)
     }
 

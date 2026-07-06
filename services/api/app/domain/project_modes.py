@@ -101,6 +101,7 @@ STARTUP_SLOTS = [
         "key": "ideaSummary",
         "label": "Startup Summary",
         "context": "what the founder is building and for whom",
+        "solidCriteria": "names the product form, the mechanism or approach, and who it serves; 'an app that uses AI' without saying what it does for whom is weak",
         "required": True,
         "array": False,
         "fallback": {
@@ -118,6 +119,7 @@ STARTUP_SLOTS = [
         "key": "targetUser",
         "label": "Target User",
         "context": "who the primary user is - the person who experiences the problem",
+        "solidCriteria": "names a specific person type plus the situation or behavior that makes them a target; broad demographics like 'all readers', 'busy professionals', or 'small businesses' are weak",
         "required": True,
         "array": False,
         "fallback": {
@@ -136,6 +138,7 @@ STARTUP_SLOTS = [
         "key": "painPoint",
         "label": "Core Problem",
         "context": "the core pain or problem the product addresses",
+        "solidCriteria": "describes a concrete failure with its cost - what the user does today, why it fails, and what it wastes (time, money, trust); restating the product category as a problem is weak",
         "required": True,
         "array": False,
         "fallback": {
@@ -153,6 +156,7 @@ STARTUP_SLOTS = [
         "key": "valueProp",
         "label": "Value Proposition",
         "context": "what specific value the product delivers to users",
+        "solidCriteria": "states the outcome for the user and the mechanism that delivers it; generic benefits like 'saves time' or 'better recommendations' without the how are weak",
         "required": True,
         "array": False,
         "fallback": {
@@ -170,6 +174,7 @@ STARTUP_SLOTS = [
         "key": "idealPeopleTypes",
         "label": "Ideal People to Talk To First",
         "context": "the types of people who would be ideal early users or customers",
+        "solidCriteria": "lists at least two distinct, findable person types, each specific enough to search for (role, community, or observable behavior) with a reason they matter; a single generic type is weak",
         "required": True,
         "array": True,
         "fallback": {
@@ -187,6 +192,7 @@ STARTUP_SLOTS = [
         "key": "biggestBottleneck",
         "label": "Biggest Bottleneck",
         "context": "the founder's current blocker, uncertainty, or constraint that makes outreach valuable now",
+        "solidCriteria": "names a specific decision, unknown, or risk the founder needs resolved next; vague ambitions like 'get more users' without the underlying uncertainty are weak",
         "required": True,
         "array": False,
         "fallback": {
@@ -222,6 +228,7 @@ STARTUP_SLOTS = [
         "key": "traction",
         "label": "Traction",
         "context": "evidence of progress such as users, revenue, pilots, waitlist, LOIs, notable customers, or design partners",
+        "solidCriteria": "gives concrete evidence with rough numbers or named milestones, or an explicit statement that there is none yet",
         "required": False,
         "array": True,
         "fallback": {
@@ -239,6 +246,7 @@ STARTUP_SLOTS = [
         "key": "differentiation",
         "label": "Differentiation",
         "context": "what makes this different from existing solutions",
+        "solidCriteria": "names the alternative or status quo being displaced and the specific edge over it; technology labels alone like 'uses AI' are weak",
         "required": False,
         "array": False,
         "fallback": {
@@ -528,6 +536,14 @@ def get_kickoff_question(project_type: str) -> str:
 
 def get_slot_context(project_type: str) -> dict[str, str]:
     return {slot["key"]: slot["context"] for slot in get_mode_slots(project_type)}
+
+
+def get_slot_solid_criteria(project_type: str) -> dict[str, str]:
+    return {
+        slot["key"]: slot["solidCriteria"]
+        for slot in get_mode_slots(project_type)
+        if slot.get("solidCriteria")
+    }
 
 
 def get_mode_config(project_type: str) -> dict:

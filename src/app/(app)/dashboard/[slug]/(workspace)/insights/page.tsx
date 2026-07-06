@@ -1,7 +1,12 @@
 import Link from 'next/link';
+import { revalidatePath } from 'next/cache';
+import { and, eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { insights, interactions, people, transcripts } from '@/lib/db/schema';
 import { getProjectInsightsState, getProjectTranscriptInsight } from '@/lib/ai/synthesize-insights';
 import { getOutreachStats } from '@/lib/outreach-insights';
 import { getNotetakerDownloadHref } from '@/lib/notetaker-download';
+import { listOutreachProjects } from '@/lib/backend-server';
 import { requireOwnedProjectBySlug } from '@/lib/project-access';
 import type { InsightContent } from '@/lib/db/schema';
 import type { TranscriptInsightRecord } from '@/lib/ai/synthesize-insights';
@@ -41,6 +46,61 @@ function formatTranscriptDate(value: Date | null) {
   return formatDate(value);
 }
 
+async function deleteInterviewRecord(
+  slug: string,
+  source: TranscriptInsightRecord['source'],
+  recordId: string,
+) {
+  'use server';
+
+  const { project } = await requireOwnedProjectBySlug(slug);
+
+  if (source === 'interaction') {
+    const [row] = await db
+      .select({
+        id: interactions.id,
+        personId: interactions.person_id,
+        transcriptRaw: interactions.transcript_raw,
+      })
+      .from(interactions)
+      .innerJoin(people, eq(interactions.person_id, people.id))
+      .where(and(eq(people.project_id, project.id), eq(interactions.id, recordId)))
+      .limit(1);
+
+    if (row) {
+      await db.delete(interactions).where(eq(interactions.id, row.id));
+      const transcriptRaw = row.transcriptRaw?.trim();
+      if (row.personId && transcriptRaw) {
+        await db
+          .delete(transcripts)
+          .where(and(
+            eq(transcripts.person_id, row.personId),
+            eq(transcripts.type, 'call'),
+            eq(transcripts.content, transcriptRaw),
+          ));
+      }
+    }
+  } else {
+    const [row] = await db
+      .select({ id: transcripts.id })
+      .from(transcripts)
+      .innerJoin(people, eq(transcripts.person_id, people.id))
+      .where(and(eq(people.project_id, project.id), eq(transcripts.id, recordId)))
+      .limit(1);
+
+    if (row) {
+      await db.delete(transcripts).where(eq(transcripts.id, row.id));
+    }
+  }
+
+  await db
+    .update(insights)
+    .set({ is_current: false })
+    .where(and(eq(insights.project_id, project.id), eq(insights.is_current, true)));
+
+  revalidatePath(`/dashboard/${slug}/insights`);
+}
+
 function EmptyInsights({
   windowsInstallerHref,
   macInstallerHref,
@@ -70,9 +130,10 @@ function EmptyInsights({
             </h2>
             <p className={styles.panelBody}>
               User Interview Notetaker keeps a visible checklist beside calls to
-              automatically check questions as they are covered, and saves your call transcript
-              back to this dashboard when the call ends. Get learning summaries of
-              what happened during your calls as well as track vital assumptions
+              help you remember what to cover, then saves your call transcript
+              back to this dashboard when the call ends. Analysis is based on
+              the transcript and your saved notes, so you get learning summaries
+              of what happened during your calls and can track vital assumptions
               for your startup.
             </p>
             <div className={styles.downloadActions}>
@@ -127,11 +188,13 @@ function DataInsights({
   transcriptInsights,
   projectType,
   slug,
+  outreachProjectId,
 }: {
   content: InsightContent;
   transcriptInsights: TranscriptInsightRecord[];
   projectType: ProjectType;
   slug: string;
+  outreachProjectId?: string | null;
 }) {
   const { recurringThemes, assumptionTracker } = content;
 
@@ -141,6 +204,7 @@ function DataInsights({
         <section className={styles.insightsHeader}>
           <div>
             <p className={styles.eyebrow}>Insights</p>
+            <h1 className={styles.dataTitle}>Interview insights</h1>
           </div>
         </section>
 
@@ -151,7 +215,12 @@ function DataInsights({
           tagMode={projectType === 'startup' ? 'idea_validation' : 'none'}
         />
 
-        <TranscriptInsightsSection transcriptInsights={transcriptInsights} projectType={projectType} slug={slug} />
+        <TranscriptInsightsSection
+          transcriptInsights={transcriptInsights}
+          projectType={projectType}
+          slug={slug}
+          outreachProjectId={outreachProjectId}
+        />
 
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
@@ -292,10 +361,12 @@ function TranscriptInsightsSection({
   transcriptInsights,
   projectType,
   slug,
+  outreachProjectId,
 }: {
   transcriptInsights: TranscriptInsightRecord[];
   projectType: ProjectType;
   slug: string;
+  outreachProjectId?: string | null;
 }) {
   if (transcriptInsights.length === 0) return null;
 
@@ -319,28 +390,47 @@ function TranscriptInsightsSection({
           <span>Name</span>
           <span>Type</span>
           <span>Interviewed</span>
+          <span />
         </div>
         {sorted.map((record) => {
           const tagMode = projectType === 'startup'
             ? tagModeForOutreachProjectType(record.outreachProjectType)
             : 'none';
           const tag = getPersonaTag(record.personaType, tagMode);
+          const detailParams = new URLSearchParams({ tab: 'insights', interview: `${record.source}:${record.id}` });
+          if (outreachProjectId) detailParams.set('outreachProjectId', outreachProjectId);
           return (
-            <Link
+            <div
               key={`${record.source}-${record.id}`}
-              href={`/dashboard/${slug}/insights?tab=insights&interview=${record.source}:${record.id}`}
               className={styles.intervieweeCard}
             >
-              <span className={styles.interviewFileName}>
-                <span className={styles.intervieweeName}>{record.personName}</span>
-              </span>
-              <span className={`${styles.intervieweeMeta} ${styles.intervieweeType}`}>
-                {tag?.label || 'Interview'}
-              </span>
-              <span className={`${styles.intervieweeMeta} ${styles.intervieweeDate}`}>
-                {formatTranscriptDate(record.completedAt)}
-              </span>
-            </Link>
+              <Link
+                href={`/dashboard/${slug}/insights?${detailParams.toString()}`}
+                className={styles.intervieweeCardLink}
+              >
+                <span className={styles.interviewFileName}>
+                  <span className={styles.intervieweeName}>{record.personName}</span>
+                </span>
+                <span className={`${styles.intervieweeMeta} ${styles.intervieweeType}`}>
+                  {tag?.label || 'Interview'}
+                </span>
+                <span className={`${styles.intervieweeMeta} ${styles.intervieweeDate}`}>
+                  {formatTranscriptDate(record.completedAt)}
+                </span>
+              </Link>
+              <form action={deleteInterviewRecord.bind(null, slug, record.source, record.id)}>
+                <button
+                  type="submit"
+                  className={styles.interviewDeleteButton}
+                  aria-label={`Delete interview with ${record.personName}`}
+                  title="Delete interview"
+                >
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </form>
+            </div>
           );
         })}
       </div>
@@ -353,23 +443,32 @@ function TranscriptInsightsSection({
 function TabBar({
   active,
   slug,
+  outreachProjectId,
   interviewTab,
 }: {
   active: 'outreach' | 'insights';
   slug: string;
+  outreachProjectId?: string | null;
   interviewTab?: { label: string; closeHref: string } | null;
 }) {
   const tabs = [
     { key: 'outreach' as const, label: 'Outreach' },
     { key: 'insights' as const, label: 'Interview' },
   ];
+  const hrefForTab = (tab: 'outreach' | 'insights') => {
+    const params = new URLSearchParams();
+    if (tab === 'insights') params.set('tab', 'insights');
+    if (outreachProjectId) params.set('outreachProjectId', outreachProjectId);
+    const query = params.toString();
+    return `/dashboard/${slug}/insights${query ? `?${query}` : ''}`;
+  };
 
   return (
     <nav className={styles.tabBar}>
       {tabs.map((tab) => (
         <Link
           key={tab.key}
-          href={`/dashboard/${slug}/insights${tab.key === 'insights' ? '?tab=insights' : ''}`}
+          href={hrefForTab(tab.key)}
           className={`${styles.tabPill} ${active === tab.key && !interviewTab ? styles.tabPillActive : ''}`}
         >
           {tab.label}
@@ -398,11 +497,14 @@ export default async function InsightsPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ tab?: string; interview?: string; welcome?: string }>;
+  searchParams: Promise<{ tab?: string; interview?: string; welcome?: string; outreachProjectId?: string | string[] }>;
 }) {
   const { slug } = await params;
-  const { tab, interview, welcome } = await searchParams;
+  const { tab, interview, welcome, outreachProjectId } = await searchParams;
   const activeTab = tab === 'insights' ? 'insights' : 'outreach';
+  const requestedOutreachProjectId = Array.isArray(outreachProjectId)
+    ? outreachProjectId[0]
+    : outreachProjectId;
 
   // Parse interview param: "transcript:recordId" or "interaction:recordId"
   let interviewSource: 'interaction' | 'transcript' | null = null;
@@ -421,20 +523,35 @@ export default async function InsightsPage({
   const windowsInstallerHref = getNotetakerDownloadHref('windows');
   const macInstallerHref = getNotetakerDownloadHref('macos');
   const { project } = await requireOwnedProjectBySlug(slug);
+  const outreachProjects = project.project_type === 'startup'
+    ? await listOutreachProjects(project.id)
+    : [];
+  const selectedOutreachProject =
+    outreachProjects.find((candidate) => (
+      candidate.id === requestedOutreachProjectId && candidate.status !== 'archived'
+    )) ?? null;
+  const insightOutreachProjectId = project.project_type === 'startup'
+    ? selectedOutreachProject?.id
+    : undefined;
 
   // Fetch data — include interview record if opening an interview tab
   const [state, outreachStats, interviewRecord] = await Promise.all([
-    getProjectInsightsState(project.id),
-    getOutreachStats(project.id),
+    getProjectInsightsState(project.id, insightOutreachProjectId),
+    getOutreachStats(project.id, insightOutreachProjectId),
     interviewSource && interviewRecordId
-      ? getProjectTranscriptInsight(project.id, interviewSource, interviewRecordId)
+      ? getProjectTranscriptInsight(project.id, interviewSource, interviewRecordId, insightOutreachProjectId)
       : null,
   ]);
 
+  const scopedInsightsHref = (() => {
+    const params = new URLSearchParams({ tab: 'insights' });
+    if (insightOutreachProjectId) params.set('outreachProjectId', insightOutreachProjectId);
+    return `/dashboard/${slug}/insights?${params.toString()}`;
+  })();
   const interviewTab = interviewRecord
     ? {
         label: interviewRecord.personName,
-        closeHref: `/dashboard/${slug}/insights?tab=insights`,
+        closeHref: scopedInsightsHref,
       }
     : null;
 
@@ -443,7 +560,7 @@ export default async function InsightsPage({
   if (interviewTab) {
     return (
       <>
-        <TabBar active="insights" slug={slug} interviewTab={interviewTab} />
+        <TabBar active="insights" slug={slug} outreachProjectId={insightOutreachProjectId} interviewTab={interviewTab} />
         <main className={styles.page}>
           <div className={styles.shellWide}>
             <InterviewDetailContent record={interviewRecord!} />
@@ -458,11 +575,11 @@ export default async function InsightsPage({
   if (activeTab === 'outreach') {
     return (
       <>
-        <TabBar active="outreach" slug={slug} />
+        <TabBar active="outreach" slug={slug} outreachProjectId={insightOutreachProjectId} />
         {outreachStats.totalContacted === 0 ? (
-          <OutreachInsightsEmpty slug={slug} />
+          <OutreachInsightsEmpty slug={slug} outreachProjectId={insightOutreachProjectId} />
         ) : (
-          <OutreachInsightsData stats={outreachStats} slug={slug} />
+          <OutreachInsightsData stats={outreachStats} slug={slug} outreachProjectId={insightOutreachProjectId} />
         )}
       </>
     );
@@ -472,14 +589,16 @@ export default async function InsightsPage({
 
   return (
     <>
-      <TabBar active="insights" slug={slug} />
+      <TabBar active="insights" slug={slug} outreachProjectId={insightOutreachProjectId} />
       {welcome === '1' && (
         <div className={styles.page}>
           <div className={styles.shellWide}>
             <EntryGoalWelcome
               entryGoal={project.entry_goal}
               projectId={project.id}
-              actionHref={`/dashboard/${slug}/people`}
+              actionHref={insightOutreachProjectId
+                ? `/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(insightOutreachProjectId)}`
+                : `/dashboard/${slug}/people`}
               actionLabel="Add an interviewee"
             />
           </div>
@@ -497,6 +616,7 @@ export default async function InsightsPage({
             transcriptInsights={state.transcriptInsights}
             projectType={project.project_type}
             slug={slug}
+            outreachProjectId={insightOutreachProjectId}
           />
         </>
       )}

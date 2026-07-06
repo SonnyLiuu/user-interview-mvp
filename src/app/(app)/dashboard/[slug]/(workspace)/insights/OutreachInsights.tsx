@@ -20,14 +20,6 @@ const OUTCOME_LABELS: Record<string, string> = {
   awaiting: 'Awaiting',
 };
 
-const OUTCOME_SLICE_LABELS: Record<string, string> = {
-  noResponse: 'No response',
-  notInterested: 'Declined',
-  successfulCall: 'Call',
-  partial: 'Partial',
-  awaiting: 'Awaiting',
-};
-
 function pct(value: number, total: number): string {
   if (total === 0) return '0%';
   return `${Math.round((value / total) * 100)}%`;
@@ -65,7 +57,20 @@ function outcomeTakeaway(chartEntries: Array<[string, number]>, totalContacted: 
 
 // ── Empty state ────────────────────────────────────────────────────────────────
 
-export function OutreachInsightsEmpty({ slug }: { slug: string }) {
+function scopedHref(slug: string, section: 'people' | 'board', outreachProjectId?: string | null) {
+  const base = `/dashboard/${slug}/${section}`;
+  return outreachProjectId
+    ? `${base}?outreachProjectId=${encodeURIComponent(outreachProjectId)}`
+    : base;
+}
+
+export function OutreachInsightsEmpty({
+  slug,
+  outreachProjectId,
+}: {
+  slug: string;
+  outreachProjectId?: string | null;
+}) {
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
@@ -86,7 +91,7 @@ export function OutreachInsightsEmpty({ slug }: { slug: string }) {
               response rate, outcome breakdown, conversion funnel, and stale
               outreach that may need follow-up.
             </p>
-            <Link href={`/dashboard/${slug}/board`} className={styles.downloadButton}>
+            <Link href={scopedHref(slug, 'board', outreachProjectId)} className={styles.downloadButton}>
               Go to Board
             </Link>
           </div>
@@ -115,7 +120,15 @@ export function OutreachInsightsEmpty({ slug }: { slug: string }) {
 
 // ── Data state ─────────────────────────────────────────────────────────────────
 
-export function OutreachInsightsData({ stats, slug }: { stats: OutreachStats; slug: string }) {
+export function OutreachInsightsData({
+  stats,
+  slug,
+  outreachProjectId,
+}: {
+  stats: OutreachStats;
+  slug: string;
+  outreachProjectId?: string | null;
+}) {
   const { totalFound, totalContacted, totalResponded, responseRate, outcomeCounts, funnel, stalePeople } = stats;
 
   return (
@@ -166,13 +179,19 @@ export function OutreachInsightsData({ stats, slug }: { stats: OutreachStats; sl
         </section>
 
         {/* ── Conversion funnel ───────────────────────────────────────── */}
-        <div className={styles.summaryGrid}>
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.eyebrow}>Conversion funnel</p>
+              <h2 className={styles.sectionHeading}>Where people drop off</h2>
+            </div>
+          </div>
           <FunnelPanel funnel={funnel} />
-        </div>
+        </section>
 
         {/* ── Stale outreach ──────────────────────────────────────────── */}
         {stalePeople.length > 0 && (
-          <StalePanel stalePeople={stalePeople} slug={slug} />
+          <StalePanel stalePeople={stalePeople} slug={slug} outreachProjectId={outreachProjectId} />
         )}
       </div>
     </main>
@@ -197,23 +216,6 @@ function OutcomeBar({ outcomeCounts, totalContacted }: { outcomeCounts: Outreach
       return stop;
     })
     .join(', ');
-  let labelStart = 0;
-  const pieLabels = chartEntries
-    .filter(([, count]) => count > 0)
-    .map(([key, count]) => {
-      const sweep = (count / totalContacted) * 360;
-      const midpoint = labelStart + sweep / 2 - 90;
-      labelStart += sweep;
-      const radians = (midpoint * Math.PI) / 180;
-      const radius = 38;
-      return {
-        key,
-        count,
-        label: OUTCOME_SLICE_LABELS[key] ?? OUTCOME_LABELS[key] ?? key,
-        x: 50 + Math.cos(radians) * radius,
-        y: 50 + Math.sin(radians) * radius,
-      };
-    });
 
   if (totalContacted === 0) {
     return <p className={styles.emptyNote}>No people contacted yet.</p>;
@@ -229,16 +231,6 @@ function OutcomeBar({ outcomeCounts, totalContacted }: { outcomeCounts: Outreach
         aria-label={`${totalContacted} contacted people by outcome`}
         role="img"
       >
-        {pieLabels.map((label) => (
-          <span
-            key={label.key}
-            className={styles.outcomePieTag}
-            style={{ left: `${label.x}%`, top: `${label.y}%` }}
-            aria-hidden="true"
-          >
-            {label.label}
-          </span>
-        ))}
         <div className={styles.outcomePieCenter}>
           <span className={styles.outcomePieValue}>{totalContacted}</span>
           <span className={styles.outcomePieLabel}>contacted</span>
@@ -283,7 +275,6 @@ function FunnelPanel({ funnel }: { funnel: OutreachStats['funnel'] }) {
 
   return (
     <article className={styles.summaryPanel}>
-      <h2 className={styles.sectionTitle}>Conversion funnel</h2>
       <div className={styles.funnelList}>
         {stages.map((stage, i) => {
           const prev = i > 0 ? stages[i - 1].count : stage.count;
@@ -317,9 +308,11 @@ function FunnelPanel({ funnel }: { funnel: OutreachStats['funnel'] }) {
 function StalePanel({
   stalePeople,
   slug,
+  outreachProjectId,
 }: {
   stalePeople: OutreachStats['stalePeople'];
   slug: string;
+  outreachProjectId?: string | null;
 }) {
   return (
     <section className={styles.section}>
@@ -335,7 +328,9 @@ function StalePanel({
         {stalePeople.map((person) => (
           <Link
             key={person.id}
-            href={`/dashboard/${slug}/people/${person.id}`}
+            href={outreachProjectId
+              ? `/dashboard/${slug}/people/${person.id}?outreachProjectId=${encodeURIComponent(outreachProjectId)}`
+              : `/dashboard/${slug}/people/${person.id}`}
             className={styles.staleCard}
           >
             <span className={styles.staleName}>{person.name}</span>

@@ -22,10 +22,9 @@ export function buildDesktopSessionTopicSummary(topics: DesktopSessionTopicInput
 }
 
 export function buildDesktopSessionNotesRaw(
-  topics: DesktopSessionTopicInput[],
+  _topics: DesktopSessionTopicInput[],
   userNotes: string | null | undefined,
 ) {
-  const summary = buildDesktopSessionTopicSummary(topics);
   const trimmedNotes = userNotes?.trim() ?? '';
-  return trimmedNotes ? `${summary}\n\nNotes:\n${trimmedNotes}` : summary;
+  return trimmedNotes;
 }

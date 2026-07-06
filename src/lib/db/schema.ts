@@ -84,6 +84,8 @@ export type PersonAnalysis = {
   // Analysis content
   summary?: string;
   key_insights?: string[];
+  approach_angles?: string[];
+  /** @deprecated use approach_angles */
   recommended_questions?: string[];
   risk_factors?: string[];
   confidence_score?: number;

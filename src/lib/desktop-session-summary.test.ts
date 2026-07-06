@@ -24,30 +24,12 @@ test('summarizes checked and unchecked desktop call topics', () => {
   );
 });
 
-test('desktop session notes append user notes only when present', () => {
+test('desktop session notes save user notes without checklist topics', () => {
   const topics = [{ label: 'Ask about workaround', checked: true }];
 
   assert.equal(
     buildDesktopSessionNotesRaw(topics, '  Follow up next week.  '),
-    [
-      'Checked topics (1/1):',
-      '- Ask about workaround',
-      '',
-      'Unchecked topics (0/1):',
-      '- None',
-      '',
-      'Notes:',
-      'Follow up next week.',
-    ].join('\n'),
+    'Follow up next week.',
   );
-  assert.equal(
-    buildDesktopSessionNotesRaw([], '   '),
-    [
-      'Checked topics (0/0):',
-      '- None',
-      '',
-      'Unchecked topics (0/0):',
-      '- None',
-    ].join('\n'),
-  );
+  assert.equal(buildDesktopSessionNotesRaw([], '   '), '');
 });

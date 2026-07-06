@@ -116,18 +116,20 @@ export function AppNav({ slug, projectId, projectName, projectType, initialProje
 
   const cls = expanded ? styles.expanded : styles.collapsed;
   const outreachProjectId = pathname?.match(/\/outreach-projects\/([^/]+)/)?.[1] ?? searchParams.get('outreachProjectId');
-  const peopleHref = slug && outreachProjectId
-    ? `/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(outreachProjectId)}`
-    : slug
-      ? `/dashboard/${slug}/people`
-      : '';
+  const scopedHref = (section: 'people' | 'board' | 'insights') => {
+    if (!slug) return '';
+    const base = `/dashboard/${slug}/${section}`;
+    return outreachProjectId
+      ? `${base}?outreachProjectId=${encodeURIComponent(outreachProjectId)}`
+      : base;
+  };
 
   const projectNav = slug
     ? [
         { href: `/dashboard/${slug}/foundation`, label: 'Foundation', icon: <IconProject />, match: (p: string) => p.startsWith(`/dashboard/${slug}/foundation`) },
-        { href: peopleHref, label: 'People', icon: <IconPeople />, match: (p: string) => p.startsWith(`/dashboard/${slug}/people`) },
-        { href: `/dashboard/${slug}/board`, label: 'Board', icon: <IconBoard />, match: (p: string) => p.startsWith(`/dashboard/${slug}/board`) },
-        { href: `/dashboard/${slug}/insights`, label: 'Insights', icon: <IconInsights />, match: (p: string) => p.startsWith(`/dashboard/${slug}/insights`) },
+        { href: scopedHref('people'), label: 'People', icon: <IconPeople />, match: (p: string) => p.startsWith(`/dashboard/${slug}/people`) },
+        { href: scopedHref('board'), label: 'Board', icon: <IconBoard />, match: (p: string) => p.startsWith(`/dashboard/${slug}/board`) },
+        { href: scopedHref('insights'), label: 'Insights', icon: <IconInsights />, match: (p: string) => p.startsWith(`/dashboard/${slug}/insights`) },
       ]
     : [];
 

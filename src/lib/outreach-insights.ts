@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { people } from '@/lib/db/schema';
 
@@ -112,7 +112,11 @@ function emptyFunnel(): FunnelStage {
 
 // ── Main query ─────────────────────────────────────────────────────────────────
 
-export async function getOutreachStats(projectId: string): Promise<OutreachStats> {
+export async function getOutreachStats(projectId: string, outreachProjectId?: string | null): Promise<OutreachStats> {
+  const scopeFilter = outreachProjectId
+    ? eq(people.outreach_project_id, outreachProjectId)
+    : undefined;
+
   const rows = await db
     .select({
       id: people.id,
@@ -123,7 +127,7 @@ export async function getOutreachStats(projectId: string): Promise<OutreachStats
       lastContactedAt: people.last_contacted_at,
     })
     .from(people)
-    .where(eq(people.project_id, projectId));
+    .where(scopeFilter ? and(eq(people.project_id, projectId), scopeFilter) : eq(people.project_id, projectId));
 
   // ── Totals ────────────────────────────────────────────────────────────────
 

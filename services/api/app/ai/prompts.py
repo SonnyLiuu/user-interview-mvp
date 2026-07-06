@@ -9,6 +9,7 @@ from ..domain.project_modes import (
     get_array_slots,
     get_mode_slots,
     get_slot_context,
+    get_slot_solid_criteria,
     normalize_project_type,
     project_actor,
 )
@@ -55,6 +56,7 @@ async def extract_kickoff_idea(user_message: str, project_type: str = "startup")
     array_slots = get_array_slots(normalized_type)
     field_lines = "\n".join(
         f"- {slot['key']}: {slot['context']}{' (array)' if slot.get('array') else ''}."
+        + (f" Solid only when it {slot['solidCriteria']}." if slot.get("solidCriteria") else "")
         for slot in slots
     )
     intro = (
@@ -75,6 +77,8 @@ async def extract_kickoff_idea(user_message: str, project_type: str = "startup")
         '- quality is "solid" when the value is specific enough to build on without immediately asking the same question.\n'
         f'- quality is "weak" when the {actor} has the right direction but the answer still needs one clarifying probe.\n'
         '- Use quality "missing" and an empty value when the field is not actually present.\n'
+        "- Grade strictly using each field's solid-only-when criteria; when in doubt, prefer \"weak\" so the field gets a follow-up question.\n"
+        "- Do not infer a solid value for one field from another field's answer; a product description alone does not make targetUser or painPoint solid.\n"
         "- For array fields, return a short list of distinct items.\n"
     )
     if normalized_type == "networking":
@@ -129,12 +133,23 @@ async def generate_next_question(target_slot: str, recent_messages: list[dict], 
         "You are a senior startup advisor having a direct, low-key conversation with a founder. "
         "Your job is to ask one focused question to understand their startup better, then offer concrete answer starters.\n\n"
     )
+    solid_criteria = get_slot_solid_criteria(normalized_type).get(target_slot)
+    current_answer = state.get(target_slot)
+    if follow_up and isinstance(current_answer, list):
+        current_answer = "; ".join(str(item) for item in current_answer)
     prompt = (
         advisor_role
         +
         f"You need to learn: {slot_context[target_slot]}\n\n"
-        f"This is {'a clarification of a weak answer' if follow_up else 'the next useful onboarding question'}.\n"
-        "When a clarifying probe would sharpen the answer, ask about the real status quo, urgency, "
+        + (f"A good answer {solid_criteria}.\n" if solid_criteria else "")
+        + f"This is {'a clarification of a weak answer' if follow_up else 'the next useful onboarding question'}.\n"
+        + (
+            f'Their current answer is too vague to build on: "{_clean_prompt_text(current_answer)}". '
+            "Ask for the missing specifics rather than re-asking the whole question.\n"
+            if follow_up and current_answer
+            else ""
+        )
+        + "When a clarifying probe would sharpen the answer, ask about the real status quo, urgency, "
         "current workaround, or the riskiest assumption instead of repeating the field label.\n\n"
         "What you know so far:\n"
         f"{chr(10).join(state_lines) or '(nothing yet)'}\n\n"
@@ -177,6 +192,7 @@ async def extract_custom_slot_answer(
     actor = project_actor(project_type)
     normalized_type = normalize_project_type(project_type)
     is_array_slot = target_slot in get_array_slots(normalized_type)
+    slot_solid_criteria = get_slot_solid_criteria(normalized_type).get(target_slot)
     snippet = "\n".join([f"{'AI' if msg['role'] == 'assistant' else actor.title()}: {msg['content']}" for msg in recent_messages[-4:]]) or "(none)"
     suggestion_context = [
         {
@@ -210,7 +226,12 @@ async def extract_custom_slot_answer(
         "- Explicitly selected suggestions are supporting context unless the typed answer changes them.\n"
         f'- Extract only what\'s relevant to the "{target_slot}" slot\n'
         '- quality is "solid" if specific and clearly addresses the slot; "weak" if vague\n'
-        f"- {'Return values as an array of strings' if is_array_slot else 'Return value as a single string'}"
+        + (
+            f'- Grade strictly: quality is "solid" only when the answer {slot_solid_criteria}\n'
+            if slot_solid_criteria
+            else ""
+        )
+        + f"- {'Return values as an array of strings' if is_array_slot else 'Return value as a single string'}"
     )
     if is_array_slot:
         raw = await _generate_json(
@@ -263,9 +284,19 @@ async def generate_foundation(messages: list[dict], state: dict, project_type: s
             '"matchRubric":"string","lowFitSignals":["string"]}}'
         )
     else:
-        task = "Generate a startup Foundation document based on the onboarding conversation and collected state.\n\n"
+        task = (
+            "Generate a startup Foundation document based on the onboarding conversation and collected state. "
+            "The Foundation is the working brief for all downstream outreach: it must carry every useful detail "
+            "the founder shared, synthesized into dense, specific fields - not one-line summaries.\n\n"
+        )
         extra_rules = (
             "- startupName should preserve the founder's chosen startup, product, company, or working name.\n"
+            "- summary: 1-2 sentences covering what the product is, the mechanism or approach, who it serves, and the outcome it produces. Fold in specifics the founder mentioned (data sources, workflow, wedge) instead of a generic category description.\n"
+            "- painPoint: describe the concrete problem including who hits it, what they do today, why that fails, and what it costs them. Never restate the product category as the problem.\n"
+            "- valueProp: state what the product eliminates or delivers and how, tied to the pain. Include the mechanism, not just the benefit.\n"
+            "- targetUser: the specific person types and the situation or behavior that makes them targets, not a broad demographic.\n"
+            "- idealPeopleTypes: 2-4 distinct, findable person types. Each entry should be a full phrase naming who they are and why they are worth talking to first. If the founder gave only one, derive 1-2 more from the transcript's target user, pain, and bottleneck - but only ones clearly consistent with what the founder said.\n"
+            "- differentiation: 1-2 sentences positioning against the named alternative or status quo - what it does differently and why that matters. Technology labels alone ('uses AI') are not differentiation.\n"
             "- recommendedOutreachProject must always recommend Idea Validation.\n"
             "- Use the collected state's biggestBottleneck only to write recommendedOutreachProject.reason.\n"
             "- Do not include biggestBottleneck as a Foundation field; it is only recommendation context.\n"
@@ -286,9 +317,10 @@ async def generate_foundation(messages: list[dict], state: dict, project_type: s
         f"Collected state:\n{state_snapshot}\n\n"
         f"Full onboarding transcript:\n{transcript}\n\n"
         "Rules:\n"
-        "- Use the collected state as the primary source; use the transcript to fill gaps or improve clarity\n"
+        "- Use the collected state as the primary source; mine the full transcript for concrete details the state summaries dropped and work them back in\n"
         "- Use the exact field names requested in the schema\n"
-        "- Keep all fields concise and specific\n"
+        "- Every field should be specific and information-dense: no filler, but do not compress away details the founder actually gave\n"
+        "- Never invent facts, numbers, or traction the founder did not state or clearly imply\n"
         "- If optional fields were not discussed, omit or set to null/empty\n"
         f"{extra_rules}"
     )

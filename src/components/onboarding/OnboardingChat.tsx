@@ -506,6 +506,17 @@ export default function OnboardingChat({
                 Send
               </button>
             </div>
+
+            {isFinishable && (
+              <div className={styles.finishInline}>
+                <p className={styles.finishInlineText}>
+                  You&apos;ve shared enough for your {finishLabel} — a few more answers will make it sharper.
+                </p>
+                <button className={styles.finishInlineBtn} onClick={() => void finish()}>
+                  {finishButtonLabel}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

@@ -32,6 +32,12 @@ function currentOutreachId(pathname: string | null, searchParams: { get(name: st
   return pathname?.match(/\/outreach-projects\/([^/]+)/)?.[1] ?? searchParams.get('outreachProjectId');
 }
 
+function currentScopedSection(pathname: string | null): 'people' | 'board' | 'insights' {
+  if (pathname?.includes('/board')) return 'board';
+  if (pathname?.includes('/insights')) return 'insights';
+  return 'people';
+}
+
 export function WorkspaceTopBar({
   slug,
   projectId,
@@ -83,9 +89,26 @@ export function WorkspaceTopBar({
     setOutreachProjects(await res.json() as OutreachProjectRecord[]);
   }
 
+  function scopedSectionHref(outreachProjectId: string | null) {
+    const section = currentScopedSection(pathname);
+    const params = new URLSearchParams();
+
+    if (section === 'insights') {
+      const tab = searchParams.get('tab');
+      if (tab) params.set('tab', tab);
+    }
+
+    if (outreachProjectId) {
+      params.set('outreachProjectId', outreachProjectId);
+    }
+
+    const query = params.toString();
+    return `/dashboard/${slug}/${section}${query ? `?${query}` : ''}`;
+  }
+
   async function openOutreachProject(project: OutreachProjectRecord) {
     setProjectOpen(false);
-    router.push(`/dashboard/${slug}/people?outreachProjectId=${encodeURIComponent(project.id)}`);
+    router.push(scopedSectionHref(project.id));
   }
 
   function openNewOutreachProjectPage() {
@@ -114,7 +137,7 @@ export function WorkspaceTopBar({
           >
             <span className={styles.selectorKicker}>Project</span>
             <span className={styles.selectorName}>
-              {!hasOutreachProjects ? 'New outreach project' : selectedOutreachProject?.name ?? 'General research'}
+              {!hasOutreachProjects ? 'New outreach project' : selectedOutreachProject?.name ?? 'Cumulative'}
             </span>
             {hasOutreachProjects ? <ChevronIcon open={projectOpen} /> : <PlusIcon />}
           </button>
@@ -126,11 +149,11 @@ export function WorkspaceTopBar({
                 className={`${styles.menuItem} ${!selectedOutreachProject ? styles.menuItemActive : ''}`}
                 onClick={() => {
                   setProjectOpen(false);
-                  router.push(`/dashboard/${slug}/people`);
+                  router.push(scopedSectionHref(null));
                 }}
                 role="menuitem"
               >
-                <span className={styles.outreachName}>General research</span>
+                <span className={styles.outreachName}>Cumulative</span>
               </button>
               <div className={styles.menuDivider} />
               {activeOutreachProjects.map((project) => (

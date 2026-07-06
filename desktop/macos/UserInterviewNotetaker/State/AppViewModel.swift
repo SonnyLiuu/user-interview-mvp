@@ -47,6 +47,7 @@ final class AppViewModel: ObservableObject {
     @Published var allPeople: [DesktopPerson] = []
     @Published var selectedStartup: String?  // startup project filter ("All Startups" = nil)
     @Published var selectedProject: String?  // outreach project filter ("All Projects" = nil)
+    @Published var peopleSearchQuery = ""
     @Published var isLoadingPeople = false
 
     // Session lifecycle
@@ -86,15 +87,27 @@ final class AppViewModel: ObservableObject {
 
     /// People filtered by the selected startup and/or project.
     var filteredPeople: [DesktopPerson] {
-        allPeople.filter { person in
+        let query = peopleSearchQuery.normalizedForPersonSearch
+        return allPeople.filter { person in
             if let startup = selectedStartup {
                 guard person.startupName == startup else { return false }
             }
             if let project = selectedProject {
                 guard person.projectName == project else { return false }
             }
+            if !query.isEmpty {
+                guard person.matchesSearchQuery(query) else { return false }
+            }
             return true
         }
+    }
+
+    var filteredPeopleEmptyMessage: String {
+        guard !allPeople.isEmpty else { return message }
+        if selectedStartup != nil || selectedProject != nil || !peopleSearchQuery.normalizedForPersonSearch.isEmpty {
+            return "No matching people found."
+        }
+        return message
     }
 
     func loadPeople(using client: DesktopAPIClient, apiBaseUrl: String, authToken: String) async {
@@ -113,6 +126,7 @@ final class AppViewModel: ObservableObject {
         allPeople = []
         selectedStartup = nil
         selectedProject = nil
+        peopleSearchQuery = ""
     }
 
     func applyLiveSession(_ response: LiveSessionResponse) {
@@ -199,5 +213,20 @@ final class AppViewModel: ObservableObject {
             notesRaw: notesSummary(),
             transcriptRaw: liveTranscriptRaw
         )
+    }
+}
+
+private extension DesktopPerson {
+    func matchesSearchQuery(_ query: String) -> Bool {
+        [name, title, company, startupName, projectName]
+            .compactMap { $0?.normalizedForPersonSearch }
+            .contains { $0.contains(query) }
+    }
+}
+
+private extension String {
+    var normalizedForPersonSearch: String {
+        trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
     }
 }
