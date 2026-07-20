@@ -2,6 +2,10 @@ import type { InsightContent } from '@/lib/db/schema';
 
 export const CURRENT_INSIGHT_SCHEMA_VERSION = 7;
 
+// Bump when question-flag detection or review shape changes so cached
+// per-interview reviews regenerate instead of serving stale coaching.
+export const CURRENT_TECHNIQUE_REVIEW_VERSION = 2;
+
 export type InsightFreshnessStats = {
   interviewCount: number;
   latestDataAt: Date | null;
@@ -25,6 +29,7 @@ export type MissedProbe = {
 };
 
 export type TranscriptTechniqueReview = {
+  reviewVersion?: number;
   summary: string;
   reliability: 'low' | 'medium' | 'high';
   evidenceSignals: string[];
@@ -186,33 +191,62 @@ function weakEvidenceMoments(transcript: string): TranscriptEvidenceMoment[] {
     .slice(0, 4);
 }
 
-function hasSolutionValidationShape(question: string) {
-  const text = question.toLowerCase();
-  const proposesSolution = /\b(tool|product|feature|agent|automate|automation|helps?|solution|platform)\b/.test(text);
-  const asksForApproval = /\b(would|could|can)\b.+\b(help|use|pay|buy|valuable|useful|interested|solve|save)\b/.test(text);
-  const hypothetical = /\b(if|somebody|someone|came up with|there was|imagine)\b/.test(text);
+function normalizeQuestion(question: string) {
+  let text = question
+    .toLowerCase()
+    .replace(/(\w)'d\b/g, '$1 would')
+    .replace(/(\w)'ll\b/g, '$1 will')
+    .replace(/(\w)'re\b/g, '$1 are');
+  const leadingFiller = /^(ah|oh|ok|okay|so|well|hmm+|right|yeah|got it|i see|interesting)[,.!\s]+/;
+  while (leadingFiller.test(text)) text = text.replace(leadingFiller, '');
+  return text.trim();
+}
+
+function hasSolutionValidationShape(text: string) {
+  const proposesSolution = /\b(tool|product|feature|agent|automate|automation|helps?|solution|platform|software|app)\b/.test(text);
+  const asksForApproval = /\b(would|could|can|will)\b.+\b(help(s|ful)?|use|pay|buy|valuable|useful|interested|solve|save|easier|faster)\b/.test(text);
+  const hypothetical = /\b(if|somebody|someone|came up with|there was|there were|imagine|hypothetically)\b/.test(text);
   return proposesSolution && asksForApproval && hypothetical;
 }
 
-function hasHypotheticalValidationShape(question: string) {
-  const text = question.toLowerCase();
-  const asksForFutureIntent = /\b(would|will|could)\b.+\b(use|pay|buy|try|switch|adopt|help|valuable|useful|interested)\b/.test(text);
+function hasHypotheticalValidationShape(text: string) {
+  const asksForFutureIntent = /\b(would|will|could)\b.+\b(use|pay|buy|try|switch|adopt|help(s|ful)?|valuable|useful|interested)\b/.test(text);
   const notGroundedInPast = !/\b(last time|most recent|currently|today|yesterday|how do you|what do you currently|tell me about)\b/.test(text);
   return asksForFutureIntent && notGroundedInPast;
 }
 
-function hasClosedValidationShape(question: string) {
-  return /\b(would you say|do you think|would that|would this|is that|does that)\b.+\b(help|useful|valuable|interesting|solve|better)\b/i.test(question);
+function hasLeadingConfirmationShape(text: string) {
+  const suppliesAnswer = /^(you|it sounds like|sounds like|it seems|seems like|that means)\b/.test(text);
+  const negativeLead = /^(do not|don'?t|doesn'?t|didn'?t|isn'?t|aren'?t|wasn'?t|weren'?t|wouldn'?t|couldn'?t|shouldn'?t|won'?t)\b/.test(text);
+  const noOpenPrompt = !/\b(what|how|why|when|where|who|which|tell me|walk me)\b/.test(text);
+  return (suppliesAnswer || negativeLead) && noOpenPrompt;
 }
 
-function hasCompoundShape(question: string) {
-  const text = question.toLowerCase();
+function hasClosedValidationShape(text: string) {
+  return /\b(would you say|do you think|would that|would this|is that|does that)\b.+\b(help(s|ful)?|useful|valuable|interesting|solve|better)\b/.test(text);
+}
+
+function hasSolutionSeedingShape(text: string) {
+  const yesNoForm = /^(have|has|had|do|does|did|would|could|can|will|are|is|was|were)\b/.test(text);
+  const namesSolutionCategory = /\b(ai|tools?|software|apps?|automation|automated?|bots?|products?|platforms?|chatgpt|copilot)\b/.test(text);
+  const probesAdoption = /\b(tried|try|use[ds]?|using|considered|looked into|adopt(ed)?|bought|paid|want|need)\b/.test(text);
+  return yesNoForm && namesSolutionCategory && probesAdoption;
+}
+
+function hasVagueClosedFollowUpShape(text: string) {
+  const closedPronounOpen = /^(does|did|do|is|was|are|were|has|have|had|can|could|would|will|should)\s+(that|this|it)\b/.test(text);
+  return closedPronounOpen && text.split(/\s+/).length <= 5;
+}
+
+function hasCompoundShape(text: string) {
   const promptCount = (text.match(/\b(how|what|when|where|why|do you|have you|would you|could you|is there|are there)\b/g) ?? []).length;
   return promptCount > 1 && /\b(and|or|also)\b/.test(text);
 }
 
 function flagQuestion(question: string): InterviewQuestionFlag | null {
-  if (hasSolutionValidationShape(question)) {
+  const text = normalizeQuestion(question);
+
+  if (hasSolutionValidationShape(text)) {
     return {
       question,
       issue: 'Leading solution-validation question. It describes the hoped-for product benefit and invites agreement instead of evidence.',
@@ -221,7 +255,7 @@ function flagQuestion(question: string): InterviewQuestionFlag | null {
     };
   }
 
-  if (hasHypotheticalValidationShape(question)) {
+  if (hasHypotheticalValidationShape(text)) {
     return {
       question,
       issue: 'Hypothetical validation question. Future intent is weaker than evidence from what the interviewee already does.',
@@ -230,7 +264,16 @@ function flagQuestion(question: string): InterviewQuestionFlag | null {
     };
   }
 
-  if (hasClosedValidationShape(question)) {
+  if (hasLeadingConfirmationShape(text)) {
+    return {
+      question,
+      issue: 'Leading question. It hands the interviewee your interpretation and invites a yes instead of their own words.',
+      suggestion: 'Let them describe it in their own words: "What is going through your head at that point?"',
+      severity: 'watch',
+    };
+  }
+
+  if (hasClosedValidationShape(text)) {
     return {
       question,
       issue: 'Closed validation question. It is likely to produce a polite yes/no answer rather than a story about real behavior.',
@@ -239,7 +282,25 @@ function flagQuestion(question: string): InterviewQuestionFlag | null {
     };
   }
 
-  if (hasCompoundShape(question)) {
+  if (hasSolutionSeedingShape(text)) {
+    return {
+      question,
+      issue: 'Closed question that introduces a solution category before the interviewee brings it up. It steers the answer toward your idea instead of their real workflow.',
+      suggestion: 'Let them name what they have tried: "What have you already tried to make that part faster?"',
+      severity: 'watch',
+    };
+  }
+
+  if (hasVagueClosedFollowUpShape(text)) {
+    return {
+      question,
+      issue: 'Vague closed follow-up. A quick yes/no check usually earns a shrug like "sometimes" instead of a story you can learn from.',
+      suggestion: 'Anchor it in a recent instance: "When was the last time that worked — what did you keep and what did you change?"',
+      severity: 'watch',
+    };
+  }
+
+  if (hasCompoundShape(text)) {
     return {
       question,
       issue: 'Compound question. Multiple prompts make it easier for the interviewee to answer only the easiest part.',
@@ -363,7 +424,7 @@ export function overarchingAnalysis(review: TranscriptTechniqueReview): string {
   if (problemFlags + watchFlags > 0) {
     const flagBits: string[] = [];
     if (problemFlags) flagBits.push(`${problemFlags} leading or hypothetical question${problemFlags === 1 ? '' : 's'} that weaken${problemFlags === 1 ? 's' : ''} reliability`);
-    if (watchFlags) flagBits.push(`${watchFlags} compound or closed question${watchFlags === 1 ? '' : 's'} to tighten`);
+    if (watchFlags) flagBits.push(`${watchFlags} closed, leading, or compound question${watchFlags === 1 ? '' : 's'} to tighten`);
     parts.push(`Interview quality note: ${flagBits.join(' and ')}.`);
   }
 
@@ -390,7 +451,8 @@ export function analyzeTranscriptTechnique(transcript: string, notes = ''): Tran
   const questionFlags = founderQuestions(combined)
     .map(flagQuestion)
     .filter((flag): flag is InterviewQuestionFlag => flag !== null)
-    .slice(0, 4);
+    .sort((a, b) => Number(b.severity === 'problem') - Number(a.severity === 'problem'))
+    .slice(0, 6);
   const probes = missedProbes(combined);
 
   const suggestedFollowUps = dedupeStrings([
@@ -407,6 +469,7 @@ export function analyzeTranscriptTechnique(transcript: string, notes = ''): Tran
   ], 3);
 
   return {
+    reviewVersion: CURRENT_TECHNIQUE_REVIEW_VERSION,
     summary: summarizeTranscript(combined, evidenceSignals),
     reliability: transcriptReliability(strongMoments, weakMoments, questionFlags, probes),
     evidenceSignals,
@@ -720,6 +783,7 @@ export async function enhanceTranscriptTechnique(
     );
 
     return {
+      reviewVersion: CURRENT_TECHNIQUE_REVIEW_VERSION,
       summary: enhanced.overarchingAnalysis,
       reliability: base.reliability,
       evidenceSignals: base.evidenceSignals,

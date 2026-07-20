@@ -66,7 +66,7 @@ function topInterviewInsights(record: TranscriptInsightRecord): InterviewInsight
 export function InterviewDetailContent({ record }: { record: TranscriptInsightRecord }) {
   const topInsights = topInterviewInsights(record);
   const missedProbes = record.review.missedProbes;
-  const flags = record.review.questionFlags.map((f) => f.issue).filter(Boolean).slice(0, 3);
+  const flags = record.review.questionFlags;
 
   return (
     <>
@@ -131,7 +131,7 @@ export function InterviewDetailContent({ record }: { record: TranscriptInsightRe
             </div>
           </div>
           <div className={styles.flagList}>
-            {record.review.questionFlags.slice(0, 3).map((flag) => (
+            {record.review.questionFlags.slice(0, 6).map((flag) => (
               <article
                 key={`${flag.question}-${flag.issue}`}
                 className={`${styles.questionFlag} ${flag.severity === 'problem' ? styles.problemFlag : styles.watchFlag}`}

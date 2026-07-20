@@ -22,6 +22,7 @@ import {
 import { getOutreachProjectTypeConfig } from '@/lib/outreach-projects';
 import {
   CURRENT_INSIGHT_SCHEMA_VERSION,
+  CURRENT_TECHNIQUE_REVIEW_VERSION,
   analyzeTranscriptTechnique,
   enhanceTranscriptTechnique,
   evidenceLevelForCalls,
@@ -578,8 +579,11 @@ export async function getProjectTranscriptInsight(
     const notes = row.notesRaw ?? '';
 
     let review: TranscriptTechniqueReview;
-    if (row.enhancedReview && typeof row.enhancedReview === 'object') {
-      review = row.enhancedReview as unknown as TranscriptTechniqueReview;
+    const cachedReview = row.enhancedReview && typeof row.enhancedReview === 'object'
+      ? row.enhancedReview as unknown as TranscriptTechniqueReview
+      : null;
+    if (cachedReview && cachedReview.reviewVersion === CURRENT_TECHNIQUE_REVIEW_VERSION) {
+      review = cachedReview;
     } else {
       review = await enhanceTranscriptTechnique(transcript, notes);
       await db
@@ -635,8 +639,11 @@ export async function getProjectTranscriptInsight(
   const transcript = row.content;
 
   let review: TranscriptTechniqueReview;
-  if (row.enhancedReview && typeof row.enhancedReview === 'object') {
-    review = row.enhancedReview as unknown as TranscriptTechniqueReview;
+  const cachedReview = row.enhancedReview && typeof row.enhancedReview === 'object'
+    ? row.enhancedReview as unknown as TranscriptTechniqueReview
+    : null;
+  if (cachedReview && cachedReview.reviewVersion === CURRENT_TECHNIQUE_REVIEW_VERSION) {
+    review = cachedReview;
   } else {
     review = await enhanceTranscriptTechnique(transcript, '');
     await db
